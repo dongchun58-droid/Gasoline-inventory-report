@@ -81,7 +81,7 @@ def organize_by_year(records: list[dict]) -> dict:
         yr = dt.year
         # ISO week number (1~53) → 52주 기준으로 clamp
         wk = min(dt.isocalendar()[1], 52)
-        mb = round(r["value"] / 1000, 1)   # thousand barrels → million barrels
+        mb = round(float(r["value"]) / 1000, 1)   # thousand barrels → million barrels
         by_year[yr].append((wk, mb))
 
     # 주차 기준 정렬, 중복 시 최신 값 사용
