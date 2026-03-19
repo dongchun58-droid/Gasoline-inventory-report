@@ -1,0 +1,6 @@
+requests
+matplotlib
+numpy
+reportlab
+pdf2image
+Pillow
