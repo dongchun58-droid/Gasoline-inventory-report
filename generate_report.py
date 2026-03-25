@@ -381,7 +381,12 @@ if __name__ == "__main__":
     print(f"[1/5] Fetching EIA data...")
     records  = fetch_eia_gasoline_stocks(EIA_API_KEY)
     by_year  = organize_by_year(records)
-    print(f"      Years available: {sorted(by_year.keys())}")
+	print(f"      Years available: {sorted(by_year.keys())}")
+	if cur_year in by_year:
+ 	    latest_wk = max(by_year[cur_year].keys())
+  	    latest_mb = by_year[cur_year][latest_wk]
+   	    print(f"      2026 latest week: W{latest_wk} = {latest_mb} mb")
+
 
     print("[2/5] Building chart...")
     chart_png = build_chart(by_year, cur_year)
