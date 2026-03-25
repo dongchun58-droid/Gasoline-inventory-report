@@ -2,7 +2,7 @@ name: Weekly Gasoline Inventory Report
 
 on:
   schedule:
-    - cron: '17 5 * * 3'
+    - cron: '17 5 * * 3' 
   workflow_dispatch:
 
 jobs:
