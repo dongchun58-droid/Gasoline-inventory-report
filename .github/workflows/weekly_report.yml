@@ -1,0 +1,38 @@
+name: Weekly Gasoline Inventory Report
+
+on:
+  schedule:
+    - cron: '17 5 * * 3'
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y poppler-utils
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run report & send email
+        env:
+          EIA_API_KEY:   ${{ secrets.EIA_API_KEY }}
+          GMAIL_USER:    ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PWD: ${{ secrets.GMAIL_APP_PWD }}
+          TO_EMAIL:      ${{ secrets.TO_EMAIL }}
+        run: |
+          python generate_report.py
