@@ -43,21 +43,18 @@ TO_EMAIL       = os.environ.get("TO_EMAIL", "realhdh@sk.com")
 # 1. EIA API — 주간 가동률 데이터 fetch
 # ═══════════════════════════════════════════════════════════════════════════════
 def fetch_eia_refinery_utilization(api_key):
-    """EIA API v2 — Weekly U.S. Percent Utilization of Refinery Operable Capacity"""
-    url = "https://api.eia.gov/v2/petroleum/pnp/wiup/data/"
+    """EIA API v2 via SeriesID translation — WPULEUS3"""
+    url = "https://api.eia.gov/v2/seriesid/PET.WPULEUS3.W"
     all_records = []
     offset = 0
     while True:
         params = {
             "api_key": api_key,
-            "frequency": "weekly",
             "data[0]": "value",
-            "facets[duoarea][]": "NUS",
-            "facets[process][]": "YUP",
             "sort[0][column]": "period",
             "sort[0][direction]": "asc",
             "offset": offset,
-            "length": 500,
+            "length": 5000,
             "start": "2022-01-01",
         }
         resp = requests.get(url, params=params, timeout=30)
@@ -67,9 +64,9 @@ def fetch_eia_refinery_utilization(api_key):
         if not records:
             break
         all_records.extend(records)
-        if len(records) < 500:
+        if len(records) < 5000:
             break
-        offset += 500
+        offset += 5000
     return all_records
 
 
