@@ -1,6 +1,7 @@
 name: Deploy TURBO SPRINT to Pages
 
 # turbo-sprint 게임을 빌드해 GitHub Pages로 배포한다.
+# (Pages 활성화 후 재배포 트리거)
 on:
   push:
     branches: [main, claude/new-session-on09d2]
