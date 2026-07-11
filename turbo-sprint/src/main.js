@@ -1,10 +1,15 @@
 // main.js — 씬, 고정 dt 물리 + 가변 렌더 루프, 리사이즈
 // Phase 1: 트랙을 카트로 달릴 수 있는 최소 플레이 상태
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Input } from './input.js';
 import { Track } from './track.js';
 import { Kart, PHYS } from './kart.js';
 import { ChaseCamera } from './camera.js';
+import { Scenery } from './scenery.js';
 
 // ---------- 셀 셰이딩용 3단 그라디언트맵 (§9) ----------
 function makeToonGradient() {
@@ -76,8 +81,29 @@ const player = new Kart(track, 0x2e6bff, gradientMap);
 scene.add(player.model);
 scene.add(player.shadow);
 
+// ---------- 배경 월드 (소품·풍선·구름·아치) ----------
+const scenery = new Scenery(track, gradientMap);
+scene.add(scenery.group);
+
 const chase = new ChaseCamera(camera);
 chase.snap(player);
+
+// ---------- 포스트프로세싱: 블룸(네온 발광) (§9) ----------
+const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, {
+  type: THREE.HalfFloatType,
+  samples: 4, // MSAA 유지
+});
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.6,  // strength
+  0.5,  // radius
+  0.6   // threshold (네온·별만 발광, 하늘은 제외)
+);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
 // ---------- 입력 ----------
 const input = new Input();
@@ -117,6 +143,9 @@ function frame(nowMs) {
   // 카메라(가변 렌더 dt)
   chase.update(player, dt);
 
+  // 배경 애니메이션 (별 회전·풍선 바운스)
+  scenery.update(dt);
+
   // HUD
   speedEl.firstChild.textContent = player.kmh;
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsCount++; fpsTimer += dt;
@@ -126,7 +155,7 @@ function frame(nowMs) {
   }
 
   input.endFrame();
-  renderer.render(scene, camera);
+  composer.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -135,8 +164,10 @@ requestAnimationFrame(frame);
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloom.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', onResize);
 

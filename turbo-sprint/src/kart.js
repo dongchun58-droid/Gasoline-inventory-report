@@ -51,21 +51,83 @@ function buildKartModel(color, gradientMap) {
     g.add(post);
   }
 
-  // 드라이버: 캡슐 몸통 + 구 헬멧
-  const bodyDriver = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.35, 4, 8), toon(0x22243a));
-  bodyDriver.position.set(0, 0.85, -0.1);
-  g.add(bodyDriver);
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), toon(color));
-  helmet.position.set(0, 1.15, -0.05);
-  g.add(helmet);
-  const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36, 0.12, 0.12),
-    toon(0x001018, 0x00e5ff, 1.4)
-  );
-  visor.position.set(0, 1.16, 0.18);
-  g.add(visor);
-  g.userData.driver = bodyDriver;
-  g.userData.helmet = helmet;
+  // --- 귀여운 오리지널 마스코트 드라이버 (그룹으로 묶어 코너에서 기울임) ---
+  const driver = new THREE.Group();
+  driver.position.set(0, 0.55, -0.05);
+  const skin = 0xffcba4;      // 살구색 피부
+  const overalls = 0xff4d4d;  // 밝은 빨강 멜빵바지
+  const shirt = 0x36d1ff;     // 하늘색 셔츠
+
+  // 몸통 (멜빵바지)
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.22, 4, 10), toon(overalls));
+  torso.position.set(0, 0.32, 0);
+  driver.add(torso);
+  // 셔츠 어깨(위쪽 살짝)
+  const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), toon(shirt));
+  shoulders.scale.set(1, 0.55, 0.9);
+  shoulders.position.set(0, 0.5, 0);
+  driver.add(shoulders);
+
+  // 머리
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 14), toon(skin));
+  head.position.set(0, 0.86, 0.02);
+  driver.add(head);
+  // 큰 코
+  const noseFace = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), toon(0xffb98f));
+  noseFace.position.set(0, 0.84, 0.30);
+  driver.add(noseFace);
+  // 눈 (흰자 + 눈동자)
+  for (const sx of [-0.12, 0.12]) {
+    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), toon(0xffffff));
+    eyeW.scale.set(0.8, 1.1, 0.6);
+    eyeW.position.set(sx, 0.92, 0.24);
+    driver.add(eyeW);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), toon(0x1a1030));
+    pupil.position.set(sx, 0.92, 0.30);
+    driver.add(pupil);
+  }
+  // 발그레한 볼
+  for (const sx of [-0.20, 0.20]) {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), toon(0xff8fb0));
+    cheek.scale.set(1, 0.7, 0.5);
+    cheek.position.set(sx, 0.80, 0.22);
+    driver.add(cheek);
+  }
+  // 모자 (팀 컬러) — 크라운 + 챙
+  const capCrown = new THREE.Mesh(new THREE.SphereGeometry(0.31, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), toon(color));
+  capCrown.position.set(0, 1.02, 0.02);
+  driver.add(capCrown);
+  const capBand = new THREE.Mesh(new THREE.CylinderGeometry(0.315, 0.315, 0.06, 16), toon(0xffffff));
+  capBand.position.set(0, 1.0, 0.02);
+  driver.add(capBand);
+  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.05, 12, 1, false, 0, Math.PI), toon(color));
+  brim.rotation.y = Math.PI; // 앞쪽 반원
+  brim.position.set(0, 1.0, 0.28);
+  driver.add(brim);
+  // 모자 엠블럼(에미시브 별 느낌 원)
+  const emblem = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), toon(0xffffff, 0xffd166, 1.6));
+  emblem.position.set(0, 1.06, 0.30);
+  driver.add(emblem);
+
+  // 팔 + 핸들 잡은 손
+  for (const sx of [-0.24, 0.24]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.28, 4, 8), toon(shirt));
+    arm.position.set(sx, 0.34, 0.28);
+    arm.rotation.x = 0.9; // 앞으로 뻗음
+    driver.add(arm);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toon(0xfff0d0));
+    hand.position.set(sx * 0.75, 0.22, 0.52);
+    driver.add(hand);
+  }
+  // 스티어링 휠
+  const steerWheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 16), toon(0x222230));
+  steerWheel.position.set(0, 0.2, 0.55);
+  steerWheel.rotation.x = 1.1;
+  driver.add(steerWheel);
+
+  g.add(driver);
+  g.userData.driver = driver;
+  g.userData.head = head;
 
   // 배기관 2 (부스트 화염 방출구 — Phase 2+)
   for (const sx of [-0.35, 0.35]) {
@@ -269,8 +331,10 @@ export class Kart {
     _fwd.addScaledVector(up, -_fwd.dot(up));
     if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, 1);
     _fwd.normalize();
-    _right.copy(_fwd).cross(up).normalize();
-    _tmp.copy(_right).cross(_fwd).normalize(); // 재직교 up
+    // 오른손 좌표계: right = up × forward, up = forward × right
+    // (이전엔 forward × up 이라 반사행렬이 되어 카트가 옆으로 향했음)
+    _right.copy(up).cross(_fwd).normalize();
+    _tmp.copy(_fwd).cross(_right).normalize(); // 재직교 up
     // 모델의 +Z가 전방이 되도록 기저 배치
     _m.makeBasis(_right, _tmp, _fwd);
     this.model.quaternion.setFromRotationMatrix(_m);
@@ -295,11 +359,13 @@ export class Kart {
       pivot.userData.spin.rotation.x = this.wheelSpin;
     }
 
-    // 드라이버 살짝 기울임 (조향 방향)
+    // 드라이버 그룹을 조향 방향으로 기울임 + 머리 살짝 반대 카운터
     if (this.model.userData.driver) {
-      const lean = -this.steerVis * 0.18;
+      const lean = -this.steerVis * 0.22;
       this.model.userData.driver.rotation.z = lean;
-      this.model.userData.helmet.rotation.z = lean;
+      if (this.model.userData.head) {
+        this.model.userData.head.rotation.z = -lean * 0.4;
+      }
     }
   }
 
