@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏎️</text></svg>" />
+  <title>TURBO SPRINT — 10초 그랑프리</title>
+  <style>
+    html, body { margin: 0; overflow: hidden; touch-action: none; background: #000; }
+    canvas { display: block; }
+
+    /* --- Phase 1 minimal HUD (full DOM HUD arrives in Phase 6) --- */
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: #fff;
+    }
+    #speed {
+      position: absolute; left: 20px; bottom: 18px;
+      font-size: 34px; font-weight: 800; letter-spacing: 1px;
+      text-shadow: -2px 0 #1b2a6b, 2px 0 #1b2a6b, 0 -2px #1b2a6b, 0 2px #1b2a6b;
+    }
+    #speed small { font-size: 15px; font-weight: 600; opacity: .85; margin-left: 4px; }
+    #hint {
+      position: absolute; left: 20px; top: 16px;
+      font-size: 13px; font-weight: 600; line-height: 1.55; opacity: .9;
+      text-shadow: -1px 0 #1b2a6b, 1px 0 #1b2a6b, 0 -1px #1b2a6b, 0 1px #1b2a6b;
+    }
+    #fps {
+      position: absolute; right: 16px; top: 14px;
+      font-size: 13px; font-weight: 700; opacity: .8;
+      text-shadow: -1px 0 #1b2a6b, 1px 0 #1b2a6b, 0 -1px #1b2a6b, 0 1px #1b2a6b;
+    }
+    /* Portrait warning */
+    #rotate {
+      position: fixed; inset: 0; display: none; z-index: 10;
+      background: #14102b; color: #fff;
+      align-items: center; justify-content: center; text-align: center;
+      font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700;
+    }
+    @media (orientation: portrait) and (max-width: 900px) {
+      #rotate { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="hint">
+      TURBO SPRINT — Phase 1<br />
+      ↑/W 가속 · ↓/S 브레이크 · ←→/AD 조향 · R 리스타트
+    </div>
+    <div id="speed">0<small>km/h</small></div>
+    <div id="fps">-- fps</div>
+  </div>
+  <div id="rotate">📱 → 🖥️<br />가로로 돌려주세요</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
