@@ -12,8 +12,13 @@ export class HUD {
     this.result = document.getElementById('result');
     this.rPlace = document.getElementById('rPlace');
     this.rTime = document.getElementById('rTime');
+    this.rStandings = document.getElementById('rStandings');
+    this.countdown = document.getElementById('countdown');
+    this.lapPopup = document.getElementById('lapPopup');
     this._lastItem = undefined;
     this._lastRank = undefined;
+    this._cdText = undefined;
+    this._lapHideAt = 0;
 
     // 미니맵 준비
     this.track = track;
@@ -88,10 +93,52 @@ export class HUD {
     if (icon !== this._lastItem) { this.itemIcon.textContent = icon; this._lastItem = icon; }
   }
 
-  showResult(rank, timeStr) {
-    const o = ORD[rank] || rank + 'th';
+  // 카운트다운 3·2·1·GO!
+  showCountdown(rem) {
+    let text = '';
+    if (rem > 2.4) text = '3';
+    else if (rem > 1.6) text = '2';
+    else if (rem > 0.8) text = '1';
+    else if (rem > -0.2) text = 'GO!';
+    if (text !== this._cdText) {
+      this._cdText = text;
+      this.countdown.textContent = text;
+      this.countdown.style.display = text ? 'flex' : 'none';
+      this.countdown.classList.toggle('go', text === 'GO!');
+      if (text) {
+        this.countdown.animate(
+          [{ transform: 'scale(1.6)', opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }],
+          { duration: 260, easing: 'ease-out' }
+        );
+      }
+    }
+  }
+  hideCountdown() { this.countdown.style.display = 'none'; this._cdText = ''; }
+
+  // 남은 바퀴 팝업
+  showLapPopup(text) {
+    this.lapPopup.textContent = text;
+    this.lapPopup.classList.add('show');
+    this.lapPopup.animate(
+      [{ transform: 'translateX(-50%) scale(1.4)', opacity: 0 }, { transform: 'translateX(-50%) scale(1)', opacity: 1 }],
+      { duration: 300, easing: 'ease-out' }
+    );
+    this._lapHideAt = performance.now() + 1600;
+    setTimeout(() => { if (performance.now() >= this._lapHideAt - 50) this.hideLapPopup(); }, 1650);
+  }
+  hideLapPopup() { this.lapPopup.classList.remove('show'); }
+
+  // 골인 결과: 최종 순위표
+  showResult(standings, player, timeStr) {
+    const myRank = standings.indexOf(player) + 1;
+    const o = ORD[myRank] || myRank + 'th';
     this.rPlace.textContent = o;
     this.rTime.textContent = 'TIME ' + timeStr;
+    const medals = ['🥇', '🥈', '🥉', '4️⃣'];
+    this.rStandings.innerHTML = standings.map((k, i) =>
+      `<div class="rrow${k === player ? ' you' : ''}"><span>${medals[i] || (i + 1)}</span>` +
+      `<span>${k.name}</span></div>`
+    ).join('');
     this.result.classList.add('show');
   }
 

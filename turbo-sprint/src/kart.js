@@ -160,6 +160,55 @@ function buildKartModel(color, gradientMap) {
   }
   g.userData.wheels = wheels;
 
+  // 통상 카트 파츠(불릿 변신 시 숨김 대상)
+  g.userData.bodyParts = [...g.children];
+
+  // --- 대형 미사일(불릿) 메시 (기본 숨김) ---
+  const bullet = new THREE.Group();
+  const bMat = toon(0x2a2a33, gradientMap, 0.15);
+  const bodyB = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 2.6, 16), bMat);
+  bodyB.rotation.x = Math.PI / 2; // 축을 +Z(전방)로
+  bodyB.position.z = -0.1;
+  bullet.add(bodyB);
+  const noseB = new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.3, 16), bMat);
+  noseB.rotation.x = Math.PI / 2;
+  noseB.position.z = 1.85;
+  bullet.add(noseB);
+  const tailB = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.7, 0.5, 16), bMat);
+  tailB.rotation.x = Math.PI / 2; tailB.position.z = -1.5;
+  bullet.add(tailB);
+  // 핀 4개
+  for (let i = 0; i < 4; i++) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.7), toon(0xff3b3b, gradientMap, 0.2));
+    const a = (i / 4) * Math.PI * 2;
+    fin.position.set(Math.cos(a) * 0.85, Math.sin(a) * 0.85, -1.3);
+    fin.rotation.z = a;
+    bullet.add(fin);
+  }
+  // 눈 (불릿빌 느낌, 오리지널)
+  for (const sx of [-0.42, 0.42]) {
+    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), toon(0xffffff, gradientMap, 0.2));
+    eyeW.position.set(sx, 0.15, 1.15); bullet.add(eyeW);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), toon(0x101018, gradientMap));
+    pupil.position.set(sx, 0.15, 1.42); bullet.add(pupil);
+  }
+  bullet.position.y = 0.7;
+  bullet.visible = false;
+  g.add(bullet);
+  g.userData.bulletMesh = bullet;
+
+  // 드리프트 스파크 (좌우 후미, 기본 숨김)
+  const sparks = [];
+  for (const sx of [-0.7, 0.7]) {
+    const sp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x66ccff, toneMapped: false, transparent: true, opacity: 0.9 }));
+    sp.position.set(sx, 0.3, -1.3);
+    sp.visible = false;
+    g.add(sp);
+    sparks.push(sp);
+  }
+  g.userData.sparks = sparks;
+
   return g;
 }
 
@@ -204,12 +253,23 @@ export class Kart {
     this.spinTimer = 0;    // >0 이면 스핀아웃(조작 불가)
     this.spinAngle = 0;    // 스핀 시각 회전 누적
     this.invincTimer = 0;  // >0 이면 무적(별)
-    this.bulletTimer = 0;  // >0 이면 대형 불릿 변신(자동 돌진)
+    this.bulletTimer = 0;  // >0 이면 대형 불릿(미사일) 변신
     this.onGrass = false;
+    this.wheelspinTimer = 0; // 로켓스타트 실패(너무 일찍) 페널티
+
+    // 드리프트/미니터보
+    this.hopTimer = 0;
+    this.drifting = false;
+    this.driftDir = 0;      // -1 좌 / +1 우
+    this.driftCharge = 0;   // 누적 차지(초)
+    this.driftStage = 0;    // 0~3
+    this._prevDrift = false;
+    this.driftYaw = 0;      // 시각 슬립 각
 
     // 아이템 보유
-    this.heldItem = null;  // 'mushroom' | 'star' | 'rocket' | null
+    this.heldItem = null;  // 'mushroom' | 'star' | 'bullet' | 'banana' | 'shell' | null
     this.aiUseTimer = 0;   // AI 아이템 사용 딜레이
+    this.frozen = false;   // 카운트다운 중 정지
 
     // 레이스 진행
     this.lap = 0;
@@ -336,6 +396,19 @@ export class Kart {
     }
     this._bulletMode = false;
 
+    // --- 휠스핀(로켓스타트 실패): 잠깐 출발 불가 ---
+    if (this.wheelspinTimer > 0) {
+      this.wheelspinTimer -= dt;
+      this.speed = 0;
+      this._prevDrift = input.drift;
+      this.wheelSpin += 22 * dt;
+      const gW = this.track.ground(this.pos, this.idx, _ground);
+      this.idx = gW.idx;
+      this.pos.y = THREE.MathUtils.lerp(this.pos.y, gW.height + 0.1, 0.5);
+      this._syncMesh(gW);
+      return;
+    }
+
     const boosting = this.boostTimer > 0;
     const effMax = boosting ? PHYS.maxSpeed * PHYS.boostMultiplier : PHYS.maxSpeed;
 
@@ -369,20 +442,56 @@ export class Kart {
     }
     if (this.speed > effMax) this.speed = effMax;
 
-    // --- 조향 (속도 비례 선회율) ---
+    // --- 호핑 / 드리프트 / 미니터보 ---
+    const driftHeld = input.drift;
+    const driftEdge = driftHeld && !this._prevDrift;
+    this._prevDrift = driftHeld;
     const steer = input.steer;
-    const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
-    const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac);
-    // 저속에선 조향 효과 감소(정지 시 제자리 회전 방지)
-    const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
-    if (steer !== 0) {
+
+    if (this.hopTimer > 0) {
+      this.hopTimer -= dt;
+      if (this.hopTimer <= 0 && driftHeld && steer !== 0 && Math.abs(this.speed) > 5) {
+        this.drifting = true;
+        this.driftDir = Math.sign(steer);
+        this.driftCharge = 0; this.driftStage = 0;
+      }
+    } else if (driftEdge && !this.drifting && Math.abs(this.speed) > 6) {
+      this.hopTimer = 0.15; // 호핑 시작
+    }
+
+    if (this.drifting) {
+      if (!driftHeld || Math.abs(this.speed) < 3) {
+        // 드리프트 해제 → 미니터보 발동
+        const dur = this.driftStage === 3 ? 1.5 : this.driftStage === 2 ? 1.0 : this.driftStage === 1 ? 0.5 : 0;
+        if (dur > 0) this.giveBoost(dur);
+        this.drifting = false; this.driftDir = 0; this.driftStage = 0; this.driftCharge = 0;
+      } else {
+        const inside = steer === this.driftDir;
+        const outside = steer === -this.driftDir;
+        const rate = inside ? 1.9 : outside ? 0.9 : 1.4;
+        _q.setFromAxisAngle(_up, -this.driftDir * rate * dt);
+        this.forward.applyQuaternion(_q);
+        this.driftCharge += dt * (inside ? 1.3 : 1.0);
+        this.driftStage = this.driftCharge >= 2.4 ? 3 : this.driftCharge >= 1.5 ? 2 : this.driftCharge >= 0.7 ? 1 : 0;
+        // 드리프트는 속도 유지(최고속의 ~90%)
+        const dmin = PHYS.maxSpeed * 0.9;
+        if (this.speed < dmin && !this.onGrass) this.speed = THREE.MathUtils.lerp(this.speed, dmin, 0.1);
+      }
+    }
+
+    // 통상 조향 (드리프트 아닐 때)
+    if (!this.drifting && steer !== 0) {
+      const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
+      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac);
+      const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
       const dir = this.speed >= 0 ? 1 : -1;
       const ang = -steer * turnRate * steerAuthority * dir * dt;
-      _q.setFromAxisAngle(_up, ang); // 수평 회전(도로 정렬은 아래에서)
+      _q.setFromAxisAngle(_up, ang);
       this.forward.applyQuaternion(_q);
     }
-    // 시각 조향각 스무딩
-    this.steerVis = THREE.MathUtils.lerp(this.steerVis, steer, 0.25);
+    // 시각 값
+    this.steerVis = THREE.MathUtils.lerp(this.steerVis, this.drifting ? this.driftDir : steer, 0.25);
+    this.driftYaw = THREE.MathUtils.lerp(this.driftYaw, this.drifting ? this.driftDir * 0.32 : 0, 0.2);
 
     // --- 이동 ---
     _fwd.copy(this.forward);
@@ -418,8 +527,11 @@ export class Kart {
   }
 
   _syncMesh(g) {
-    // 위치
+    // 위치 (+ 호핑 높이)
     this.model.position.copy(this.pos);
+    if (this.hopTimer > 0) {
+      this.model.position.y += Math.sin((0.15 - this.hopTimer) / 0.15 * Math.PI) * 0.4;
+    }
 
     // 방향: forward + 도로 up으로 기저 구성
     _fwd.copy(this.forward);
@@ -439,11 +551,35 @@ export class Kart {
       _q.setFromAxisAngle(_tmp, this.spinAngle);
       this.model.quaternion.premultiply(_q);
     }
-    // 스케일: 불릿 변신(확대) / 무적(반짝 펄스)
-    let sc = 1;
-    if (this._bulletMode) sc = 1.55 + Math.sin(this.wheelSpin * 0.5) * 0.05;
-    else if (this.invincTimer > 0) sc = 1 + Math.sin(this.invincTimer * 30) * 0.08;
+    // 드리프트 슬립(시각 요)
+    if (this.driftYaw !== 0) {
+      _q.setFromAxisAngle(_tmp, this.driftYaw);
+      this.model.quaternion.premultiply(_q);
+    }
+
+    // 불릿(미사일) 변신: 카트 파츠 숨기고 미사일 메시 표시
+    const bm = this._bulletMode;
+    const parts = this.model.userData.bodyParts;
+    const bmesh = this.model.userData.bulletMesh;
+    if (parts && bmesh && bm !== this._bmShown) {
+      for (const p of parts) p.visible = !bm;
+      bmesh.visible = bm;
+      this._bmShown = bm;
+    }
+    // 스케일: 무적(반짝 펄스)만
+    const sc = (!bm && this.invincTimer > 0) ? 1 + Math.sin(this.invincTimer * 30) * 0.08 : 1;
     this.model.scale.setScalar(sc);
+
+    // 드리프트 스파크
+    const sparks = this.model.userData.sparks;
+    if (sparks) {
+      const show = this.drifting && this.driftStage >= 1;
+      const col = this.driftStage >= 3 ? 0xff5ecb : this.driftStage >= 2 ? 0xffa53d : 0x66ccff;
+      for (const s of sparks) {
+        s.visible = show;
+        if (show) { s.material.color.setHex(col); s.scale.setScalar(0.7 + Math.sin(this.wheelSpin * 3 + s.position.x) * 0.35); }
+      }
+    }
 
     // 그림자: 도로면 바로 위
     if (g) {

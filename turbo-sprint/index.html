@@ -70,8 +70,29 @@
     #rTitle { font-size: 30px; font-weight: 800; letter-spacing: 2px; opacity: .95; }
     #rPlace { font-size: 96px; font-weight: 900; color: #ffd23f;
       text-shadow: 0 4px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b; margin: 4px 0; }
-    #rTime { font-size: 40px; font-weight: 800; }
+    #rTime { font-size: 34px; font-weight: 800; }
+    #rStandings { margin: 16px auto 0; display: inline-block; text-align: left; }
+    .rrow { display: flex; gap: 12px; align-items: center; font-size: 20px; font-weight: 700;
+      padding: 4px 14px; border-radius: 10px; min-width: 200px; }
+    .rrow.you { background: rgba(255,210,63,.22); }
+    .rrow span:first-child { width: 30px; text-align: center; }
     #rHint { margin-top: 18px; font-size: 18px; font-weight: 700; opacity: .9; }
+    /* 카운트다운 3·2·1·GO */
+    #countdown {
+      position: fixed; inset: 0; z-index: 9; display: none;
+      align-items: center; justify-content: center; pointer-events: none;
+      font-family: system-ui, sans-serif; font-weight: 900; font-size: 22vh;
+      color: #fff; text-shadow: 0 6px 0 #1b2a6b, -4px 0 #1b2a6b, 4px 0 #1b2a6b, 0 -4px #1b2a6b;
+    }
+    #countdown.go { color: #7CFF6B; font-size: 26vh; }
+    /* 남은 바퀴 팝업 */
+    #lapPopup {
+      position: fixed; top: 20%; left: 50%; transform: translateX(-50%);
+      z-index: 7; opacity: 0; pointer-events: none;
+      font-family: system-ui, sans-serif; font-weight: 900; font-size: 44px;
+      color: #ffd23f; text-shadow: 0 4px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b;
+    }
+    #lapPopup.show { opacity: 1; }
     /* Portrait warning */
     #rotate {
       position: fixed; inset: 0; display: none; z-index: 10;
@@ -88,7 +109,7 @@
   <div id="hud">
     <div id="hint">
       ↑/W 가속 · ↓/S 브레이크 · ←→/AD 조향<br />
-      Space 아이템 · R 리스타트
+      Shift 드리프트 · Space 아이템 · R 리스타트
     </div>
     <div id="lap">LAP <b>1</b>/3</div>
     <div id="item"><span id="itemIcon"></span></div>
@@ -97,11 +118,14 @@
     <div id="speed">0<small>km/h</small></div>
     <div id="fps">-- fps</div>
   </div>
+  <div id="countdown"></div>
+  <div id="lapPopup"></div>
   <div id="result">
     <div class="rbox">
-      <div id="rTitle">FINISH!</div>
+      <div id="rTitle">🏁 GOAL IN! 🏁</div>
       <div id="rPlace">1st</div>
       <div id="rTime">00.00</div>
+      <div id="rStandings"></div>
       <div id="rHint">R = 다시 하기</div>
     </div>
   </div>

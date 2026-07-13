@@ -132,8 +132,14 @@ const chase = new ChaseCamera(camera);
 chase.snap(player);
 
 // ---------- 레이스 상태 ----------
+const NEUTRAL = { accel: false, brake: false, steer: 0, drift: false };
 let raceTime = 0;
-let playerItemRoulette = 0; // 룰렛 남은 시간
+let raceState = 'countdown';       // 'countdown' | 'racing' | 'finished'
+let countdownRem = 3.2;
+let goFired = false;
+let accelPressRem = null;          // 로켓스타트 판정용
+let prevPlayerLap = 0;
+let finishSnapped = false;
 
 function resetRace() {
   for (const k of karts) {
@@ -141,12 +147,34 @@ function resetRace() {
     k.lap = 0; k.progress = 0; k._prevT = undefined; k._started = false; k._armed = true;
     k.finished = false; k.finishTime = 0;
     k.heldItem = null; k.boostTimer = 0; k.spinTimer = 0; k.invincTimer = 0;
+    k.bulletTimer = 0; k.wheelspinTimer = 0; k.drifting = false; k.driftYaw = 0;
+    k._bulletMode = false; k._bmShown = undefined;
+    for (const p of k.model.userData.bodyParts) p.visible = true;
+    k.model.userData.bulletMesh.visible = false;
     k.model.scale.setScalar(1);
   }
+  itemSystem.reset();
   raceTime = 0;
-  playerItemRoulette = 0;
+  raceState = 'countdown';
+  countdownRem = 3.2;
+  goFired = false;
+  accelPressRem = null;
+  prevPlayerLap = 0;
+  finishSnapped = false;
   hud.hideResult();
+  hud.hideLapPopup();
+  chase.reset();
   chase.snap(player);
+}
+
+// 최종 순위: 완주자는 기록순, 미완주자는 진행도순
+function computeStandings() {
+  return karts.slice().sort((a, b) => {
+    if (a.finished && b.finished) return a.finishTime - b.finishTime;
+    if (a.finished) return -1;
+    if (b.finished) return 1;
+    return b.progress - a.progress;
+  });
 }
 
 function updateProgress(k) {
@@ -241,39 +269,64 @@ function frame(nowMs) {
   // 리스타트
   if (input.consumePressed('restart')) resetRace();
 
-  // 아이템 사용 (Space)
-  if (input.consumePressed('item') && player.heldItem && !player.finished) {
-    itemSystem.useItem(player, karts);
-  }
-
-  // 고정 스텝 물리
-  accumulator += dt;
-  let steps = 0;
-  while (accumulator >= FIXED && steps < 8) {
-    // 물리 스텝 (플레이어=키보드, AI=컨트롤러)
-    player.step(FIXED, input);
-    for (const ai of ais) {
-      const inp = ai.update(FIXED, player);
-      ai.kart.step(FIXED, inp);
+  // --- 카운트다운 표시 + 로켓스타트 판정 (레이스 시작 게이팅) ---
+  if (countdownRem > -0.4) {
+    countdownRem -= dt;
+    if (raceState === 'countdown' && accelPressRem === null && input.accel) accelPressRem = countdownRem;
+    if (!goFired && countdownRem <= 0.8) {
+      goFired = true;
+      raceState = 'racing';
+      if (accelPressRem !== null) {
+        if (accelPressRem <= 1.15) player.giveBoost(1.2);   // 완벽 스타트
+        else player.wheelspinTimer = 0.6;                    // 너무 일찍 → 휠스핀
+      }
+      ais.forEach((ai, i) => { if (((i * 0.37 + 0.2) % 1) < 0.5) ai.kart.giveBoost(0.7); });
     }
-    // 카트 간 충돌
-    resolveKartCollisions();
-    // 진행/순위
-    for (const k of karts) updateProgress(k);
-    updateRanks();
-    accumulator -= FIXED;
-    steps++;
+    hud.showCountdown(countdownRem);
   }
 
-  // 레이스 타이머
-  if (!player.finished) raceTime += dt;
+  if (raceState !== 'countdown') {
+    // --- 레이싱 / 피니시 ---
+    if (raceState === 'racing' && input.consumePressed('item') && player.heldItem && !player.finished) {
+      itemSystem.useItem(player, karts);
+    }
+    accumulator += dt;
+    let steps = 0;
+    while (accumulator >= FIXED && steps < 8) {
+      player.step(FIXED, player.finished ? NEUTRAL : input);
+      for (const ai of ais) {
+        const inp = ai.update(FIXED, player);
+        ai.kart.step(FIXED, inp);
+      }
+      resolveKartCollisions();
+      for (const k of karts) updateProgress(k);
+      updateRanks();
+      accumulator -= FIXED;
+      steps++;
+    }
+    if (raceState === 'racing') raceTime += dt;
+
+    // 남은 바퀴 팝업 (플레이어 랩 증가 시)
+    if (player.lap > prevPlayerLap) {
+      prevPlayerLap = player.lap;
+      const remaining = LAPS - player.lap;
+      if (remaining === 1) hud.showLapPopup('FINAL LAP!');
+      else if (remaining > 1) hud.showLapPopup('LAP ' + (player.lap + 1) + ' / ' + LAPS);
+    }
+
+    // 피니시 진입
+    if (player.finished && raceState !== 'finished') {
+      raceState = 'finished';
+    }
+  }
 
   // 아이템/배경
   itemSystem.update(dt, karts);
   scenery.update(dt);
 
-  // 카메라
-  chase.update(player, dt, player.boosting);
+  // 카메라 (피니시 시 줌 연출)
+  if (raceState === 'finished') chase.updateFinish(player, dt);
+  else chase.update(player, dt, player.boosting);
 
   // HUD
   hud.update({
@@ -282,8 +335,9 @@ function frame(nowMs) {
     item: player.heldItem, roulette: false,
   });
   hud.drawMinimap(karts);
-  if (player.finished && !hud.result.classList.contains('show')) {
-    hud.showResult(player.rank || 1, fmtTime(player.finishTime));
+  if (raceState === 'finished' && !finishSnapped) {
+    finishSnapped = true;
+    hud.showResult(computeStandings(), player, fmtTime(player.finishTime));
   }
 
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsCount++; fpsTimer += dt;
@@ -310,4 +364,8 @@ function onResize() {
 window.addEventListener('resize', onResize);
 
 // 디버그용 전역 노출
-window.__turbo = { scene, player, karts, track, itemSystem, PHYS, resetRace };
+window.__turbo = {
+  scene, player, karts, track, itemSystem, PHYS, resetRace,
+  get raceState() { return raceState; },
+  get countdownRem() { return countdownRem; },
+};

@@ -1,11 +1,15 @@
-// items.js — ? 아이템 박스 + 아이템(버섯/별/불릿)
+// items.js — ? 아이템 박스 + 아이템(버섯/별/불릿/바나나/등껍질)
 import * as THREE from 'three';
 
 export const ITEMS = {
   mushroom: { emoji: '🍄', label: 'MUSHROOM' },
   star:     { emoji: '⭐', label: 'STAR' },
   bullet:   { emoji: '🚀', label: 'BULLET' },
+  banana:   { emoji: '🍌', label: 'BANANA' },
+  shell:    { emoji: '🐢', label: 'SHELL' },
 };
+
+const _d = new THREE.Vector3();
 
 function qmark(gm) {
   const cv = document.createElement('canvas');
@@ -24,8 +28,11 @@ function qmark(gm) {
 export class ItemSystem {
   constructor(track, gm) {
     this.track = track;
+    this.gm = gm;
     this.group = new THREE.Group();
     this.boxes = [];
+    this.bananas = [];
+    this.shells = [];
     this._t = 0;
 
     const mat = qmark(gm);
@@ -42,16 +49,26 @@ export class ItemSystem {
         this.boxes.push({ mesh, home: mesh.position.clone(), active: true, respawn: 0 });
       }
     }
+
+    // 바나나/등껍질 프리팹 재질·지오메트리
+    this._bananaGeo = new THREE.TorusGeometry(0.55, 0.2, 8, 12, Math.PI * 1.2);
+    this._bananaMat = new THREE.MeshToonMaterial({ color: 0xffe23f, gradientMap: gm });
+    this._shellGeo = new THREE.SphereGeometry(0.55, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+    this._shellMat = new THREE.MeshToonMaterial({ color: 0x35c94a, gradientMap: gm, emissive: 0x35c94a, emissiveIntensity: 0.2 });
   }
 
   _grant(kart, rank) {
     const roll = Math.abs((Math.sin(this._t * 97.13 + kart.pos.x * 3.7 + kart.pos.z * 1.9) * 43758.5453) % 1);
     let item;
-    if (rank === 1) item = roll < 0.75 ? 'mushroom' : 'bullet';
-    else if (rank >= 3) item = roll < 0.35 ? 'mushroom' : (roll < 0.7 ? 'bullet' : 'star');
-    else item = roll < 0.5 ? 'mushroom' : (roll < 0.8 ? 'bullet' : 'star');
+    if (rank === 1) {
+      item = roll < 0.4 ? 'mushroom' : roll < 0.7 ? 'banana' : roll < 0.9 ? 'shell' : 'bullet';
+    } else if (rank >= 3) {
+      item = roll < 0.3 ? 'mushroom' : roll < 0.55 ? 'bullet' : roll < 0.75 ? 'star' : roll < 0.9 ? 'shell' : 'banana';
+    } else {
+      item = roll < 0.35 ? 'mushroom' : roll < 0.6 ? 'shell' : roll < 0.8 ? 'banana' : roll < 0.92 ? 'bullet' : 'star';
+    }
     kart.heldItem = item;
-    if (kart.isAI) kart.aiUseTimer = 0.8 + roll * 1.6;
+    if (kart.isAI) kart.aiUseTimer = 0.8 + roll * 1.8;
   }
 
   useItem(kart, karts) {
@@ -61,11 +78,35 @@ export class ItemSystem {
     if (item === 'mushroom') kart.giveBoost(1.5);
     else if (item === 'star') kart.setInvincible(5);
     else if (item === 'bullet') kart.startBullet(4.5);
+    else if (item === 'banana') this._dropBanana(kart);
+    else if (item === 'shell') this._fireShell(kart);
     return item;
+  }
+
+  _dropBanana(owner) {
+    _d.copy(owner.forward).setY(0).normalize();
+    const mesh = new THREE.Mesh(this._bananaGeo, this._bananaMat);
+    mesh.position.copy(owner.pos).addScaledVector(_d, -3);
+    mesh.rotation.x = -Math.PI / 2;
+    const gy = this.track.samplePos[owner.idx].y;
+    mesh.position.y = gy + 0.35;
+    this.group.add(mesh);
+    this.bananas.push({ mesh, owner, grace: 1.2 });
+  }
+
+  _fireShell(owner) {
+    _d.copy(owner.forward).setY(0).normalize();
+    const mesh = new THREE.Mesh(this._shellGeo, this._shellMat);
+    mesh.position.copy(owner.pos).addScaledVector(_d, 2.5);
+    mesh.position.y += 0.4;
+    this.group.add(mesh);
+    this.shells.push({ mesh, owner, dir: _d.clone(), speed: 42, life: 4, grace: 0.2 });
   }
 
   update(dt, karts) {
     this._t += dt;
+
+    // ? 박스
     for (const b of this.boxes) {
       if (b.active) {
         b.mesh.rotation.y += dt * 1.6;
@@ -84,6 +125,7 @@ export class ItemSystem {
         if (b.respawn <= 0) { b.active = true; b.mesh.visible = true; }
       }
     }
+
     // AI 아이템 자동 사용
     for (const k of karts) {
       if (k.isAI && k.heldItem) {
@@ -91,5 +133,44 @@ export class ItemSystem {
         if (k.aiUseTimer <= 0) this.useItem(k, karts);
       }
     }
+
+    // 바나나 (밟으면 스핀)
+    for (let i = this.bananas.length - 1; i >= 0; i--) {
+      const bn = this.bananas[i];
+      bn.grace -= dt;
+      bn.mesh.rotation.z += dt * 1.5;
+      let hit = false;
+      for (const k of karts) {
+        if (bn.grace > 0 && k === bn.owner) continue;
+        if (k.pos.distanceToSquared(bn.mesh.position) < 4) {
+          if (k.spinOut(1.2)) hit = true;
+          hit = true; break;
+        }
+      }
+      if (hit) { this.group.remove(bn.mesh); this.bananas.splice(i, 1); }
+    }
+
+    // 등껍질 (직진, 맞으면 스핀)
+    for (let i = this.shells.length - 1; i >= 0; i--) {
+      const sh = this.shells[i];
+      sh.life -= dt; sh.grace -= dt;
+      sh.mesh.position.addScaledVector(sh.dir, sh.speed * dt);
+      const gi = this.track.sampleNear(sh.mesh.position, 0);
+      sh.mesh.position.y = this.track.samplePos[gi].y + 0.4;
+      sh.mesh.rotation.y += dt * 8;
+      let done = sh.life <= 0;
+      for (const k of karts) {
+        if (sh.grace > 0 && k === sh.owner) continue;
+        if (k.pos.distanceToSquared(sh.mesh.position) < 4.5) { k.spinOut(1.2); done = true; break; }
+      }
+      if (done) { this.group.remove(sh.mesh); this.shells.splice(i, 1); }
+    }
+  }
+
+  reset() {
+    for (const bn of this.bananas) this.group.remove(bn.mesh);
+    for (const sh of this.shells) this.group.remove(sh.mesh);
+    this.bananas.length = 0; this.shells.length = 0;
+    for (const b of this.boxes) { b.active = true; b.mesh.visible = true; b.respawn = 0; }
   }
 }

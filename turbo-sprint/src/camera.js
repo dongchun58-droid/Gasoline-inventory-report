@@ -57,4 +57,26 @@ export class ChaseCamera {
   }
 
   snap(kart) { this._inited = false; this.update(kart, 1 / 60); }
+
+  reset() { this._finishT = 0; }
+
+  // 골인 연출: 카트 주위를 돌며 서서히 줌인
+  updateFinish(kart, dt) {
+    this._finishT = (this._finishT || 0) + dt;
+    const t = this._finishT;
+    const ang = t * 0.7;
+    const r = Math.max(5, 10 - t * 1.0);
+    const height = 3 + Math.sin(t * 0.6) * 0.6;
+    _desired.set(
+      kart.pos.x + Math.sin(ang) * r,
+      kart.pos.y + height,
+      kart.pos.z + Math.cos(ang) * r
+    );
+    this.camera.position.lerp(_desired, 0.12);
+    _look.copy(kart.pos); _look.y += 0.8;
+    this.camera.lookAt(_look);
+    const targetFov = 52;
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 0.05);
+    this.camera.updateProjectionMatrix();
+  }
 }
