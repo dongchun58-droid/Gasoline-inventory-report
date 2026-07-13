@@ -4,7 +4,7 @@ name: Deploy TURBO SPRINT to Pages
 # (Pages 활성화 후 재배포 트리거)
 on:
   push:
-    branches: [main, claude/new-session-on09d2]
+    branches: [main]   # main에서만 배포 (동시성 레이스 방지)
     paths:
       - 'turbo-sprint/**'
       - '.github/workflows/deploy-pages.yml'
