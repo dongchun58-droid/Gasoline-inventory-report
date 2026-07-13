@@ -10,6 +10,9 @@ import { Track } from './track.js';
 import { Kart, PHYS } from './kart.js';
 import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
+import { AIController } from './ai.js';
+import { ItemSystem } from './items.js';
+import { HUD } from './hud.js';
 
 // ---------- 셀 셰이딩용 3단 그라디언트맵 (§9) ----------
 function makeToonGradient() {
@@ -86,20 +89,113 @@ scene.add(sun);
 const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x6bbf5a, 1.0); // 하늘색↑ / 풀색↓
 scene.add(hemi);
 
-// ---------- 트랙 & 카트 ----------
+// ---------- 트랙 ----------
 const track = new Track(gradientMap);
 scene.add(track.group);
 
-const player = new Kart(track, 0x2e6bff, gradientMap);
-scene.add(player.model);
-scene.add(player.shadow);
+// ---------- 카트들 (플레이어 + AI 3) ----------
+const LAPS = 3;
+// [색, 이름, 레인오프셋, 그리드 lat, 그리드 back]
+const LINEUP = [
+  { color: 0x2e6bff, name: 'YOU',       lane: 0,  gLat: -3.5, gBack: 5,  ai: false },
+  { color: 0xff3b3b, name: 'CRIMSON',   lane: -3, gLat: 3.5,  gBack: 5,  ai: true },
+  { color: 0x18c2c2, name: 'TEAL',      lane: 0,  gLat: -3.5, gBack: 12, ai: true },
+  { color: 0xffc233, name: 'GOLD',      lane: 3,  gLat: 3.5,  gBack: 12, ai: true },
+];
+const karts = [];
+const ais = [];
+let player;
+for (const spec of LINEUP) {
+  const k = new Kart(track, spec.color, gradientMap);
+  k.name = spec.name;
+  k.isAI = spec.ai;
+  k.gridLat = spec.gLat; k.gridBack = spec.gBack;
+  k.resetToStart(spec.gLat, spec.gBack);
+  scene.add(k.model, k.shadow);
+  karts.push(k);
+  if (spec.ai) ais.push(new AIController(k, track, spec.lane));
+  else player = k;
+}
 
-// ---------- 배경 월드 (소품·풍선·구름·아치) ----------
+// ---------- 아이템 시스템 ----------
+const itemSystem = new ItemSystem(track, gradientMap);
+scene.add(itemSystem.group);
+
+// ---------- 배경 월드 ----------
 const scenery = new Scenery(track, gradientMap);
 scene.add(scenery.group);
 
+// ---------- HUD ----------
+const hud = new HUD();
+
 const chase = new ChaseCamera(camera);
 chase.snap(player);
+
+// ---------- 레이스 상태 ----------
+let raceTime = 0;
+let playerItemRoulette = 0; // 룰렛 남은 시간
+
+function resetRace() {
+  for (const k of karts) {
+    k.resetToStart(k.gridLat, k.gridBack);
+    k.lap = 0; k.progress = 0; k._prevT = undefined; k._started = false; k._armed = true;
+    k.finished = false; k.finishTime = 0;
+    k.heldItem = null; k.boostTimer = 0; k.spinTimer = 0; k.invincTimer = 0;
+    k.model.scale.setScalar(1);
+  }
+  raceTime = 0;
+  playerItemRoulette = 0;
+  hud.hideResult();
+  chase.snap(player);
+}
+
+function updateProgress(k) {
+  const N = track.samplePos.length;
+  const t = k.idx / (N - 1);
+  if (k._prevT === undefined) k._prevT = t;
+  if (k._armed === undefined) k._armed = true; // 첫 통과(스타트)는 유효
+  // 히스테리시스: 통과 후 트랙 중반(t~0.5)을 지나야 다음 통과가 유효
+  if (t > 0.4 && t < 0.6) k._armed = true;
+  if (k._armed && k._prevT > 0.72 && t < 0.28) {
+    k._armed = false;
+    if (!k._started) k._started = true; else k.lap++;
+    if (k._started && k.lap >= LAPS && !k.finished) {
+      k.finished = true; k.finishTime = raceTime;
+    }
+  }
+  k._prevT = t;
+  k.progress = (k._started ? k.lap : -1) + t;
+}
+
+function updateRanks() {
+  const sorted = karts.slice().sort((a, b) => b.progress - a.progress);
+  sorted.forEach((k, i) => { k.rank = i + 1; });
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = (s % 60);
+  return (m > 0 ? m + ':' : '') + sec.toFixed(2).padStart(5, '0');
+}
+
+// 카트 간 구 충돌 (반경 1.1m)
+const _sep = new THREE.Vector3();
+function resolveKartCollisions() {
+  const MIN = 2.2;
+  for (let i = 0; i < karts.length; i++) {
+    for (let j = i + 1; j < karts.length; j++) {
+      const a = karts[i], b = karts[j];
+      _sep.set(b.pos.x - a.pos.x, 0, b.pos.z - a.pos.z);
+      const d = _sep.length();
+      if (d > 1e-4 && d < MIN) {
+        _sep.multiplyScalar(1 / d);
+        const push = (MIN - d) * 0.5;
+        a.pos.addScaledVector(_sep, -push);
+        b.pos.addScaledVector(_sep, push);
+        a.speed *= 0.9; b.speed *= 0.9;
+      }
+    }
+  }
+}
 
 // ---------- 포스트프로세싱: 블룸(네온 발광) (§9) ----------
 const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -129,7 +225,6 @@ let last = performance.now() / 1000;
 
 // FPS 표시
 const fpsEl = document.getElementById('fps');
-const speedEl = document.getElementById('speed');
 let fpsAcc = 0, fpsCount = 0, fpsTimer = 0;
 
 function frame(nowMs) {
@@ -139,28 +234,52 @@ function frame(nowMs) {
   if (dt > 0.25) dt = 0.25; // 탭 복귀 등 큰 점프 방지
 
   // 리스타트
-  if (input.consumePressed('restart')) {
-    player.resetToStart();
-    chase.snap(player);
+  if (input.consumePressed('restart')) resetRace();
+
+  // 아이템 사용 (Space)
+  if (input.consumePressed('item') && player.heldItem && !player.finished) {
+    itemSystem.useItem(player, karts);
   }
 
   // 고정 스텝 물리
   accumulator += dt;
   let steps = 0;
   while (accumulator >= FIXED && steps < 8) {
+    // 물리 스텝 (플레이어=키보드, AI=컨트롤러)
     player.step(FIXED, input);
+    for (const ai of ais) {
+      const inp = ai.update(FIXED, player);
+      ai.kart.step(FIXED, inp);
+    }
+    // 카트 간 충돌
+    resolveKartCollisions();
+    // 진행/순위
+    for (const k of karts) updateProgress(k);
+    updateRanks();
     accumulator -= FIXED;
     steps++;
   }
 
-  // 카메라(가변 렌더 dt)
-  chase.update(player, dt);
+  // 레이스 타이머
+  if (!player.finished) raceTime += dt;
 
-  // 배경 애니메이션 (별 회전·풍선 바운스)
+  // 아이템/배경
+  itemSystem.update(dt, karts, player);
   scenery.update(dt);
 
+  // 카메라
+  chase.update(player, dt, player.boosting);
+
   // HUD
-  speedEl.firstChild.textContent = player.kmh;
+  hud.update({
+    kmh: player.kmh, rank: player.rank || 1,
+    lap: player.lap, laps: LAPS,
+    item: player.heldItem, roulette: false,
+  });
+  if (player.finished && !hud.result.classList.contains('show')) {
+    hud.showResult(player.rank || 1, fmtTime(player.finishTime));
+  }
+
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsCount++; fpsTimer += dt;
   if (fpsTimer >= 0.5) {
     fpsEl.textContent = Math.round(fpsAcc / fpsCount) + ' fps';
@@ -185,4 +304,4 @@ function onResize() {
 window.addEventListener('resize', onResize);
 
 // 디버그용 전역 노출
-window.__turbo = { scene, player, track, PHYS };
+window.__turbo = { scene, player, karts, track, itemSystem, PHYS, resetRace };

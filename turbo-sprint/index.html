@@ -32,6 +32,40 @@
       font-size: 13px; font-weight: 700; opacity: .8;
       text-shadow: -1px 0 #1b2a6b, 1px 0 #1b2a6b, 0 -1px #1b2a6b, 0 1px #1b2a6b;
     }
+    #lap {
+      position: absolute; left: 20px; bottom: 62px;
+      font-size: 20px; font-weight: 800;
+      text-shadow: -2px 0 #1b2a6b, 2px 0 #1b2a6b, 0 -2px #1b2a6b, 0 2px #1b2a6b;
+    }
+    #lap b { font-size: 26px; }
+    #rank {
+      position: absolute; right: 22px; bottom: 16px;
+      font-size: 58px; font-weight: 900; line-height: .9;
+      color: #ffd23f;
+      text-shadow: -3px 0 #1b2a6b, 3px 0 #1b2a6b, 0 -3px #1b2a6b, 0 3px #1b2a6b, 0 4px 0 #1b2a6b;
+    }
+    #rank sup { font-size: 26px; }
+    #item {
+      position: absolute; right: 20px; top: 44px;
+      width: 92px; height: 92px; border-radius: 20px;
+      background: rgba(20,24,60,.45); border: 4px solid rgba(255,255,255,.85);
+      box-shadow: 0 4px 14px rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #itemIcon { font-size: 52px; line-height: 1; }
+    #result {
+      position: fixed; inset: 0; z-index: 8; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(10,12,30,.55); backdrop-filter: blur(3px);
+      font-family: system-ui, sans-serif; color: #fff;
+    }
+    #result.show { display: flex; }
+    .rbox { text-align: center; }
+    #rTitle { font-size: 30px; font-weight: 800; letter-spacing: 2px; opacity: .95; }
+    #rPlace { font-size: 96px; font-weight: 900; color: #ffd23f;
+      text-shadow: 0 4px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b; margin: 4px 0; }
+    #rTime { font-size: 40px; font-weight: 800; }
+    #rHint { margin-top: 18px; font-size: 18px; font-weight: 700; opacity: .9; }
     /* Portrait warning */
     #rotate {
       position: fixed; inset: 0; display: none; z-index: 10;
@@ -47,11 +81,22 @@
 <body>
   <div id="hud">
     <div id="hint">
-      TURBO SPRINT — Phase 1<br />
-      ↑/W 가속 · ↓/S 브레이크 · ←→/AD 조향 · R 리스타트
+      ↑/W 가속 · ↓/S 브레이크 · ←→/AD 조향<br />
+      Space 아이템 · R 리스타트
     </div>
+    <div id="lap">LAP <b>1</b>/3</div>
+    <div id="item"><span id="itemIcon"></span></div>
+    <div id="rank"><b>1</b><sup>st</sup></div>
     <div id="speed">0<small>km/h</small></div>
     <div id="fps">-- fps</div>
+  </div>
+  <div id="result">
+    <div class="rbox">
+      <div id="rTitle">FINISH!</div>
+      <div id="rPlace">1st</div>
+      <div id="rTime">00.00</div>
+      <div id="rHint">R = 다시 하기</div>
+    </div>
   </div>
   <div id="rotate">📱 → 🖥️<br />가로로 돌려주세요</div>
   <script type="module" src="/src/main.js"></script>

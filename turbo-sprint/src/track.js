@@ -2,17 +2,17 @@
 // Phase 1: 도로를 달릴 수 있고, 접지 높이/이탈 판정을 제공한다.
 import * as THREE from 'three';
 
-// §4 제어점 초안 (스펙 그대로)
+// §4 제어점 — 지면 주행을 위해 평탄화(y≈0). XZ 레이아웃은 유지.
 const CONTROL_POINTS = [
-  [0, 0, 0],      [55, 0, -4],    [100, 1, -28],
-  [112, 3, -78],  [88, 5, -112],
-  [42, 5, -104],  [18, 4, -72],   [-28, 6, -64],
-  [-72, 10, -30],
-  [-78, 13, 18],
-  [-38, 2, 52],   [-8, 0, 24],
+  [0, 0, 0],      [55, 0, -4],    [100, 0, -28],
+  [112, 0, -78],  [88, 0, -112],
+  [42, 0, -104],  [18, 0, -72],   [-28, 0, -64],
+  [-72, 0, -30],
+  [-78, 0, 18],
+  [-38, 0, 52],   [-8, 0, 24],
 ];
 
-export const ROAD_WIDTH = 14;
+export const ROAD_WIDTH = 20;
 const HALF_W = ROAD_WIDTH / 2;
 const SAMPLES = 720;          // 접지 샘플 수 (조밀할수록 접지가 매끈)
 const CURB_W = 1;             // 연석 폭 (양끝 1m)
@@ -221,6 +221,18 @@ export class Track {
     out.lateral = lateral;
     out.onRoad = Math.abs(lateral) <= HALF_W + 0.5;
     return out;
+  }
+
+  // 지형 평탄화용: 임의 (x,z)에서 도로 중심선까지의 수평 최단거리
+  pathDistanceXZ(x, z) {
+    let best = Infinity;
+    const arr = this.samplePos;
+    for (let i = 0; i < arr.length; i += 4) {
+      const dx = arr[i].x - x, dz = arr[i].z - z;
+      const d = dx * dx + dz * dz;
+      if (d < best) best = d;
+    }
+    return Math.sqrt(best);
   }
 
   get halfWidth() { return HALF_W; }

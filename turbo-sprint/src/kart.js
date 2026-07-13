@@ -199,6 +199,22 @@ export class Kart {
     this.wheelSpin = 0;    // 휠 회전 누적
     this.fallTimer = 0;
 
+    // 아이템/부스트 상태
+    this.boostTimer = 0;   // >0 이면 부스트 중
+    this.spinTimer = 0;    // >0 이면 스핀아웃(조작 불가)
+    this.spinAngle = 0;    // 스핀 시각 회전 누적
+    this.invincTimer = 0;  // >0 이면 무적(별)
+
+    // 아이템 보유
+    this.heldItem = null;  // 'mushroom' | 'star' | 'rocket' | null
+    this.aiUseTimer = 0;   // AI 아이템 사용 딜레이
+
+    // 레이스 진행
+    this.lap = 0;
+    this.progress = 0;     // lap + t (순위 계산용)
+    this.finished = false;
+    this.finishTime = 0;
+
     this.resetToStart();
   }
 
@@ -231,16 +247,55 @@ export class Kart {
     this.fallTimer = 0;
   }
 
+  // 부스트/스핀/무적 트리거
+  giveBoost(t) { this.boostTimer = Math.max(this.boostTimer, t); }
+  spinOut(t) {
+    if (this.invincTimer > 0 || this.spinTimer > 0) return false;
+    this.spinTimer = t;
+    this.speed *= 0.4;
+    this.boostTimer = 0;
+    return true;
+  }
+  setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
+  get boosting() { return this.boostTimer > 0; }
+
   // 고정 dt 물리 스텝
   step(dt, input) {
+    // 타이머 감소
+    if (this.boostTimer > 0) this.boostTimer -= dt;
+    if (this.invincTimer > 0) this.invincTimer -= dt;
+
+    // --- 스핀아웃 중: 조작 불가, 제자리 회전 연출 ---
+    if (this.spinTimer > 0) {
+      this.spinTimer -= dt;
+      this.spinAngle += 12 * dt;
+      // 감속(드래그)
+      this.speed -= PHYS.drag * 1.5 * dt;
+      if (this.speed < 0) this.speed = 0;
+      _fwd.copy(this.forward); _fwd.y = 0;
+      if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+      this.pos.addScaledVector(_fwd, this.speed * dt);
+      const gS = this.track.ground(this.pos, this.idx, _ground);
+      this.idx = gS.idx;
+      if (gS.onRoad) this.pos.y = THREE.MathUtils.lerp(this.pos.y, gS.height + 0.1, 0.5);
+      this.wheelSpin += (this.speed / 0.34) * dt;
+      this._syncMesh(gS);
+      return;
+    }
+    this.spinAngle = 0;
+
+    const boosting = this.boostTimer > 0;
+    const effMax = boosting ? PHYS.maxSpeed * PHYS.boostMultiplier : PHYS.maxSpeed;
+
     // --- 종방향 (가속/브레이크/드래그) ---
-    const throttle = input.accel;
-    const braking = input.brake;
+    const throttle = input.accel || boosting;
+    const braking = input.brake && !boosting;
 
     if (throttle) {
-      // v가 max에 가까울수록 지수 감쇠
-      const room = Math.max(0, 1 - this.speed / PHYS.maxSpeed);
-      this.speed += PHYS.accel * room * dt;
+      // v가 max에 가까울수록 지수 감쇠 (부스트 중엔 강하게 밀어붙임)
+      const room = Math.max(0, 1 - this.speed / effMax);
+      const push = boosting ? Math.max(room, 0.4) * 2.2 : room;
+      this.speed += PHYS.accel * push * dt;
     } else if (braking) {
       if (this.speed > 0) {
         this.speed -= PHYS.brake * dt;
@@ -260,7 +315,7 @@ export class Kart {
         if (this.speed > 0) this.speed = 0;
       }
     }
-    if (this.speed > PHYS.maxSpeed) this.speed = PHYS.maxSpeed;
+    if (this.speed > effMax) this.speed = effMax;
 
     // --- 조향 (속도 비례 선회율) ---
     const steer = input.steer;
@@ -338,6 +393,14 @@ export class Kart {
     // 모델의 +Z가 전방이 되도록 기저 배치
     _m.makeBasis(_right, _tmp, _fwd);
     this.model.quaternion.setFromRotationMatrix(_m);
+    // 스핀아웃 시각 회전
+    if (this.spinAngle > 0) {
+      _q.setFromAxisAngle(_tmp, this.spinAngle);
+      this.model.quaternion.premultiply(_q);
+    }
+    // 무적(별): 반짝 스케일 펄스
+    const pulse = this.invincTimer > 0 ? 1 + Math.sin(this.invincTimer * 30) * 0.08 : 1;
+    this.model.scale.setScalar(pulse);
 
     // 그림자: 도로면 바로 위
     if (g) {
