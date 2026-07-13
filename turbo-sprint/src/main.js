@@ -29,22 +29,35 @@ function makeToonGradient() {
   return tex;
 }
 
-// ---------- 임시 노을 스카이돔 (Phase 6에서 고도화) ----------
+// ---------- 밝은 한낮 스카이돔 (마리오 월드풍) + 태양 ----------
 function makeSky() {
+  const group = new THREE.Group();
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 256;
   const g = cv.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.0, '#3D2C8D'); // 천정
-  grd.addColorStop(0.55, '#FF5E8A');
-  grd.addColorStop(1.0, '#FF9E5E'); // 지평선
+  grd.addColorStop(0.0, '#1E6FE0'); // 천정 (진한 하늘색)
+  grd.addColorStop(0.55, '#5FB8FF');
+  grd.addColorStop(0.85, '#B8E8FF');
+  grd.addColorStop(1.0, '#EAF9FF'); // 지평선 (밝은 하늘)
   g.fillStyle = grd;
   g.fillRect(0, 0, 16, 256);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const geo = new THREE.SphereGeometry(600, 24, 16);
-  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
-  return new THREE.Mesh(geo, mat);
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(600, 24, 16),
+    new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
+  );
+  group.add(dome);
+  // 태양 (블룸이 먹는 밝은 원반)
+  const sunDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(34, 32),
+    new THREE.MeshBasicMaterial({ color: 0xfff6d0, fog: false, toneMapped: false })
+  );
+  sunDisc.position.set(-180, 190, -430);
+  sunDisc.lookAt(0, 0, 0);
+  group.add(sunDisc);
+  return group;
 }
 
 // ---------- 렌더러 ----------
@@ -53,12 +66,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // iPad 60fps �
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.0;
 document.body.appendChild(renderer.domElement);
 
 // ---------- 씬 ----------
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xff7e77, 120, 520);
+scene.fog = new THREE.Fog(0xbfeaff, 180, 620); // 밝은 하늘색 안개
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1200);
 
@@ -66,11 +79,11 @@ const gradientMap = makeToonGradient();
 
 scene.add(makeSky());
 
-// 라이팅 (§9)
-const sun = new THREE.DirectionalLight(0xffb36b, 2.2);
-sun.position.set(40, 60, 20);
+// 라이팅 (한낮 햇살)
+const sun = new THREE.DirectionalLight(0xfff2d0, 2.4);
+sun.position.set(-60, 90, -40);
 scene.add(sun);
-const hemi = new THREE.HemisphereLight(0xff9e5e, 0x3d2c8d, 0.8);
+const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x6bbf5a, 1.0); // 하늘색↑ / 풀색↓
 scene.add(hemi);
 
 // ---------- 트랙 & 카트 ----------
@@ -98,9 +111,9 @@ const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.6,  // strength
-  0.5,  // radius
-  0.6   // threshold (네온·별만 발광, 하늘은 제외)
+  0.35, // strength (한낮이라 은은하게)
+  0.4,  // radius
+  0.8   // threshold (태양·네온·별만 발광)
 );
 composer.addPass(bloom);
 composer.addPass(new OutputPass());

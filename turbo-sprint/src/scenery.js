@@ -18,6 +18,16 @@ function toon(color, gradientMap, emissiveI = 0) {
   });
 }
 
+// 결정적(deterministic) 언덕 높이 — Math.random 미사용
+function hills(x, z) {
+  return (
+    Math.sin(x * 0.035) * 6 +
+    Math.cos(z * 0.03) * 5 +
+    Math.sin((x + z) * 0.02) * 4 +
+    Math.cos(x * 0.08 + z * 0.05) * 2
+  );
+}
+
 export class Scenery {
   constructor(track, gradientMap) {
     this.track = track;
@@ -27,13 +37,13 @@ export class Scenery {
     this.balloons = null;
     this._t = 0;
 
+    this._buildLandscape();  // 저 아래 초록 대지 (트랙 뒤 풍경)
     this._buildEdgeProps();
     this._buildRings();
     this._buildBalloons();
     this._buildCoins();
     this._buildFinishArch();
     this._buildClouds();
-    this._buildIslands();
   }
 
   // 도로 가장자리 바깥에 네온 기둥 + 버섯을 번갈아 배치
@@ -274,6 +284,102 @@ export class Scenery {
       island.position.set(x, y, z);
       this.group.add(island);
     }
+  }
+
+  // 저 아래 초록 대지: 언덕 지형 + 산 + 호수 + 나무 (트랙은 그 위에 떠 있음)
+  _buildLandscape() {
+    const CX = 16, CZ = -30, GY = -30;
+    const gm = this.gm;
+
+    // --- 언덕 지형 ---
+    const size = 760, seg = 60;
+    const geo = new THREE.PlaneGeometry(size, size, seg, seg);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const cLow = new THREE.Color(0x4fae4a);   // 초록
+    const cHigh = new THREE.Color(0x8fe06a);  // 밝은 연두
+    const cSand = new THREE.Color(0xe8d9a0);  // 낮은 곳 모래빛
+    const tmpC = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const wx = pos.getX(i) + CX, wz = pos.getZ(i) + CZ;
+      const h = hills(wx, wz);
+      pos.setY(i, h);
+      const t = THREE.MathUtils.clamp((h + 8) / 20, 0, 1);
+      tmpC.copy(h < -4 ? cSand : cLow).lerp(cHigh, t);
+      colors[i * 3] = tmpC.r; colors[i * 3 + 1] = tmpC.g; colors[i * 3 + 2] = tmpC.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    const ground = new THREE.Mesh(
+      geo,
+      new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gm })
+    );
+    ground.position.set(CX, GY, CZ);
+    this.group.add(ground);
+
+    // --- 호수 (파란 원반) ---
+    const lakeMat = new THREE.MeshToonMaterial({ color: 0x3fb8ff, gradientMap: gm, transparent: true, opacity: 0.92 });
+    const lakeSpots = [[-120, -60], [140, 40], [40, -180], [-40, 120]];
+    for (const [lx, lz] of lakeSpots) {
+      const lake = new THREE.Mesh(new THREE.CircleGeometry(34, 28), lakeMat);
+      lake.rotation.x = -Math.PI / 2;
+      lake.position.set(CX + lx, GY - 3.5, CZ + lz);
+      this.group.add(lake);
+    }
+
+    // --- 먼 산 (링 형태로 둘러쌈) ---
+    const mtnMat = new THREE.MeshToonMaterial({ color: 0x5a7d8c, gradientMap: gm });
+    const snowMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: gm });
+    const mtnCount = 14, R = 330;
+    for (let i = 0; i < mtnCount; i++) {
+      const a = (i / mtnCount) * Math.PI * 2;
+      const mx = CX + Math.cos(a) * R;
+      const mz = CZ + Math.sin(a) * R;
+      const hgt = 70 + (i % 4) * 22;
+      const rad = 44 + (i % 3) * 12;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(rad, hgt, 6), mtnMat);
+      m.position.set(mx, GY + hgt / 2 - 6, mz);
+      this.group.add(m);
+      const snow = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.42, hgt * 0.35, 6), snowMat);
+      snow.position.set(mx, GY + hgt - hgt * 0.35 / 2 - 6, mz);
+      this.group.add(snow);
+    }
+
+    // --- 나무 (인스턴스드) ---
+    const spots = [];
+    const step = 34;
+    for (let gx = -size / 2 + 20; gx < size / 2 - 20; gx += step) {
+      for (let gz = -size / 2 + 20; gz < size / 2 - 20; gz += step) {
+        const idx = Math.round(gx + gz);
+        if (Math.abs(idx) % 5 < 2) continue; // 듬성듬성
+        const wx = CX + gx + (idx % 7), wz = CZ + gz + (idx % 5);
+        const rr = Math.hypot(gx, gz);
+        if (rr > 300) continue;            // 산보다 안쪽만
+        spots.push({ x: wx, y: GY + hills(wx, wz), z: wz, s: 0.8 + (Math.abs(idx) % 5) * 0.18 });
+      }
+    }
+    const trunkGeo = new THREE.CylinderGeometry(0.7, 0.95, 5, 6);
+    const trunks = new THREE.InstancedMesh(trunkGeo, toon(0x7a5230, gm), spots.length);
+    const foliageGeo = new THREE.ConeGeometry(3.6, 9, 8);
+    const foliage = new THREE.InstancedMesh(foliageGeo, new THREE.MeshToonMaterial({ gradientMap: gm }), spots.length);
+    foliage.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(spots.length * 3), 3);
+    const greens = [0x4fae4a, 0x6bc95a, 0x3f9e6a, 0x8fe06a];
+    const col = new THREE.Color();
+    spots.forEach((sp, k) => {
+      _q.identity();
+      _p.set(sp.x, sp.y + 2.5 * sp.s, sp.z);
+      _m.compose(_p, _q, _s.set(sp.s, sp.s, sp.s));
+      trunks.setMatrixAt(k, _m);
+      _p.set(sp.x, sp.y + 7.5 * sp.s, sp.z);
+      _m.compose(_p, _q, _s.set(sp.s, sp.s, sp.s));
+      foliage.setMatrixAt(k, _m);
+      col.set(greens[k % greens.length]);
+      foliage.setColorAt(k, col);
+    });
+    trunks.instanceMatrix.needsUpdate = true;
+    foliage.instanceMatrix.needsUpdate = true;
+    this.group.add(trunks, foliage);
   }
 
   update(dt) {

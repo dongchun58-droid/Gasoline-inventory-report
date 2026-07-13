@@ -165,7 +165,7 @@ export class Track {
     const cols = 16;
     for (let x = 0; x < cols; x++) {
       for (let y = 0; y < 2; y++) {
-        g.fillStyle = ((x + y) % 2 === 0) ? '#FFFFFF' : '#12101f';
+        g.fillStyle = ((x + y) % 2 === 0) ? '#ECECF2' : '#12101f';
         g.fillRect(x * (128 / cols), y * 8, 128 / cols, 8);
       }
     }
