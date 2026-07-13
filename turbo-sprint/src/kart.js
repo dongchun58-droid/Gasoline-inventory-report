@@ -284,7 +284,8 @@ export class Kart {
     const crossY = _fwd.x * _tmp.z - _fwd.z * _tmp.x;
     const dot = THREE.MathUtils.clamp(_fwd.dot(_tmp), -1, 1);
     const ang = Math.atan2(crossY, dot);
-    _q.setFromAxisAngle(_up, THREE.MathUtils.clamp(ang, -5 * dt, 5 * dt));
+    // 목표로 수렴하려면 forward 를 -ang 만큼 회전 (rot 규칙과 동일 부호)
+    _q.setFromAxisAngle(_up, THREE.MathUtils.clamp(-ang, -5 * dt, 5 * dt));
     this.forward.applyQuaternion(_q);
   }
 

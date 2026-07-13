@@ -28,10 +28,12 @@ export class AIController {
     if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
 
     // 조향: 전방과 목표방향 사이 각
+    // 카트 회전 규칙(rot = -steer·…, 목표까지 필요한 rot = -ang)상
+    // steer 는 +ang 이어야 목표로 수렴한다. (이전 -ang 은 반대로 꺾여 버그)
     const crossY = _fwd.x * _toT.z - _fwd.z * _toT.x;
     const dot = THREE.MathUtils.clamp(_fwd.dot(_toT), -1, 1);
     const ang = Math.atan2(crossY, dot);
-    this.input.steer = THREE.MathUtils.clamp(-ang * 2.2, -1, 1);
+    this.input.steer = THREE.MathUtils.clamp(ang * 2.4, -1, 1);
 
     // 곡률 기반 목표 속도 (앞쪽 접선 변화가 크면 감속)
     const a = track.sampleTan[k.idx];
