@@ -204,6 +204,8 @@ export class Kart {
     this.spinTimer = 0;    // >0 이면 스핀아웃(조작 불가)
     this.spinAngle = 0;    // 스핀 시각 회전 누적
     this.invincTimer = 0;  // >0 이면 무적(별)
+    this.bulletTimer = 0;  // >0 이면 대형 불릿 변신(자동 돌진)
+    this.onGrass = false;
 
     // 아이템 보유
     this.heldItem = null;  // 'mushroom' | 'star' | 'rocket' | null
@@ -257,7 +259,34 @@ export class Kart {
     return true;
   }
   setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
-  get boosting() { return this.boostTimer > 0; }
+  get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
+
+  // 대형 불릿 변신: 자동으로 트랙을 따라 고속 돌진
+  startBullet(t) {
+    this.bulletTimer = t;
+    this.spinTimer = 0;
+    this.invincTimer = Math.max(this.invincTimer, t + 0.3);
+    const tan = this.track.sampleTan[this.idx];
+    if (tan) this.forward.copy(tan);
+  }
+
+  // 트랙 룩어헤드를 향해 forward를 강하게 회전 (불릿 자동주행)
+  _autoSteer(dt) {
+    const N = this.track.samplePos.length;
+    const li = (this.idx + Math.max(6, Math.round(N * 0.02))) % N;
+    const tp = this.track.samplePos[li];
+    _tmp.set(tp.x - this.pos.x, 0, tp.z - this.pos.z);
+    if (_tmp.lengthSq() < 1e-6) return;
+    _tmp.normalize();
+    _fwd.copy(this.forward); _fwd.y = 0;
+    if (_fwd.lengthSq() < 1e-6) return;
+    _fwd.normalize();
+    const crossY = _fwd.x * _tmp.z - _fwd.z * _tmp.x;
+    const dot = THREE.MathUtils.clamp(_fwd.dot(_tmp), -1, 1);
+    const ang = Math.atan2(crossY, dot);
+    _q.setFromAxisAngle(_up, THREE.MathUtils.clamp(ang, -5 * dt, 5 * dt));
+    this.forward.applyQuaternion(_q);
+  }
 
   // 고정 dt 물리 스텝
   step(dt, input) {
@@ -283,6 +312,28 @@ export class Kart {
       return;
     }
     this.spinAngle = 0;
+
+    // --- 대형 불릿 변신: 조작 무시, 자동 고속 돌진 ---
+    if (this.bulletTimer > 0) {
+      this.bulletTimer -= dt;
+      this.invincTimer = Math.max(this.invincTimer, 0.15);
+      this._autoSteer(dt);
+      const bmax = PHYS.maxSpeed * 1.85;
+      this.speed += (bmax - this.speed) * Math.min(1, dt * 4);
+      _fwd.copy(this.forward); _fwd.y = 0;
+      if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+      this.pos.addScaledVector(_fwd, this.speed * dt);
+      const gB = this.track.ground(this.pos, this.idx, _ground);
+      this.idx = gB.idx;
+      this.pos.y = THREE.MathUtils.lerp(this.pos.y, gB.height + 0.1, 0.5);
+      _tmp.copy(this.forward).addScaledVector(gB.up, -this.forward.dot(gB.up));
+      if (_tmp.lengthSq() > 1e-6) this.forward.copy(_tmp).normalize();
+      this.wheelSpin += (this.speed / 0.34) * dt;
+      this._bulletMode = true;
+      this._syncMesh(gB);
+      return;
+    }
+    this._bulletMode = false;
 
     const boosting = this.boostTimer > 0;
     const effMax = boosting ? PHYS.maxSpeed * PHYS.boostMultiplier : PHYS.maxSpeed;
@@ -338,35 +389,24 @@ export class Kart {
     if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
     this.pos.addScaledVector(_fwd, this.speed * dt);
 
-    // --- 접지/낙하 ---
+    // --- 접지 (낙하 없음): 도로 밖은 잔디처럼 감속 ---
     const g = this.track.ground(this.pos, this.idx, _ground);
     this.idx = g.idx;
-
-    if (this.airborne) {
-      this.vertVel -= PHYS.gravity * dt;
-      this.pos.y += this.vertVel * dt;
-      // 도로면에 도달하면 착지
-      if (g.onRoad && this.pos.y <= g.height + 0.1 && this.vertVel <= 0) {
-        this.pos.y = g.height + 0.1;
-        this.vertVel = 0;
-        this.airborne = false;
-      }
-      // 너무 아래로 떨어지면 리스폰
-      if (this.pos.y < g.height - 12) {
-        this.fallTimer += dt;
-        this.respawn();
-      }
-    } else {
-      if (g.onRoad) {
-        // 도로 위: 표면에 부드럽게 스냅
-        this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
-        // forward를 도로 접선 평면에 재투영 (경사 대응)
-        _tmp.copy(this.forward).addScaledVector(g.up, -this.forward.dot(g.up));
-        if (_tmp.lengthSq() > 1e-6) this.forward.copy(_tmp).normalize();
-      } else {
-        // 도로 밖 → 낙하 시작
-        this.airborne = true;
-        this.vertVel = 0;
+    // 항상 도로 평면 높이에 스냅
+    this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
+    // forward를 도로 접선 평면에 재투영 (경사 대응)
+    _tmp.copy(this.forward).addScaledVector(g.up, -this.forward.dot(g.up));
+    if (_tmp.lengthSq() > 1e-6) this.forward.copy(_tmp).normalize();
+    // 도로 밖(잔디): 최고속 제한 + 소프트 월 (추락 없음)
+    const over = Math.abs(g.lateral) - this.track.halfWidth;
+    this.onGrass = over > 0.2;
+    if (this.onGrass) {
+      const grassMax = PHYS.maxSpeed * 0.42;
+      if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
+      const maxOff = this.track.halfWidth + 9;
+      if (Math.abs(g.lateral) > maxOff) {
+        const push = Math.abs(g.lateral) - maxOff;
+        this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
       }
     }
 
@@ -398,9 +438,11 @@ export class Kart {
       _q.setFromAxisAngle(_tmp, this.spinAngle);
       this.model.quaternion.premultiply(_q);
     }
-    // 무적(별): 반짝 스케일 펄스
-    const pulse = this.invincTimer > 0 ? 1 + Math.sin(this.invincTimer * 30) * 0.08 : 1;
-    this.model.scale.setScalar(pulse);
+    // 스케일: 불릿 변신(확대) / 무적(반짝 펄스)
+    let sc = 1;
+    if (this._bulletMode) sc = 1.55 + Math.sin(this.wheelSpin * 0.5) * 0.05;
+    else if (this.invincTimer > 0) sc = 1 + Math.sin(this.invincTimer * 30) * 0.08;
+    this.model.scale.setScalar(sc);
 
     // 그림자: 도로면 바로 위
     if (g) {

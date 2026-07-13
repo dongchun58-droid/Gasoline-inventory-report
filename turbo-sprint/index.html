@@ -53,6 +53,12 @@
       display: flex; align-items: center; justify-content: center;
     }
     #itemIcon { font-size: 52px; line-height: 1; }
+    #minimap {
+      position: absolute; right: 18px; top: 148px;
+      width: 160px; height: 160px;
+      background: rgba(20,24,60,.4); border: 3px solid rgba(255,255,255,.75);
+      border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.3);
+    }
     #result {
       position: fixed; inset: 0; z-index: 8; display: none;
       align-items: center; justify-content: center;
@@ -86,6 +92,7 @@
     </div>
     <div id="lap">LAP <b>1</b>/3</div>
     <div id="item"><span id="itemIcon"></span></div>
+    <canvas id="minimap" width="160" height="160"></canvas>
     <div id="rank"><b>1</b><sup>st</sup></div>
     <div id="speed">0<small>km/h</small></div>
     <div id="fps">-- fps</div>

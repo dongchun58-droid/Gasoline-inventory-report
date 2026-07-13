@@ -14,8 +14,9 @@ const CONTROL_POINTS = [
 
 export const ROAD_WIDTH = 20;
 const HALF_W = ROAD_WIDTH / 2;
-const SAMPLES = 720;          // 접지 샘플 수 (조밀할수록 접지가 매끈)
+const SAMPLES = 1100;         // 접지 샘플 수 (조밀할수록 접지가 매끈)
 const CURB_W = 1;             // 연석 폭 (양끝 1m)
+const SCALE = 2.9;            // 트랙 확대 (큰 한 바퀴, 주행거리 ~3배)
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
@@ -24,7 +25,7 @@ const _v = new THREE.Vector3();
 
 export class Track {
   constructor(gradientMap) {
-    const pts = CONTROL_POINTS.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+    const pts = CONTROL_POINTS.map((p) => new THREE.Vector3(p[0] * SCALE, p[1], p[2] * SCALE));
     this.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
     this.length = this.curve.getLength();
 
@@ -53,6 +54,18 @@ export class Track {
       prev = pos;
     }
     this.totalDist = acc;
+
+    // 트랙 경계/중심/반경 (미니맵·배경 크기 계산용)
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of this.samplePos) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    }
+    this.bounds = { minX, maxX, minZ, maxZ };
+    this.center = { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
+    this.spanX = maxX - minX;
+    this.spanZ = maxZ - minZ;
+    this.radius = 0.5 * Math.hypot(this.spanX, this.spanZ);
 
     this.group = new THREE.Group();
     this._buildRoad(gradientMap);

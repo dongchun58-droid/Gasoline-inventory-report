@@ -41,10 +41,12 @@ export class Scenery {
   _buildLandscape() {
     const track = this.track;
     const gm = this.gm;
+    const CX = track.center.x, CZ = track.center.z;
+    const RAD = track.radius;
     const CORR = track.halfWidth + 4;   // 회랑 반경(평탄)
-    const BLEND = 26;                    // 언덕으로 섞이는 폭
+    const BLEND = 30;                    // 언덕으로 섞이는 폭
 
-    const size = 900, seg = 90;
+    const size = 2 * (RAD + 340), seg = 130;
     const geo = new THREE.PlaneGeometry(size, size, seg, seg);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -55,14 +57,11 @@ export class Scenery {
     const tmp = new THREE.Color();
 
     for (let i = 0; i < pos.count; i++) {
-      const wx = pos.getX(i), wz = pos.getZ(i);
+      const wx = pos.getX(i) + CX, wz = pos.getZ(i) + CZ;
       const d = track.pathDistanceXZ(wx, wz);
-      let h;
-      let shoulder = 0;
-      if (d < CORR) {
-        h = -0.15;                       // 도로 바로 밑(평탄)
-        shoulder = 1;
-      } else {
+      let h, shoulder = 0;
+      if (d < CORR) { h = -0.15; shoulder = 1; }
+      else {
         const k = Math.min(1, (d - CORR) / BLEND);
         h = THREE.MathUtils.lerp(-0.15, hills(wx, wz), k * k);
         shoulder = 1 - k;
@@ -70,13 +69,13 @@ export class Scenery {
       pos.setY(i, h);
       const t = THREE.MathUtils.clamp((h + 6) / 16, 0, 1);
       tmp.copy(cGrass).lerp(cGrass2, t);
-      if (shoulder > 0.6) tmp.lerp(cSand, 0.25 * shoulder); // 도로변 흙빛
+      if (shoulder > 0.6) tmp.lerp(cSand, 0.25 * shoulder);
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     const ground = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gm }));
-    ground.position.y = 0;
+    ground.position.set(CX, 0, CZ);
     this.group.add(ground);
     this._groundH = (x, z) => {
       const d = track.pathDistanceXZ(x, z);
@@ -87,9 +86,10 @@ export class Scenery {
 
     // 호수 (도로에서 먼 곳)
     const lakeMat = new THREE.MeshToonMaterial({ color: 0x3fb8ff, gradientMap: gm, transparent: true, opacity: 0.9 });
-    for (const [lx, lz] of [[-150, -80], [170, 30], [60, -200], [-70, 150]]) {
-      if (track.pathDistanceXZ(lx, lz) < 60) continue;
-      const lake = new THREE.Mesh(new THREE.CircleGeometry(30, 24), lakeMat);
+    for (const [fx, fz] of [[-0.5, -0.35], [0.55, 0.2], [0.2, -0.6], [-0.35, 0.5]]) {
+      const lx = CX + fx * RAD, lz = CZ + fz * RAD;
+      if (track.pathDistanceXZ(lx, lz) < 70) continue;
+      const lake = new THREE.Mesh(new THREE.CircleGeometry(38, 24), lakeMat);
       lake.rotation.x = -Math.PI / 2;
       lake.position.set(lx, 1.2, lz);
       this.group.add(lake);
@@ -98,11 +98,11 @@ export class Scenery {
     // 먼 산맥
     const mtnMat = new THREE.MeshToonMaterial({ color: 0x6a8a9c, gradientMap: gm });
     const snowMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: gm });
-    const R = 360, MC = 16;
+    const R = RAD + 210, MC = 20;
     for (let i = 0; i < MC; i++) {
       const a = (i / MC) * Math.PI * 2;
-      const mx = 16 + Math.cos(a) * R, mz = -30 + Math.sin(a) * R;
-      const hgt = 80 + (i % 4) * 26, rad = 50 + (i % 3) * 14;
+      const mx = CX + Math.cos(a) * R, mz = CZ + Math.sin(a) * R;
+      const hgt = 100 + (i % 4) * 30, rad = 60 + (i % 3) * 16;
       const m = new THREE.Mesh(new THREE.ConeGeometry(rad, hgt, 6), mtnMat);
       m.position.set(mx, hgt / 2 - 4, mz); this.group.add(m);
       const sn = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.4, hgt * 0.34, 6), snowMat);
@@ -115,17 +115,17 @@ export class Scenery {
   _buildTrees() {
     const track = this.track;
     const gm = this.gm;
+    const CX = track.center.x, CZ = track.center.z, RAD = track.radius;
     const spots = [];
-    const size = 880, step = 30;
-    for (let x = -size / 2; x < size / 2; x += step) {
-      for (let z = -size / 2; z < size / 2; z += step) {
+    const reach = RAD + 180, step = 34;
+    for (let x = -reach; x < reach; x += step) {
+      for (let z = -reach; z < reach; z += step) {
         const idx = Math.round(x * 0.13 + z * 0.11);
         if (Math.abs(idx) % 4 === 0) continue;
-        const wx = x + (idx % 9), wz = z + (idx % 7);
+        const wx = CX + x + (idx % 9), wz = CZ + z + (idx % 7);
         const d = track.pathDistanceXZ(wx, wz);
         if (d < track.halfWidth + 5) continue;   // 도로 위엔 없음
-        const rr = Math.hypot(wx - 16, wz + 30);
-        if (rr > 320) continue;                   // 산 안쪽만
+        if (Math.hypot(x, z) > RAD + 170) continue;
         spots.push({ x: wx, y: this._groundH(wx, wz), z: wz, s: 0.85 + (Math.abs(idx) % 5) * 0.16 });
       }
     }

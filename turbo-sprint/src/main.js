@@ -126,7 +126,7 @@ const scenery = new Scenery(track, gradientMap);
 scene.add(scenery.group);
 
 // ---------- HUD ----------
-const hud = new HUD();
+const hud = new HUD(track);
 
 const chase = new ChaseCamera(camera);
 chase.snap(player);
@@ -192,6 +192,11 @@ function resolveKartCollisions() {
         a.pos.addScaledVector(_sep, -push);
         b.pos.addScaledVector(_sep, push);
         a.speed *= 0.9; b.speed *= 0.9;
+        // 불릿/무적은 상대를 스핀아웃시킴
+        const aP = a.bulletTimer > 0 || a.invincTimer > 0;
+        const bP = b.bulletTimer > 0 || b.invincTimer > 0;
+        if (aP && !bP) b.spinOut(1.1);
+        else if (bP && !aP) a.spinOut(1.1);
       }
     }
   }
@@ -264,7 +269,7 @@ function frame(nowMs) {
   if (!player.finished) raceTime += dt;
 
   // 아이템/배경
-  itemSystem.update(dt, karts, player);
+  itemSystem.update(dt, karts);
   scenery.update(dt);
 
   // 카메라
@@ -276,6 +281,7 @@ function frame(nowMs) {
     lap: player.lap, laps: LAPS,
     item: player.heldItem, roulette: false,
   });
+  hud.drawMinimap(karts);
   if (player.finished && !hud.result.classList.contains('show')) {
     hud.showResult(player.rank || 1, fmtTime(player.finishTime));
   }
