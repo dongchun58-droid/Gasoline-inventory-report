@@ -42,7 +42,13 @@ export class ItemSystem {
     for (const r of rows) {
       const i = Math.floor(r * N) % N;
       const p = track.samplePos[i], lat = track.sampleLat[i];
-      for (const off of [-track.halfWidth * 0.55, 0, track.halfWidth * 0.55]) {
+      const hw = track.sampleHalf ? track.sampleHalf[i] : track.halfWidth;
+      // 중앙 분리대가 있는 구간: 센터 대신 양쪽 차선에 2개씩 (분리대 위엔 못 먹으므로)
+      const median = track.sampleMedian && track.sampleMedian[i];
+      const offs = median
+        ? [-hw * 0.62, -hw * 0.28, hw * 0.28, hw * 0.62]
+        : [-hw * 0.55, 0, hw * 0.55];
+      for (const off of offs) {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(p.x + lat.x * off, p.y + 1.8, p.z + lat.z * off);
         this.group.add(mesh);

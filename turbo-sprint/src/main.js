@@ -43,10 +43,11 @@ function makeSky() {
   cv.width = 16; cv.height = 256;
   const g = cv.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.0, '#1E6FE0'); // 천정 (진한 하늘색)
-  grd.addColorStop(0.55, '#5FB8FF');
-  grd.addColorStop(0.85, '#B8E8FF');
-  grd.addColorStop(1.0, '#EAF9FF'); // 지평선 (밝은 하늘)
+  grd.addColorStop(0.0, '#1560D8'); // 천정 (선명한 하늘색 · Astro 톤)
+  grd.addColorStop(0.42, '#3D9BFF');
+  grd.addColorStop(0.72, '#8FD6FF');
+  grd.addColorStop(0.9, '#CFF0FF');
+  grd.addColorStop(1.0, '#F2FCFF'); // 지평선 (밝은 하늘)
   g.fillStyle = grd;
   g.fillRect(0, 0, 16, 256);
   const tex = new THREE.CanvasTexture(cv);
@@ -96,14 +97,14 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIX_CAP));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.18; // Astro 톤: 화사하게
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // ---------- 씬 ----------
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfeaff, 200, 680);
+scene.fog = new THREE.Fog(0xd8f2ff, 320, 1000); // 멀리까지 선명하게(Astro 톤)
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1200);
 
@@ -116,8 +117,8 @@ scene.add(sky);
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromEquirectangular(makeEnvTex()).texture;
 
-// 라이팅 (한낮 햇살 + 실시간 그림자)
-const sun = new THREE.DirectionalLight(0xfff2d0, 2.6);
+// 라이팅 (한낮 햇살 + 실시간 그림자 + 하늘/땅 채움광)
+const sun = new THREE.DirectionalLight(0xfff2d0, 3.0);
 sun.position.set(-60, 90, -40);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -128,8 +129,10 @@ sun.shadow.bias = -0.0004;
 scene.add(sun);
 scene.add(sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.95, 0.35).normalize();
-const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x6bbf5a, 0.9);
+// Astro 톤: 하늘빛/풀빛 소프트 필 (그림자 부분도 화사하게)
+const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x7fd06a, 1.15);
 scene.add(hemi);
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 
 // ---------- 트랙 ----------
 const track = new Track(gradientMap);
@@ -311,18 +314,24 @@ const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, {
 });
 const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(scene, camera));
+const BLOOM_BASE = 0.5; // Astro 톤: 은은한 글로우
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.35, // strength (한낮이라 은은하게)
-  0.4,  // radius
-  0.8   // threshold (태양·네온·별만 발광)
+  BLOOM_BASE, // strength
+  0.5,  // radius
+  0.75  // threshold (태양·네온·별만 발광)
 );
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
 // ---------- 실시간 그림자 적용 ----------
 function enableShadows(root) {
-  root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  root.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = !o.userData.noShadow; // 잔디 등 대량 인스턴스는 그림자 캐스팅 제외
+      o.receiveShadow = true;
+    }
+  });
 }
 enableShadows(scene);
 sky.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
@@ -516,6 +525,12 @@ function frame(nowMs) {
   }
 
   updateSun(); // 그림자 프러스텀을 플레이어 주변으로
+  // 스타(무적) 중엔 화면 전체를 번쩍번쩍하게 (블룸 펄스)
+  if (player.invincTimer > 0) {
+    bloom.strength = 0.7 + 0.45 * Math.abs(Math.sin(player.invincTimer * 20));
+  } else if (bloom.strength !== BLOOM_BASE) {
+    bloom.strength = BLOOM_BASE;
+  }
   input.endFrame();
   composer.render();
   requestAnimationFrame(frame);

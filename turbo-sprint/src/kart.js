@@ -256,18 +256,36 @@ function buildKartModel(color, gradientMap, type = 'kart') {
   }
   g.userData.sparks = sparks;
 
-  // 스타(무적) 반짝임 아우라 — 카트 주위 작은 별빛들 (기본 숨김)
+  // 스타(무적) 반짝임 아우라 — 카트를 감싸는 별빛들 (기본 숨김)
   const aura = new THREE.Group();
-  for (let i = 0; i < 7; i++) {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
+  for (let i = 0; i < 16; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 8),
       new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true }));
-    const a = (i / 7) * Math.PI * 2;
-    s.position.set(Math.cos(a) * 1.1, 0.6 + (i % 3) * 0.35, Math.sin(a) * 1.1);
+    const a = (i / 16) * Math.PI * 2;
+    const r = 1.15 + (i % 2) * 0.45;
+    s.position.set(Math.cos(a) * r, 0.35 + (i % 4) * 0.45, Math.sin(a) * r);
     aura.add(s);
   }
   aura.visible = false;
   g.add(aura);
   g.userData.aura = aura;
+
+  // 스타 발광 라이트 (무적 중 카트가 통째로 번쩍이도록)
+  const starLight = new THREE.PointLight(0xffffff, 0, 16, 2);
+  starLight.position.set(0, 1.3, 0);
+  starLight.castShadow = false;
+  starLight.visible = false;
+  g.add(starLight);
+  g.userData.starLight = starLight;
+
+  // 스타 무적 시 통째로 무지개 발광시킬 도장 재질 목록 (원본 emissive 보관)
+  const paint = [];
+  g.traverse((o) => {
+    if (o.isMesh && o.material && o.material.isMeshStandardMaterial) {
+      paint.push({ m: o.material, e: o.material.emissive.getHex(), i: o.material.emissiveIntensity });
+    }
+  });
+  g.userData.paint = paint;
 
   return g;
 }
@@ -683,23 +701,44 @@ export class Kart {
       this._bmShown = bm;
     }
     this.model.scale.setScalar(1);
-    // 스타(무적): 번쩍번쩍 반짝이는 별빛 아우라
+    // 스타(무적): 카트 통째로 번쩍번쩍 무지개 발광 + 별빛 아우라 + 발광 라이트
     const aura = this.model.userData.aura;
+    const on = this.invincTimer > 0 && !bm;
+    const hue = (this.invincTimer * 3) % 1;
+    const flash = 0.5 + 0.5 * Math.abs(Math.sin(this.invincTimer * 26)); // 0~1 빠른 점멸
     if (aura) {
-      const on = this.invincTimer > 0 && !bm;
       aura.visible = on;
       if (on) {
-        aura.rotation.y += 0.35;
-        const hue = (this.invincTimer * 2) % 1;
-        const flash = 0.45 + 0.55 * Math.abs(Math.sin(this.invincTimer * 22));
+        aura.rotation.y += 0.5;
         const n = aura.children.length;
         for (let i = 0; i < n; i++) {
           const s = aura.children[i];
-          s.material.color.setHSL((hue + i / n) % 1, 1, 0.65);
-          s.material.opacity = flash;
-          s.scale.setScalar(0.6 + flash * 0.7);
+          s.material.color.setHSL((hue + i / n) % 1, 1, 0.7);
+          s.material.opacity = 0.55 + flash * 0.45;
+          s.scale.setScalar(0.7 + flash * 1.1);
         }
       }
+    }
+    // 차체 전체 무지개 발광 (원본 emissive 복원 관리)
+    const paint = this.model.userData.paint;
+    if (paint) {
+      if (on) {
+        for (let i = 0; i < paint.length; i++) {
+          const pm = paint[i];
+          pm.m.emissive.setHSL((hue + i * 0.02) % 1, 1, 0.5);
+          pm.m.emissiveIntensity = 0.45 + flash * 0.95;
+        }
+        this._starPaint = true;
+      } else if (this._starPaint) {
+        for (const pm of paint) { pm.m.emissive.setHex(pm.e); pm.m.emissiveIntensity = pm.i; }
+        this._starPaint = false;
+      }
+    }
+    // 발광 라이트 펄스
+    const sl = this.model.userData.starLight;
+    if (sl) {
+      sl.visible = on;
+      if (on) { sl.intensity = 3 + flash * 4; sl.color.setHSL(hue, 1, 0.6); }
     }
 
     // 드리프트 스파크

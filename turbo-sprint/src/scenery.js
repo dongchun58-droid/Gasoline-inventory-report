@@ -58,10 +58,72 @@ export class Scenery {
     this.group = new THREE.Group();
 
     this._buildLandscape();
+    this._buildGrassBlades();
     this._buildFences();
     this._buildRoadsideProps();
     this._buildFinishArch();
     this._buildClouds();
+  }
+
+  // ---- 무성한 잔디 카펫 (Astro 톤 핵심) — 도로 양옆 회랑에 촘촘히 ----
+  // 프레임보다 비주얼 우선. 그림자 캐스팅은 제외(대량 인스턴스).
+  _buildGrassBlades() {
+    const track = this.track;
+    const N = track.samplePos.length;
+    const CORR = (track.maxHalf || track.halfWidth);
+    // 뾰족한 풀잎 (아래=짙은 초록, 위=밝은 초록) — 정점 색 그라디언트
+    const bladeGeo = new THREE.ConeGeometry(0.16, 1.15, 4, 1);
+    bladeGeo.translate(0, 0.575, 0); // 밑동을 바닥에
+    const gp = bladeGeo.attributes.position;
+    const gcol = new Float32Array(gp.count * 3);
+    const cLow = new THREE.Color(0x3f9e34), cHigh = new THREE.Color(0xb6f57a);
+    const tmp = new THREE.Color();
+    for (let i = 0; i < gp.count; i++) {
+      const t = THREE.MathUtils.clamp(gp.getY(i) / 1.15, 0, 1);
+      tmp.copy(cLow).lerp(cHigh, t);
+      gcol[i * 3] = tmp.r; gcol[i * 3 + 1] = tmp.g; gcol[i * 3 + 2] = tmp.b;
+    }
+    bladeGeo.setAttribute('color', new THREE.BufferAttribute(gcol, 3));
+    const bladeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0, metalness: 0.0 });
+
+    // 밀도 계산
+    const step = 3;                 // 몇 샘플마다
+    const perSide = 9;              // 한쪽에 몇 줄
+    const rows = Math.floor((N - 1) / step);
+    const total = rows * 2 * perSide;
+    const grass = new THREE.InstancedMesh(bladeGeo, bladeMat, total);
+    grass.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3);
+    let gi = 0;
+    const jitter = (n) => ((Math.sin(n * 12.9898) * 43758.5453) % 1);
+    const tint = new THREE.Color();
+    for (let r = 0; r < rows; r++) {
+      const i = r * step;
+      const p = track.samplePos[i], lat = track.sampleLat[i], tan = track.sampleTan[i];
+      const edge = (track.sampleHalf ? track.sampleHalf[i] : CORR) + 0.6;
+      for (const side of [-1, 1]) {
+        for (let b = 0; b < perSide; b++) {
+          const seed = i * 7.3 + b * 3.1 + (side + 1) * 51;
+          const off = edge + Math.abs(jitter(seed)) * 11;           // 도로 밖 0~11m 대역
+          const along = (jitter(seed * 1.7)) * step * 0.9;          // 진행방향 산포
+          const gx = p.x + lat.x * off * side + tan.x * along;
+          const gz = p.z + lat.z * off * side + tan.z * along;
+          const gy = this._groundH ? this._groundH(gx, gz) : -0.15;
+          _q.setFromAxisAngle(_up, jitter(seed * 2.3) * Math.PI * 2);
+          const sc = 0.8 + Math.abs(jitter(seed * 3.7)) * 1.1;
+          _m.compose(_p.set(gx, gy, gz), _q, _s.set(sc, sc * (0.9 + Math.abs(jitter(seed * 5.1)) * 0.6), sc));
+          grass.setMatrixAt(gi, _m);
+          tint.setHSL(0.28 + jitter(seed * 4.2) * 0.05, 0.65, 0.5 + Math.abs(jitter(seed * 6.6)) * 0.12);
+          grass.setColorAt(gi, tint);
+          gi++;
+        }
+      }
+    }
+    grass.instanceMatrix.needsUpdate = true;
+    if (grass.instanceColor) grass.instanceColor.needsUpdate = true;
+    grass.userData.noShadow = true; // 대량 인스턴스: 그림자 캐스팅 제외
+    grass.receiveShadow = true;
+    this._grass = grass;
+    this.group.add(grass);
   }
 
   // ---- 지면: 도로 회랑은 평탄, 바깥으로 갈수록 언덕 ----
@@ -78,9 +140,9 @@ export class Scenery {
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
-    const cGrass = new THREE.Color(0x62c24a);
-    const cGrass2 = new THREE.Color(0x8fe06a);
-    const cSand = new THREE.Color(0xe4d29a);
+    const cGrass = new THREE.Color(0x57cf42);   // 선명한 잔디 (Astro 톤)
+    const cGrass2 = new THREE.Color(0x9cf06e);  // 밝은 하이라이트 잔디
+    const cSand = new THREE.Color(0xf0dfa2);
     const tmp = new THREE.Color();
 
     for (let i = 0; i < pos.count; i++) {
@@ -162,22 +224,31 @@ export class Scenery {
         spots.push({ x: wx, y: this._groundH(wx, wz), z: wz, s: 0.85 + (Math.abs(idx) % 5) * 0.16 });
       }
     }
-    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.7, 0.95, 5, 6), toon(0x7a5230, gm), spots.length);
-    const foliage = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 12, 10), new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 }), spots.length);
+    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.7, 0.95, 5, 6), toon(0x8a5a34, gm), spots.length);
+    const foMat = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 });
+    const foliage = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 12, 10), foMat, spots.length);
+    // 위쪽 작은 퍼프 (둥글고 도톰한 Astro풍 수관)
+    const foliage2 = new THREE.InstancedMesh(new THREE.SphereGeometry(2.3, 12, 10), foMat, spots.length);
     foliage.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(spots.length * 3), 3);
-    const greens = [0x3f9e3a, 0x59bd4a, 0x4fae4a, 0x2f8e5a];
+    foliage2.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(spots.length * 3), 3);
+    // 초록 + 벚꽃 핑크/코랄 (참고 이미지 톤)
+    const palette = [0x49b83f, 0x63cf4e, 0x3f9e4f, 0xff8fc0, 0xff6fa8, 0xffc04d];
     const col = new THREE.Color();
     spots.forEach((sp, k) => {
       _q.identity();
       _m.compose(_p.set(sp.x, sp.y + 2.5 * sp.s, sp.z), _q, _s.set(sp.s, sp.s, sp.s));
       trunks.setMatrixAt(k, _m);
-      _m.compose(_p.set(sp.x, sp.y + 6.5 * sp.s, sp.z), _q, _s.set(sp.s, sp.s * 1.15, sp.s));
+      _m.compose(_p.set(sp.x, sp.y + 6.3 * sp.s, sp.z), _q, _s.set(sp.s, sp.s * 1.1, sp.s));
       foliage.setMatrixAt(k, _m);
-      col.set(greens[k % greens.length]); foliage.setColorAt(k, col);
+      _m.compose(_p.set(sp.x, sp.y + 8.6 * sp.s, sp.z), _q, _s.set(sp.s, sp.s, sp.s));
+      foliage2.setMatrixAt(k, _m);
+      const c = palette[Math.abs(Math.round(sp.x * 0.7 + sp.z * 1.3 + k)) % palette.length];
+      col.set(c); foliage.setColorAt(k, col); foliage2.setColorAt(k, col);
     });
     trunks.instanceMatrix.needsUpdate = true;
     foliage.instanceMatrix.needsUpdate = true;
-    this.group.add(trunks, foliage);
+    foliage2.instanceMatrix.needsUpdate = true;
+    this.group.add(trunks, foliage, foliage2);
   }
 
   // ---- 도로 양쪽 나무 울타리 ----

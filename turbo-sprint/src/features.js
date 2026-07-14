@@ -35,8 +35,13 @@ export class Features {
     for (const t of [0.30, 0.58, 0.88]) {
       this._addBoostPad(Math.floor(t * N) % N, 28, perSample);
     }
-    // 점프 램프
-    this._addJumpPad(Math.floor(0.72 * N) % N, perSample);
+    // 점프 램프 — 중앙 분리대가 없는 구간(t≈0.90)에 설치해야 점프 가능
+    let ji = Math.floor(0.90 * N) % N;
+    // 만약을 대비해 분리대가 없는 가장 가까운 샘플로 스냅
+    if (track.sampleMedian && track.sampleMedian[ji]) {
+      for (let d = 1; d < N; d++) { const c = (ji + d) % N; if (!track.sampleMedian[c]) { ji = c; break; } }
+    }
+    this._addJumpPad(ji, perSample);
   }
 
   _orient(mesh, i0, lift) {
