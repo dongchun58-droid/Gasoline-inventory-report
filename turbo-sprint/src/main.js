@@ -14,6 +14,7 @@ import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
+import { GameAudio } from './audio.js';
 
 // ---------- 셀 셰이딩용 3단 그라디언트맵 (§9) ----------
 function makeToonGradient() {
@@ -135,7 +136,7 @@ chase.snap(player);
 // ---------- 레이스 상태 ----------
 const NEUTRAL = { accel: false, brake: false, steer: 0, drift: false };
 let raceTime = 0;
-let raceState = 'countdown';       // 'countdown' | 'racing' | 'finished'
+let raceState = 'ready';            // 'ready' | 'countdown' | 'racing' | 'finished'
 let countdownRem = 3.2;
 let goFired = false;
 let accelPressRem = null;          // 로켓스타트 판정용
@@ -156,7 +157,7 @@ function resetRace() {
   }
   itemSystem.reset();
   raceTime = 0;
-  raceState = 'countdown';
+  raceState = 'ready';
   countdownRem = 3.2;
   goFired = false;
   accelPressRem = null;
@@ -164,6 +165,7 @@ function resetRace() {
   finishSnapped = false;
   hud.hideResult();
   hud.hideLapPopup();
+  hud.hideCountdown();
   chase.reset();
   chase.snap(player);
 }
@@ -250,8 +252,29 @@ composer.addPass(new OutputPass());
 
 // ---------- 입력 ----------
 const input = new Input();
-input.onFirstInput(() => { /* Phase 6: AudioContext.resume() */ });
 setupTouch(input); // 터치 조작(폰) 연결
+
+// ---------- 오디오 (합성 BGM) ----------
+const audio = new GameAudio();
+input.onFirstInput(() => audio.start()); // 첫 입력에서 재생(iOS 정책)
+const muteBtn = document.getElementById('btnMute');
+function toggleMute() {
+  const m = audio.toggleMute();
+  if (muteBtn) muteBtn.textContent = m ? '🔇' : '🔊';
+}
+muteBtn?.addEventListener('pointerdown', (e) => { e.preventDefault(); audio.start(); toggleMute(); });
+
+// ---------- 시작/재시작 버튼 ----------
+const startScreen = document.getElementById('startScreen');
+function beginRace() {
+  resetRace();
+  raceState = 'countdown';
+  startScreen.classList.remove('show');
+  hud.hideResult();
+  audio.start();
+}
+document.getElementById('btnStart')?.addEventListener('pointerdown', (e) => { e.preventDefault(); beginRace(); });
+document.getElementById('btnAgain')?.addEventListener('pointerdown', (e) => { e.preventDefault(); beginRace(); });
 
 // ---------- 루프: 고정 dt 물리(1/120) + 가변 렌더 ----------
 const FIXED = 1 / 120;
@@ -268,11 +291,16 @@ function frame(nowMs) {
   last = now;
   if (dt > 0.25) dt = 0.25; // 탭 복귀 등 큰 점프 방지
 
-  // 리스타트
-  if (input.consumePressed('restart')) resetRace();
+  // 음소거 토글 (M)
+  if (input.consumePressed('mute')) toggleMute();
 
-  // --- 카운트다운 표시 + 로켓스타트 판정 (레이스 시작 게이팅) ---
-  if (countdownRem > -0.4) {
+  // 시작 / 재시작: R은 언제나 재시작, ready/finished에선 Space도 시작
+  const wantStart = input.consumePressed('restart')
+    || ((raceState === 'ready' || raceState === 'finished') && input.consumePressed('item'));
+  if (wantStart) beginRace();
+
+  // --- 카운트다운 표시 + 로켓스타트 판정 (ready에선 정지) ---
+  if (raceState !== 'ready' && countdownRem > -0.4) {
     countdownRem -= dt;
     if (raceState === 'countdown' && accelPressRem === null && input.accel) accelPressRem = countdownRem;
     if (!goFired && countdownRem <= 0.8) {
@@ -287,7 +315,7 @@ function frame(nowMs) {
     hud.showCountdown(countdownRem);
   }
 
-  if (raceState !== 'countdown') {
+  if (raceState === 'racing' || raceState === 'finished') {
     // --- 레이싱 / 피니시 ---
     if (raceState === 'racing' && input.consumePressed('item') && player.heldItem && !player.finished) {
       itemSystem.useItem(player, karts);
