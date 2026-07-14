@@ -96,21 +96,31 @@
     /* 터치 조작 */
     #touch { position: fixed; inset: 0; z-index: 6; display: none; }
     #touch.show { display: block; }
-    #touch .tpad { position: absolute; bottom: 22px; display: flex; align-items: flex-end; gap: 14px; }
-    #touch .tleft { left: 22px; }
-    #touch .tright { right: 22px; align-items: flex-end; }
+    /* 왼쪽 조이스틱 */
+    #joyZone { position: absolute; left: 0; top: 0; width: 52%; height: 100%;
+      pointer-events: auto; touch-action: none; }
+    #joyBase, #joyKnob {
+      position: fixed; opacity: 0; pointer-events: none; border-radius: 50%;
+      transform: translate(-50%, -50%); transition: opacity .12s;
+    }
+    #joyBase { width: 148px; height: 148px; border: 4px solid rgba(255,255,255,.55);
+      background: rgba(20,24,60,.28); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+    #joyKnob { width: 70px; height: 70px; border: 3px solid rgba(255,255,255,.9);
+      background: rgba(46,107,255,.62); }
+    /* 오른쪽 버튼 */
+    #touch .tpad { position: absolute; right: 24px; bottom: 26px; display: flex; align-items: flex-end; gap: 16px; }
     .tbtn {
       pointer-events: auto; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
-      border: 3px solid rgba(255,255,255,.8); background: rgba(20,24,60,.4); color: #fff;
+      border: 3px solid rgba(255,255,255,.82); background: rgba(20,24,60,.42); color: #fff;
       font-family: system-ui, sans-serif; font-weight: 800; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center; touch-action: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; touch-action: none; line-height: 1;
     }
-    .tbtn.active { background: rgba(255,210,63,.55); transform: scale(.94); }
-    .tbtn { width: 78px; height: 78px; font-size: 30px; }
-    .tbtn.big { width: 108px; height: 108px; font-size: 26px; background: rgba(46,107,255,.5); }
-    .tbtn.mid { width: 78px; height: 78px; font-size: 30px; background: rgba(255,80,80,.45); }
-    .tbtn.small { width: 66px; height: 66px; font-size: 22px; border-radius: 18px; }
-    #btnRestart.restart { position: absolute; top: 14px; right: 190px; width: 52px; height: 52px; font-size: 24px; }
+    .tbtn.active { background: rgba(255,210,63,.6); transform: scale(.94); }
+    .tbtn.big { width: 104px; height: 104px; font-size: 34px; background: rgba(46,107,255,.5); }
+    .tbtn.big span { font-size: 13px; font-weight: 800; }
+    .tbtn.small { width: 76px; height: 76px; font-size: 15px; }
+    #btnRestart.restart { position: absolute; top: 14px; right: 200px; width: 52px; height: 52px; font-size: 24px; border-radius: 50%; }
     /* Portrait warning */
     #rotate {
       position: fixed; inset: 0; display: none; z-index: 10;
@@ -149,15 +159,12 @@
   </div>
   <!-- 터치 조작 (키보드 없는 기기) -->
   <div id="touch">
-    <div class="tpad tleft">
-      <button id="btnLeft" class="tbtn">◀</button>
-      <button id="btnRight" class="tbtn">▶</button>
-    </div>
+    <div id="joyZone"></div>
+    <div id="joyBase"></div>
+    <div id="joyKnob"></div>
     <div class="tpad tright">
-      <button id="btnItem" class="tbtn small">🎁</button>
       <button id="btnDrift" class="tbtn small">DRIFT</button>
-      <button id="btnBrake" class="tbtn mid">B</button>
-      <button id="btnGas" class="tbtn big">GAS</button>
+      <button id="btnItem" class="tbtn big">🎁<span>ITEM</span></button>
     </div>
     <button id="btnRestart" class="tbtn restart">↺</button>
   </div>

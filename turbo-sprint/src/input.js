@@ -24,8 +24,12 @@ export class Input {
     this._down = new Set();
     // 이번 프레임에 새로 눌린(edge) 액션 — 소비형
     this._pressed = new Set();
-    // 터치 버튼 상태 (키보드와 OR 결합)
-    this.touch = { accel: false, brake: false, left: false, right: false, drift: false };
+    // 터치 상태 (키보드와 OR 결합)
+    // joyActive/steerX/throttle = 아날로그 조이스틱, drift/item = 버튼
+    this.touch = {
+      accel: false, brake: false, left: false, right: false, drift: false,
+      joyActive: false, steerX: 0, throttle: 0,
+    };
     // 첫 입력 콜백(오디오 언락 등)
     this._firstInputCbs = [];
     this._gotFirstInput = false;
@@ -64,8 +68,8 @@ export class Input {
 
   // 홀드 상태 (키보드 || 터치)
   _any(codes) { for (const c of codes) if (this._down.has(c)) return true; return false; }
-  get accel()  { return this._any(KEYS.accel) || this.touch.accel; }
-  get brake()  { return this._any(KEYS.brake) || this.touch.brake; }
+  get accel()  { return this._any(KEYS.accel) || this.touch.accel || (this.touch.joyActive && this.touch.throttle > 0.35); }
+  get brake()  { return this._any(KEYS.brake) || this.touch.brake || (this.touch.joyActive && this.touch.throttle < -0.35); }
   get left()   { return this._any(KEYS.left) || this.touch.left; }
   get right()  { return this._any(KEYS.right) || this.touch.right; }
   get drift()  { return this._any(KEYS.drift) || this.touch.drift; }
@@ -73,11 +77,14 @@ export class Input {
   // 터치 버튼에서 엣지 액션(아이템/리스타트) 주입
   pressAction(action) { this._pressed.add(action); this._fireFirstInput(); }
 
-  // 조향: -1(좌) ~ +1(우)
+  // 조향: -1(좌) ~ +1(우) — 조이스틱은 아날로그
   get steer() {
     let s = 0;
     if (this.left) s -= 1;
     if (this.right) s += 1;
+    if (s === 0 && this.touch.joyActive) {
+      s = Math.max(-1, Math.min(1, this.touch.steerX));
+    }
     return s;
   }
 
