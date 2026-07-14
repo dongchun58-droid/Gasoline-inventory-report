@@ -51,72 +51,78 @@ function buildKartModel(color, gradientMap) {
     g.add(post);
   }
 
-  // --- 귀여운 오리지널 마스코트 드라이버 (그룹으로 묶어 코너에서 기울임) ---
+  // --- 귀여운 카툰 아기 드라이버 (큰 머리·볼·눈 / 오리지널) ---
   const driver = new THREE.Group();
-  driver.position.set(0, 0.55, -0.05);
-  const skin = 0xffcba4;      // 살구색 피부
-  const overalls = 0xff4d4d;  // 밝은 빨강 멜빵바지
-  const shirt = 0x36d1ff;     // 하늘색 셔츠
+  driver.position.set(0, 0.5, -0.05);
+  const skin = 0xffd8b8;      // 아기 피부톤
+  const romper = color;       // 팀 컬러 우주복
+  const shirt = 0xfff4e6;     // 크림색
 
-  // 몸통 (멜빵바지)
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.22, 4, 10), toon(overalls));
-  torso.position.set(0, 0.32, 0);
+  // 몸통 (작고 통통한 우주복)
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.14, 4, 10), toon(romper));
+  torso.position.set(0, 0.3, 0);
   driver.add(torso);
-  // 셔츠 어깨(위쪽 살짝)
-  const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), toon(shirt));
-  shoulders.scale.set(1, 0.55, 0.9);
-  shoulders.position.set(0, 0.5, 0);
-  driver.add(shoulders);
+  const collar = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), toon(shirt));
+  collar.scale.set(1, 0.5, 0.95);
+  collar.position.set(0, 0.46, 0);
+  driver.add(collar);
 
-  // 머리
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 14), toon(skin));
-  head.position.set(0, 0.86, 0.02);
+  // 큰 머리
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 16), toon(skin));
+  head.position.set(0, 0.86, 0.03);
   driver.add(head);
-  // 큰 코
-  const noseFace = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), toon(0xffb98f));
-  noseFace.position.set(0, 0.84, 0.30);
-  driver.add(noseFace);
-  // 눈 (흰자 + 눈동자)
-  for (const sx of [-0.12, 0.12]) {
-    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), toon(0xffffff));
-    eyeW.scale.set(0.8, 1.1, 0.6);
-    eyeW.position.set(sx, 0.92, 0.24);
+  // 배냇머리 한 가닥 (곱슬 컬)
+  const curl = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.022, 8, 14, Math.PI * 1.6), toon(0x6b4a2a));
+  curl.position.set(0, 1.22, 0.05);
+  curl.rotation.z = 0.4;
+  driver.add(curl);
+  // 큰 눈 (흰자 + 큰 눈동자 + 반짝 하이라이트)
+  for (const sx of [-0.15, 0.15]) {
+    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), toon(0xffffff));
+    eyeW.scale.set(0.85, 1.05, 0.55);
+    eyeW.position.set(sx, 0.9, 0.3);
     driver.add(eyeW);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), toon(0x1a1030));
-    pupil.position.set(sx, 0.92, 0.30);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), toon(0x201828));
+    pupil.position.set(sx, 0.89, 0.37);
     driver.add(pupil);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), toon(0xffffff, 0xffffff, 1.2));
+    glint.position.set(sx + 0.02, 0.93, 0.42);
+    driver.add(glint);
   }
-  // 발그레한 볼
-  for (const sx of [-0.20, 0.20]) {
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), toon(0xff8fb0));
-    cheek.scale.set(1, 0.7, 0.5);
-    cheek.position.set(sx, 0.80, 0.22);
+  // 통통 볼
+  for (const sx of [-0.26, 0.26]) {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(0xffa9c7));
+    cheek.scale.set(1, 0.8, 0.5);
+    cheek.position.set(sx, 0.76, 0.26);
     driver.add(cheek);
   }
-  // 모자 (팀 컬러) — 크라운 + 챙
-  const capCrown = new THREE.Mesh(new THREE.SphereGeometry(0.31, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), toon(color));
-  capCrown.position.set(0, 1.02, 0.02);
-  driver.add(capCrown);
-  const capBand = new THREE.Mesh(new THREE.CylinderGeometry(0.315, 0.315, 0.06, 16), toon(0xffffff));
-  capBand.position.set(0, 1.0, 0.02);
-  driver.add(capBand);
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.05, 12, 1, false, 0, Math.PI), toon(color));
-  brim.rotation.y = Math.PI; // 앞쪽 반원
-  brim.position.set(0, 1.0, 0.28);
-  driver.add(brim);
-  // 모자 엠블럼(에미시브 별 느낌 원)
-  const emblem = new THREE.Mesh(new THREE.CircleGeometry(0.07, 12), toon(0xffffff, 0xffd166, 1.6));
-  emblem.position.set(0, 1.06, 0.30);
-  driver.add(emblem);
+  // 작은 코
+  const noseFace = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), toon(0xffc59e));
+  noseFace.position.set(0, 0.82, 0.4);
+  driver.add(noseFace);
+  // 쪽쪽이(공갈젖꼭지)
+  const paci = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.02, 8, 14), toon(0xff8fb0, 0xff8fb0, 0.2));
+  paci.position.set(0, 0.7, 0.4);
+  driver.add(paci);
+  const paciNub = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), toon(0xffe08a));
+  paciNub.position.set(0, 0.7, 0.36);
+  driver.add(paciNub);
+  // 팀 컬러 보닛(작은 모자, 뒤통수쪽)
+  const bonnet = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.42), toon(color));
+  bonnet.position.set(0, 0.92, -0.02);
+  driver.add(bonnet);
+  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), toon(0xffffff));
+  pom.position.set(0, 1.24, -0.05);
+  driver.add(pom);
 
-  // 팔 + 핸들 잡은 손
+  // 팔 + 핸들 잡은 손 (통통)
   for (const sx of [-0.24, 0.24]) {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.28, 4, 8), toon(shirt));
-    arm.position.set(sx, 0.34, 0.28);
-    arm.rotation.x = 0.9; // 앞으로 뻗음
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.24, 4, 8), toon(romper));
+    arm.position.set(sx, 0.32, 0.28);
+    arm.rotation.x = 0.9;
     driver.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toon(0xfff0d0));
-    hand.position.set(sx * 0.75, 0.22, 0.52);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(skin));
+    hand.position.set(sx * 0.75, 0.2, 0.52);
     driver.add(hand);
   }
   // 스티어링 휠
