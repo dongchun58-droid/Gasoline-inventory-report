@@ -23,15 +23,16 @@ export const MAPS = {
     ],
     obstacle: 'cow',
     pad: { boost: 0x18d6ff, chevron: '#eaffff', jump: '#ff9a2e', jumpHex: 0xff9a2e, jumpEdge: 0xffd23f },
-    road: { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#FFFFFF', median1: 0xffd23f, median2: 0x2a2a32 },
+    road: { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#dfe4ea', median1: 0xffd23f, median2: 0x2a2a32 },
     sky: { stops: [[0, '#1560D8'], [0.42, '#3D9BFF'], [0.72, '#8FD6FF'], [0.9, '#CFF0FF'], [1, '#F2FCFF']], sun: 0xfff6d0, sunPos: [-180, 190, -430] },
     env: [[0, '#1E6FE0'], [0.5, '#8fd0ff'], [0.6, '#eaf9ff'], [0.61, '#6fc45a'], [1, '#3f8e3a']],
     fog: { color: 0xd8f2ff, near: 320, far: 1000 },
-    sun: { color: 0xfff2d0, intensity: 3.0, dir: [0.5, 0.95, 0.35] },
+    sun: { color: 0xfff2d0, intensity: 2.4, dir: [0.5, 0.95, 0.35] },
     hemi: { sky: 0xbfe6ff, ground: 0x7fd06a, intensity: 1.15 },
-    ambient: 0.18,
-    bloom: 0.5,
-    exposure: 1.18,
+    ambient: 0.2,
+    bloom: 0.32,
+    bloomThreshold: 0.92, // 확산 흰색(눈·구름·잔디)은 번지지 않도록 높임
+    exposure: 1.08,
   },
 
   // 🌋 마왕 성 (신규 맵) — '쿠파 성' 계열에서 영감, 오리지널
@@ -59,6 +60,7 @@ export const MAPS = {
     hemi: { sky: 0x5a2028, ground: 0x1a0808, intensity: 0.5 },
     ambient: 0.1,
     bloom: 0.95,
+    bloomThreshold: 0.72,
     exposure: 1.02,
   },
 };

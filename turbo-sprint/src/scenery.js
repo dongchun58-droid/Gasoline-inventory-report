@@ -76,7 +76,7 @@ export class Scenery {
     bladeGeo.translate(0, 0.575, 0); // 밑동을 바닥에
     const gp = bladeGeo.attributes.position;
     const gcol = new Float32Array(gp.count * 3);
-    const cLow = new THREE.Color(0x3f9e34), cHigh = new THREE.Color(0xb6f57a);
+    const cLow = new THREE.Color(0x3a8f30), cHigh = new THREE.Color(0x7ec94f); // 끝을 덜 밝게 → 눈부심 완화
     const tmp = new THREE.Color();
     for (let i = 0; i < gp.count; i++) {
       const t = THREE.MathUtils.clamp(gp.getY(i) / 1.15, 0, 1);
@@ -84,7 +84,7 @@ export class Scenery {
       gcol[i * 3] = tmp.r; gcol[i * 3 + 1] = tmp.g; gcol[i * 3 + 2] = tmp.b;
     }
     bladeGeo.setAttribute('color', new THREE.BufferAttribute(gcol, 3));
-    const bladeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0, metalness: 0.0 });
+    const bladeMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1.0, metalness: 0.0, envMapIntensity: 0.2 });
 
     // 밀도 계산
     const step = 3;                 // 몇 샘플마다
@@ -112,7 +112,7 @@ export class Scenery {
           const sc = 0.8 + Math.abs(jitter(seed * 3.7)) * 1.1;
           _m.compose(_p.set(gx, gy, gz), _q, _s.set(sc, sc * (0.9 + Math.abs(jitter(seed * 5.1)) * 0.6), sc));
           grass.setMatrixAt(gi, _m);
-          tint.setHSL(0.28 + jitter(seed * 4.2) * 0.05, 0.65, 0.5 + Math.abs(jitter(seed * 6.6)) * 0.12);
+          tint.setHSL(0.28 + jitter(seed * 4.2) * 0.05, 0.6, 0.4 + Math.abs(jitter(seed * 6.6)) * 0.08);
           grass.setColorAt(gi, tint);
           gi++;
         }
@@ -192,7 +192,8 @@ export class Scenery {
 
     // 먼 산맥
     const mtnMat = new THREE.MeshStandardMaterial({ color: 0x6a8a9c, roughness: 0.92, metalness: 0 });
-    const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, metalness: 0 });
+    // 눈: 무광 + 은은한 회백색 + 반사 억제 → 블룸/글레어 제거
+    const snowMat = new THREE.MeshStandardMaterial({ color: 0xccd2da, roughness: 1.0, metalness: 0, envMapIntensity: 0.12 });
     const R = RAD + 210, MC = 20;
     for (let i = 0; i < MC; i++) {
       const a = (i / MC) * Math.PI * 2;
@@ -403,7 +404,8 @@ export class Scenery {
 
   _buildClouds() {
     const gm = this.gm;
-    const cloudMat = toon(0xffffff, gm, 0.0);
+    // 구름: 무광 회백색 + 반사 억제 → 번쩍임 제거
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xe0e6ee, roughness: 1.0, metalness: 0, envMapIntensity: 0.1 });
     const puff = new THREE.SphereGeometry(1, 10, 8);
     const positions = [
       [80, 70, -80], [-90, 90, -30], [10, 100, -160], [160, 66, -60],

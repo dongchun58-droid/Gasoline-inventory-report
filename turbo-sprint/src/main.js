@@ -182,6 +182,7 @@ function buildWorld(key) {
   hemi.color.setHex(map.hemi.sky); hemi.groundColor.setHex(map.hemi.ground); hemi.intensity = map.hemi.intensity;
   ambient.intensity = map.ambient;
   BLOOM_BASE = map.bloom; bloom.strength = BLOOM_BASE;
+  bloom.threshold = map.bloomThreshold != null ? map.bloomThreshold : 0.75;
   renderer.toneMappingExposure = map.exposure;
   // 트랙 + 배경 + 아이템 + 장애물 + 기능
   track = new Track(gradientMap, map); scene.add(track.group);
