@@ -24,36 +24,59 @@ const _q = new THREE.Quaternion();
 const _up = new THREE.Vector3(0, 1, 0);
 const _ground = {};
 
-// 프로시저럴 카트 모델 (~primitive 조합)
-function buildKartModel(color, gradientMap) {
+// 차량 종류별 스탯 (speed=최고속·strength=충돌강도/내구·turn=회전력)
+export const VEHICLES = {
+  kart:   { name: 'KART',   speed: 1.00, strength: 1.00, turn: 1.00 },
+  bike:   { name: 'BIKE',   speed: 1.07, strength: 0.55, turn: 1.30 },
+  sports: { name: 'SPORTS', speed: 1.16, strength: 0.85, turn: 0.86 },
+  truck:  { name: 'TRUCK',  speed: 0.90, strength: 1.80, turn: 0.70 },
+};
+export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
+
+// 프로시저럴 차량 모델 (종류별 바디 + 공용 드라이버/휠)
+function buildKartModel(color, gradientMap, type = 'kart') {
   const g = new THREE.Group();
   const toon = (c, emissive = 0x000000, emIntensity = 0) =>
     new THREE.MeshToonMaterial({ color: c, gradientMap, emissive, emissiveIntensity: emIntensity });
+  const dark = 0x1a1a2a;
+  let wheelSpec, driverY = 0.5, driverScale = 1;
 
-  // 바디 (라운드박스 대용: 살짝 눌린 박스)
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), toon(color));
-  body.position.y = 0.45;
-  g.add(body);
-
-  // 노즈콘
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), toon(color));
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0.42, 1.4);
-  g.add(nose);
-
-  // 리어윙 (박스 + 기둥 2)
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.5), toon(0x1a1a2a));
-  wing.position.set(0, 0.95, -1.1);
-  g.add(wing);
-  for (const sx of [-0.6, 0.6]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(0x1a1a2a));
-    post.position.set(sx, 0.72, -1.1);
-    g.add(post);
+  if (type === 'bike') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2.0), toon(color)); body.position.y = 0.55; g.add(body);
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), toon(color)); tank.scale.set(1, 0.75, 1.3); tank.position.set(0, 0.82, 0.35); g.add(tank);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.8), toon(0x222230)); seat.position.set(0, 0.82, -0.45); g.add(seat);
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.85, 8), toon(0x333340)); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.98, 0.92); g.add(bar);
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), toon(0xffffff, 0xfff2a0, 1.2)); hl.position.set(0, 0.72, 1.05); g.add(hl);
+    wheelSpec = [[0, 0.42, 1.05, true, 0.42], [0, 0.44, -1.05, false, 0.44]];
+    driverY = 0.62;
+  } else if (type === 'sports') {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 2.9), toon(color)); body.position.y = 0.4; g.add(body);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.0), toon(color)); nose.position.set(0, 0.32, 1.55); g.add(nose);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.42, 1.2), toon(0x101018)); cabin.position.set(0, 0.74, -0.15); g.add(cabin);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.08, 0.4), toon(dark)); wing.position.set(0, 0.78, -1.55); g.add(wing);
+    for (const sx of [-0.75, 0.75]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.6, -1.55); g.add(post); }
+    wheelSpec = [[-0.88, 0.36, 1.25, true, 0.4], [0.88, 0.36, 1.25, true, 0.4], [-0.88, 0.36, -1.3, false, 0.4], [0.88, 0.36, -1.3, false, 0.4]];
+    driverY = 0.5; driverScale = 0.9;
+  } else if (type === 'truck') {
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.95, 1.05, 1.5), toon(color)); cab.position.set(0, 0.98, 0.7); g.add(cab);
+    const cargo = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.2, 1.9), toon(0x7a5a34)); cargo.position.set(0, 1.05, -0.85); g.add(cargo);
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.5, 0.3), toon(0x333340)); grille.position.set(0, 0.6, 1.5); g.add(grille);
+    const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.28, 0.4), toon(0x22222c)); bumper.position.set(0, 0.35, 1.55); g.add(bumper);
+    wheelSpec = [[-0.98, 0.52, 1.15, true, 0.55], [0.98, 0.52, 1.15, true, 0.55], [-0.98, 0.52, -1.1, false, 0.55], [0.98, 0.52, -1.1, false, 0.55]];
+    driverY = 1.2; driverScale = 0.9;
+  } else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), toon(color)); body.position.y = 0.45; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), toon(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.5), toon(dark)); wing.position.set(0, 0.95, -1.1); g.add(wing);
+    for (const sx of [-0.6, 0.6]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.72, -1.1); g.add(post); }
+    for (const sx of [-0.35, 0.35]) { const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.4, 8), toon(0x555566)); pipe.rotation.x = Math.PI / 2; pipe.position.set(sx, 0.5, -1.25); g.add(pipe); }
+    wheelSpec = [[-0.82, 0.34, 1.0, true, 0.34], [0.82, 0.34, 1.0, true, 0.34], [-0.82, 0.34, -0.95, false, 0.34], [0.82, 0.34, -0.95, false, 0.34]];
   }
 
   // --- 귀여운 카툰 아기 드라이버 (큰 머리·볼·눈 / 오리지널) ---
   const driver = new THREE.Group();
-  driver.position.set(0, 0.5, -0.05);
+  driver.position.set(0, driverY, -0.05);
+  driver.scale.setScalar(driverScale);
   const skin = 0xffd8b8;      // 아기 피부톤
   const romper = color;       // 팀 컬러 우주복
   const shirt = 0xfff4e6;     // 크림색
@@ -135,32 +158,18 @@ function buildKartModel(color, gradientMap) {
   g.userData.driver = driver;
   g.userData.head = head;
 
-  // 배기관 2 (부스트 화염 방출구 — Phase 2+)
-  for (const sx of [-0.35, 0.35]) {
-    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.4, 8), toon(0x555566));
-    pipe.rotation.x = Math.PI / 2;
-    pipe.position.set(sx, 0.5, -1.25);
-    g.add(pipe);
-  }
-
-  // 휠 4 (토러스) — 조향/서스펜션/회전 반영
-  const wheelGeo = new THREE.TorusGeometry(0.34, 0.16, 8, 14);
+  // 휠 (종류별 스펙) — 조향/서스펜션/회전 반영
   const wheelMat = toon(0x111119);
   const wheels = [];
-  const wpos = [
-    [-0.82, 0.34, 1.0, true],   // FL (조향)
-    [0.82, 0.34, 1.0, true],    // FR
-    [-0.82, 0.34, -0.95, false],// RL
-    [0.82, 0.34, -0.95, false], // RR
-  ];
-  for (const [x, y, z, steer] of wpos) {
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
+  for (const [x, y, z, steer, r] of wheelSpec) {
+    const w = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.47, 8, 14), wheelMat);
     w.rotation.y = Math.PI / 2; // 토러스 면을 옆으로
     const pivot = new THREE.Group();
     pivot.position.set(x, y, z);
     pivot.add(w);
     pivot.userData.steer = steer;
-    pivot.userData.spin = w; // 회전은 자식 메시에
+    pivot.userData.spin = w;
+    pivot.userData.baseY = y;
     g.add(pivot);
     wheels.push(pivot);
   }
@@ -236,12 +245,19 @@ function makeBlobShadow() {
 }
 
 export class Kart {
-  constructor(track, color, gradientMap) {
+  constructor(track, color, gradientMap, type = 'kart') {
     this.track = track;
     this.color = color;
+    this._gm = gradientMap;
+    this.type = type;
+    this.stats = VEHICLES[type] || VEHICLES.kart;
 
-    this.model = buildKartModel(color, gradientMap);
+    this.model = buildKartModel(color, gradientMap, type);
     this.shadow = makeBlobShadow();
+
+    // 충돌 넉백
+    this.shove = new THREE.Vector3();
+    this._bumpCd = 0;
 
     // 상태
     this.pos = new THREE.Vector3();
@@ -327,6 +343,20 @@ export class Kart {
   setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
   get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
 
+  // 차량 종류 변경(모델 재생성). 이전 모델을 반환 → 호출자가 씬에서 교체.
+  setType(type) {
+    const old = this.model;
+    this.type = type;
+    this.stats = VEHICLES[type] || VEHICLES.kart;
+    this.model = buildKartModel(this.color, this._gm, type);
+    this._bmShown = undefined;
+    this._syncMesh();
+    return old;
+  }
+
+  // 넉백 추가(충돌)
+  applyShove(v) { this.shove.add(v); }
+
   // 점프 램프: 수직 속도 부여 + 착지 시 부스트
   jump(vel, landBoost = 0) {
     if (this.airborne || this.bulletTimer > 0) return;
@@ -368,6 +398,7 @@ export class Kart {
     // 타이머 감소
     if (this.boostTimer > 0) this.boostTimer -= dt;
     if (this.invincTimer > 0) this.invincTimer -= dt;
+    if (this._bumpCd > 0) this._bumpCd -= dt;
 
     // --- 스핀아웃 중: 조작 불가, 제자리 회전 연출 ---
     if (this.spinTimer > 0) {
@@ -424,7 +455,8 @@ export class Kart {
     }
 
     const boosting = this.boostTimer > 0;
-    const effMax = boosting ? PHYS.maxSpeed * PHYS.boostMultiplier : PHYS.maxSpeed;
+    const base = PHYS.maxSpeed * this.stats.speed;
+    const effMax = boosting ? base * PHYS.boostMultiplier : base;
 
     // --- 종방향 (가속/브레이크/드래그) ---
     const throttle = input.accel || boosting;
@@ -482,7 +514,7 @@ export class Kart {
       } else {
         const inside = steer === this.driftDir;
         const outside = steer === -this.driftDir;
-        const rate = inside ? 1.9 : outside ? 0.9 : 1.4;
+        const rate = (inside ? 1.9 : outside ? 0.9 : 1.4) * this.stats.turn;
         _q.setFromAxisAngle(_up, -this.driftDir * rate * dt);
         this.forward.applyQuaternion(_q);
         this.driftCharge += dt * (inside ? 1.3 : 1.0);
@@ -496,7 +528,7 @@ export class Kart {
     // 통상 조향 (드리프트 아닐 때)
     if (!this.drifting && steer !== 0) {
       const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
-      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac);
+      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * this.stats.turn;
       const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
       const dir = this.speed >= 0 ? 1 : -1;
       const ang = -steer * turnRate * steerAuthority * dir * dt;
@@ -512,6 +544,11 @@ export class Kart {
     _fwd.y = 0;
     if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
     this.pos.addScaledVector(_fwd, this.speed * dt);
+    // 충돌 넉백(감쇠)
+    if (this.shove.lengthSq() > 1e-4) {
+      this.pos.addScaledVector(this.shove, dt);
+      this.shove.multiplyScalar(Math.max(0, 1 - 6 * dt));
+    }
 
     // --- 접지 ---
     const g = this.track.ground(this.pos, this.idx, _ground);
@@ -622,7 +659,7 @@ export class Kart {
       if (pivot.userData.steer) {
         pivot.rotation.y = this.steerVis * 0.5;
       }
-      pivot.position.y = 0.34 + bounce;
+      pivot.position.y = pivot.userData.baseY + bounce;
       pivot.userData.spin.rotation.x = this.wheelSpin;
     }
 

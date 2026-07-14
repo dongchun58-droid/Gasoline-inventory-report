@@ -7,12 +7,13 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Input } from './input.js';
 import { Track } from './track.js';
-import { Kart, PHYS } from './kart.js';
+import { Kart, PHYS, VEHICLES, VEHICLE_ORDER } from './kart.js';
 import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
 import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
 import { Features } from './features.js';
+import { Obstacles } from './obstacles.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
 import { GameAudio } from './audio.js';
@@ -100,16 +101,16 @@ scene.add(track.group);
 const LAPS = 3;
 // [색, 이름, 레인오프셋, 그리드 lat, 그리드 back]
 const LINEUP = [
-  { color: 0x2e6bff, name: 'YOU',       lane: 0,  gLat: -3.5, gBack: 5,  ai: false },
-  { color: 0xff3b3b, name: 'CRIMSON',   lane: -3, gLat: 3.5,  gBack: 5,  ai: true },
-  { color: 0x18c2c2, name: 'TEAL',      lane: 0,  gLat: -3.5, gBack: 12, ai: true },
-  { color: 0xffc233, name: 'GOLD',      lane: 3,  gLat: 3.5,  gBack: 12, ai: true },
+  { color: 0x2e6bff, name: 'YOU',       lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart' },
+  { color: 0xff3b3b, name: 'CRIMSON',   lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports' },
+  { color: 0x18c2c2, name: 'TEAL',      lane: 0,  gLat: -3.5, gBack: 12, ai: true,  type: 'bike' },
+  { color: 0xffc233, name: 'GOLD',      lane: 3,  gLat: 3.5,  gBack: 12, ai: true,  type: 'truck' },
 ];
 const karts = [];
 const ais = [];
 let player;
 for (const spec of LINEUP) {
-  const k = new Kart(track, spec.color, gradientMap);
+  const k = new Kart(track, spec.color, gradientMap, spec.type);
   k.name = spec.name;
   k.isAI = spec.ai;
   k.gridLat = spec.gLat; k.gridBack = spec.gBack;
@@ -123,6 +124,10 @@ for (const spec of LINEUP) {
 // ---------- 아이템 시스템 ----------
 const itemSystem = new ItemSystem(track, gradientMap);
 scene.add(itemSystem.group);
+
+// ---------- 장애물: 횡단하는 젖소 ----------
+const obstacles = new Obstacles(track, gradientMap);
+scene.add(obstacles.group);
 
 // ---------- 트랙 기능: 네온 부스트 발판 + 점프 램프 ----------
 const features = new Features(track, gradientMap);
@@ -215,6 +220,7 @@ function fmtTime(s) {
 
 // 카트 간 구 충돌 (반경 1.1m)
 const _sep = new THREE.Vector3();
+const _shoveTmp = new THREE.Vector3();
 function resolveKartCollisions() {
   const MIN = 2.2;
   for (let i = 0; i < karts.length; i++) {
@@ -223,16 +229,35 @@ function resolveKartCollisions() {
       _sep.set(b.pos.x - a.pos.x, 0, b.pos.z - a.pos.z);
       const d = _sep.length();
       if (d > 1e-4 && d < MIN) {
-        _sep.multiplyScalar(1 / d);
+        _sep.multiplyScalar(1 / d); // a→b 방향(단위)
         const push = (MIN - d) * 0.5;
         a.pos.addScaledVector(_sep, -push);
         b.pos.addScaledVector(_sep, push);
-        a.speed *= 0.9; b.speed *= 0.9;
-        // 불릿/무적은 상대를 스핀아웃시킴
+
+        // 불릿/무적은 상대를 스핀아웃시킴 (항상)
         const aP = a.bulletTimer > 0 || a.invincTimer > 0;
         const bP = b.bulletTimer > 0 || b.invincTimer > 0;
         if (aP && !bP) b.spinOut(1.1);
         else if (bP && !aP) a.spinOut(1.1);
+
+        // 나머지 효과는 새 충돌(쿨다운)일 때만 → 급감속 방지
+        if (a._bumpCd <= 0 && b._bumpCd <= 0) {
+          a._bumpCd = b._bumpCd = 0.35;
+          // 부드러운 감속 (한 번, 소폭)
+          a.speed *= 0.94; b.speed *= 0.94;
+          // 램밍: 빠르고 강한 쪽이 상대를 옆으로 튕겨냄
+          const ram = Math.abs(a.speed) >= Math.abs(b.speed) ? a : b;
+          const hit = ram === a ? b : a;
+          const diff = Math.abs(ram.speed) - Math.abs(hit.speed);
+          if (diff > 6 && !bP && !aP) {
+            const ratio = ram.stats.strength / hit.stats.strength;
+            const mag = Math.min(34, diff * 1.6 * ratio);
+            const dir = hit === b ? 1 : -1; // _sep는 a→b
+            _sep.y = 0;
+            hit.applyShove(_shoveTmp.copy(_sep).multiplyScalar(dir * mag));
+            hit.speed *= 0.8;
+          }
+        }
       }
     }
   }
@@ -280,6 +305,37 @@ function beginRace() {
 }
 document.getElementById('btnStart')?.addEventListener('pointerdown', (e) => { e.preventDefault(); beginRace(); });
 document.getElementById('btnAgain')?.addEventListener('pointerdown', (e) => { e.preventDefault(); beginRace(); });
+
+// ---------- 차량 선택 UI (막대차트 스탯) ----------
+function statPct(stat, val) {
+  let min = Infinity, max = -Infinity;
+  for (const t of VEHICLE_ORDER) { const v = VEHICLES[t][stat]; min = Math.min(min, v); max = Math.max(max, v); }
+  return Math.round(20 + ((val - min) / (max - min || 1)) * 80);
+}
+function setupVehicleSelect() {
+  const cont = document.getElementById('vehicleSelect');
+  if (!cont) return;
+  const bar = (lab, cls, stat, v) =>
+    `<div class="vbar"><span class="vlab">${lab}</span><span class="vtrack"><span class="vfill ${cls}" style="width:${statPct(stat, v[stat])}%"></span></span></div>`;
+  cont.innerHTML = VEHICLE_ORDER.map((t) => {
+    const v = VEHICLES[t];
+    return `<div class="vcard${t === player.type ? ' sel' : ''}" data-type="${t}">` +
+      `<div class="vname">${v.name}</div>` +
+      bar('SPD', 'spd', 'speed', v) + bar('POW', 'pow', 'strength', v) + bar('TRN', 'trn', 'turn', v) +
+      `</div>`;
+  }).join('');
+  cont.querySelectorAll('.vcard').forEach((card) => {
+    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectVehicle(card.dataset.type); });
+  });
+}
+function selectVehicle(type) {
+  if (!VEHICLES[type] || type === player.type) return;
+  const old = player.setType(type);
+  scene.remove(old); scene.add(player.model);
+  player.resetToStart(player.gridLat, player.gridBack);
+  document.querySelectorAll('#vehicleSelect .vcard').forEach((c) => c.classList.toggle('sel', c.dataset.type === type));
+}
+setupVehicleSelect();
 
 // ---------- 루프: 고정 dt 물리(1/120) + 가변 렌더 ----------
 const FIXED = 1 / 120;
@@ -357,7 +413,10 @@ function frame(nowMs) {
 
   // 아이템/발판/배경
   itemSystem.update(dt, karts);
-  if (raceState === 'racing' || raceState === 'finished') features.update(dt, karts);
+  if (raceState === 'racing' || raceState === 'finished') {
+    features.update(dt, karts);
+    obstacles.update(dt, karts);
+  }
   scenery.update(dt);
 
   // 카메라 (피니시 시 줌 연출)
@@ -401,7 +460,7 @@ window.addEventListener('resize', onResize);
 
 // 디버그용 전역 노출
 window.__turbo = {
-  scene, player, karts, track, itemSystem, features, input, audio, PHYS, resetRace,
+  scene, player, karts, track, itemSystem, features, obstacles, input, audio, PHYS, resetRace,
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },
 };

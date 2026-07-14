@@ -88,7 +88,20 @@
     #startScreen.show { display: flex; animation: fadein .4s ease; }
     #sTitle { font-size: 64px; font-weight: 900; letter-spacing: 2px;
       text-shadow: 0 5px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b; }
-    #sSub { font-size: 20px; font-weight: 700; opacity: .9; margin: 6px 0 26px; }
+    #sSub { font-size: 20px; font-weight: 700; opacity: .9; margin: 6px 0 18px; }
+    #vehicleSelect { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+    .vcard {
+      pointer-events: auto; cursor: pointer; width: 150px; padding: 12px;
+      background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
+      border-radius: 16px; color: #fff; transition: transform .1s, border-color .1s;
+    }
+    .vcard.sel { border-color: #ffd23f; background: rgba(255,210,63,.18); transform: translateY(-4px); }
+    .vcard .vname { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
+    .vbar { display: flex; align-items: center; gap: 6px; margin: 5px 0; font-size: 11px; font-weight: 700; }
+    .vbar .vlab { width: 42px; text-align: left; opacity: .85; }
+    .vbar .vtrack { flex: 1; height: 9px; background: rgba(255,255,255,.15); border-radius: 6px; overflow: hidden; }
+    .vbar .vfill { height: 100%; border-radius: 6px; }
+    .vfill.spd { background: #37e0ff; } .vfill.pow { background: #ff6b6b; } .vfill.trn { background: #7CFF6B; }
     .startbtn {
       pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent;
       font-family: system-ui, sans-serif; font-weight: 900; font-size: 30px; color: #1b2a6b;
@@ -180,7 +193,8 @@
   <div id="startScreen" class="show">
     <div class="sbox">
       <div id="sTitle">TURBO SPRINT</div>
-      <div id="sSub">10초 그랑프리 · vs AI 3</div>
+      <div id="sSub">차량을 선택하세요</div>
+      <div id="vehicleSelect"></div>
       <button id="btnStart" class="startbtn">START ▶</button>
     </div>
   </div>

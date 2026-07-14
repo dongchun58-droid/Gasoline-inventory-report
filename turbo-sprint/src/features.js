@@ -108,7 +108,7 @@ export class Features {
       if (!k.airborne && k.speed > 9) {
         for (const p of this.jumpPads) {
           if (Math.abs(lateral) < p.width && this._within(k.idx, p.i0, p.half, N)) {
-            k.jump(9, 0.6);
+            k.jump(14.5, 0.8); // 더 높고 박진감 있게 + 착지 부스트
           }
         }
       }
