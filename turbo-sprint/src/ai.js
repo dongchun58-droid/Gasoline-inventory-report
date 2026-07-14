@@ -21,7 +21,10 @@ export class AIController {
     const LOOK = 22;
     const li = (k.idx + LOOK) % N;
     const tp = track.samplePos[li], tl = track.sampleLat[li];
-    _toT.set(tp.x + tl.x * this.lane - k.pos.x, 0, tp.z + tl.z * this.lane - k.pos.z);
+    // 중앙 분리대 구간에선 레인을 한쪽으로 (센터 회피)
+    let lane = this.lane;
+    if (track.sampleMedian[li] && Math.abs(lane) < 3) lane = (lane >= 0 ? 1 : -1) * 4.5;
+    _toT.set(tp.x + tl.x * lane - k.pos.x, 0, tp.z + tl.z * lane - k.pos.z);
     if (_toT.lengthSq() > 1e-6) _toT.normalize();
 
     _fwd.copy(k.forward); _fwd.y = 0;

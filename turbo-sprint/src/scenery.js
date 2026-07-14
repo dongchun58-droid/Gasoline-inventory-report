@@ -10,8 +10,35 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _zAxis = new THREE.Vector3(0, 0, 1);
 const _dir = new THREE.Vector3();
 
+// 사실적 표준 재질 (그림자·반사 수용)
 function toon(color, gm, emissiveI = 0) {
-  return new THREE.MeshToonMaterial({ color, gradientMap: gm, emissive: color, emissiveIntensity: emissiveI });
+  return new THREE.MeshStandardMaterial({
+    color, roughness: 0.82, metalness: 0.0,
+    emissive: color, emissiveIntensity: emissiveI,
+  });
+}
+
+// 잔디 디테일 텍스처 (밝기 노이즈 → 지면에 결)
+let _grassTex = null;
+function grassTexture() {
+  if (_grassTex) return _grassTex;
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#cfe0bf'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 2600; i++) {
+    const x = (Math.sin(i * 12.9898) * 43758.5) % 1, y = (Math.sin(i * 78.233) * 43758.5) % 1;
+    const px = Math.abs(x) * 128, py = Math.abs(y) * 128;
+    const dark = (i % 3 === 0);
+    g.strokeStyle = dark ? 'rgba(120,150,95,0.5)' : 'rgba(235,245,225,0.5)';
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(px, py); g.lineTo(px + (dark ? 1 : -1), py - 3); g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _grassTex = tex;
+  return tex;
 }
 
 // 결정적 언덕 높이 (Math.random 미사용)
@@ -43,7 +70,7 @@ export class Scenery {
     const gm = this.gm;
     const CX = track.center.x, CZ = track.center.z;
     const RAD = track.radius;
-    const CORR = track.halfWidth + 4;   // 회랑 반경(평탄)
+    const CORR = (track.maxHalf || track.halfWidth) + 4; // 회랑 반경(가장 넓은 구간 기준)
     const BLEND = 30;                    // 언덕으로 섞이는 폭
 
     const size = 2 * (RAD + 340), seg = 130;
@@ -73,8 +100,14 @@ export class Scenery {
       colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    // 잔디 결 UV (넓게 반복)
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) { uv.setXY(i, uv.getX(i) * size / 6, uv.getY(i) * size / 6); }
     geo.computeVertexNormals();
-    const ground = new THREE.Mesh(geo, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gm }));
+    const gtex = grassTexture();
+    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      vertexColors: true, map: gtex, roughness: 0.95, metalness: 0.0,
+    }));
     ground.position.set(CX, 0, CZ);
     this.group.add(ground);
     this._groundH = (x, z) => {
@@ -85,7 +118,7 @@ export class Scenery {
     };
 
     // 호수 (도로에서 먼 곳)
-    const lakeMat = new THREE.MeshToonMaterial({ color: 0x3fb8ff, gradientMap: gm, transparent: true, opacity: 0.9 });
+    const lakeMat = new THREE.MeshStandardMaterial({ color: 0x2f9fe0, transparent: true, opacity: 0.85, metalness: 0.2, roughness: 0.12 });
     for (const [fx, fz] of [[-0.5, -0.35], [0.55, 0.2], [0.2, -0.6], [-0.35, 0.5]]) {
       const lx = CX + fx * RAD, lz = CZ + fz * RAD;
       if (track.pathDistanceXZ(lx, lz) < 70) continue;
@@ -96,8 +129,8 @@ export class Scenery {
     }
 
     // 먼 산맥
-    const mtnMat = new THREE.MeshToonMaterial({ color: 0x6a8a9c, gradientMap: gm });
-    const snowMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: gm });
+    const mtnMat = new THREE.MeshStandardMaterial({ color: 0x6a8a9c, roughness: 0.92, metalness: 0 });
+    const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, metalness: 0 });
     const R = RAD + 210, MC = 20;
     for (let i = 0; i < MC; i++) {
       const a = (i / MC) * Math.PI * 2;
@@ -124,13 +157,13 @@ export class Scenery {
         if (Math.abs(idx) % 4 === 0) continue;
         const wx = CX + x + (idx % 9), wz = CZ + z + (idx % 7);
         const d = track.pathDistanceXZ(wx, wz);
-        if (d < track.halfWidth + 5) continue;   // 도로 위엔 없음
+        if (d < (track.maxHalf || track.halfWidth) + 5) continue;   // 도로 위엔 없음
         if (Math.hypot(x, z) > RAD + 170) continue;
         spots.push({ x: wx, y: this._groundH(wx, wz), z: wz, s: 0.85 + (Math.abs(idx) % 5) * 0.16 });
       }
     }
     const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.7, 0.95, 5, 6), toon(0x7a5230, gm), spots.length);
-    const foliage = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 10, 8), new THREE.MeshToonMaterial({ gradientMap: gm }), spots.length);
+    const foliage = new THREE.InstancedMesh(new THREE.SphereGeometry(3.4, 12, 10), new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 }), spots.length);
     foliage.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(spots.length * 3), 3);
     const greens = [0x3f9e3a, 0x59bd4a, 0x4fae4a, 0x2f8e5a];
     const col = new THREE.Color();
@@ -153,10 +186,10 @@ export class Scenery {
     const gm = this.gm;
     const N = track.samplePos.length;
     const step = 8;
-    const gap = track.halfWidth + 1.3;
     const sides = [[], []];
     for (let i = 0; i < N - 1; i += step) {
       const p = track.samplePos[i], lat = track.sampleLat[i], tan = track.sampleTan[i];
+      const gap = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + 1.3; // 가변폭 추종
       for (let s = 0; s < 2; s++) {
         const side = s === 0 ? -1 : 1;
         sides[s].push({
@@ -208,9 +241,9 @@ export class Scenery {
     const clusters = [];
     for (let i = 60; i < N - 1; i += 130) clusters.push(i);
     const totalFlowers = clusters.length * 2 * 14;
-    const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshToonMaterial({ gradientMap: gm }), totalFlowers);
+    const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 }), totalFlowers);
     flowers.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(totalFlowers * 3), 3);
-    const stem = new THREE.MeshToonMaterial({ color: 0x3f9e3a, gradientMap: gm });
+    const stem = new THREE.MeshStandardMaterial({ color: 0x3f9e3a, roughness: 0.8 });
     let fi = 0;
     const col = new THREE.Color();
     for (const ci of clusters) {

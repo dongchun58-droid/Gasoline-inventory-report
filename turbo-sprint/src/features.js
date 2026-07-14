@@ -79,9 +79,9 @@ export class Features {
     const lip = new THREE.Mesh(new THREE.BoxGeometry(width * 1.05, 0.5, rampLen), lipMat);
     _m.makeBasis(lat, up, tan);
     lip.quaternion.setFromRotationMatrix(_m);
-    lip.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(lat, -tilt)); // 앞이 들림
+    lip.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(lat, tilt)); // 진행방향 앞이 높아지게(방향 수정)
     // 램프가 도로에서 솟아오르도록 배치(중심을 앞·위로)
-    lip.position.copy(t.samplePos[i0]).addScaledVector(tan, 2.6).addScaledVector(up, 1.05);
+    lip.position.copy(t.samplePos[i0]).addScaledVector(tan, 1.8).addScaledVector(up, 1.0);
     this.group.add(lip);
     // 옆 네온 스트립(발광 테두리)
     for (const sx of [-1, 1]) {

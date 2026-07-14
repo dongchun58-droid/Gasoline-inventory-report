@@ -8,7 +8,7 @@ const _up = new THREE.Vector3(0, 1, 0);
 
 function buildCow(gm) {
   const g = new THREE.Group();
-  const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: gm });
+  const toon = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, metalness: 0.0 });
   const white = toon(0xf4f4ef), dark = toon(0x2a2a30), pink = toon(0xffb0bf), hoof = toon(0x333338);
   // 몸통(+Z가 앞)
   const body = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.25, 2.3), white);

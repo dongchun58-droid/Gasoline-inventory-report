@@ -28,8 +28,8 @@ const _ground = {};
 export const VEHICLES = {
   kart:   { name: 'KART',   speed: 1.00, strength: 1.00, turn: 1.00 },
   bike:   { name: 'BIKE',   speed: 1.07, strength: 0.55, turn: 1.30 },
-  sports: { name: 'SPORTS', speed: 1.16, strength: 0.85, turn: 0.86 },
-  truck:  { name: 'TRUCK',  speed: 0.90, strength: 1.80, turn: 0.70 },
+  sports: { name: 'SPORTS', speed: 1.18, strength: 0.80, turn: 0.62 }, // 최고속·조향 어려움
+  truck:  { name: 'TRUCK',  speed: 0.95, strength: 3.00, turn: 0.72 }, // 조금 빠르게·내구 압도적
 };
 export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
 
@@ -62,7 +62,7 @@ function buildKartModel(color, gradientMap, type = 'kart') {
     driverY = 0.5; driverScale = 0.9;
   } else if (type === 'truck') {
     // 미국식 픽업트럭 (오픈 적재함 · 테일게이트 · 세로 테일라이트 · 범퍼)
-    const bodyCol = toon(color);
+    const bodyCol = toon(0xdd7a1f); // 앰버/오렌지 (사진 참고)
     const clad = toon(dark);
     const redLite = toon(0x330000, 0xff2323, 1.6);
     const whiteLite = toon(0x222018, 0xfff2c8, 1.3);
@@ -255,6 +255,19 @@ function buildKartModel(color, gradientMap, type = 'kart') {
     sparks.push(sp);
   }
   g.userData.sparks = sparks;
+
+  // 스타(무적) 반짝임 아우라 — 카트 주위 작은 별빛들 (기본 숨김)
+  const aura = new THREE.Group();
+  for (let i = 0; i < 7; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, transparent: true }));
+    const a = (i / 7) * Math.PI * 2;
+    s.position.set(Math.cos(a) * 1.1, 0.6 + (i % 3) * 0.35, Math.sin(a) * 1.1);
+    aura.add(s);
+  }
+  aura.visible = false;
+  g.add(aura);
+  g.userData.aura = aura;
 
   return g;
 }
@@ -597,13 +610,22 @@ export class Kart {
       this.onGrass = false;
     } else {
       this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
+      // 중앙 분리대(4차선 구간): 넘지 못하게 밀어냄 + 감속
+      if (g.median) {
+        const mh = this.track.medianHalf() + 0.5;
+        if (Math.abs(g.lateral) < mh) {
+          const side = g.lateral >= 0 ? 1 : -1;
+          this.pos.addScaledVector(g.lat, (mh - Math.abs(g.lateral)) * side);
+          this.speed *= 0.9;
+        }
+      }
       // 도로 밖(잔디): 최고속 제한 + 소프트 월 (추락 없음)
-      const over = Math.abs(g.lateral) - this.track.halfWidth;
+      const over = Math.abs(g.lateral) - g.half;
       this.onGrass = over > 0.2;
       if (this.onGrass) {
         const grassMax = PHYS.maxSpeed * 0.42;
         if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
-        const maxOff = this.track.halfWidth + 9;
+        const maxOff = g.half + 9;
         if (Math.abs(g.lateral) > maxOff) {
           const push = Math.abs(g.lateral) - maxOff;
           this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
@@ -660,9 +682,25 @@ export class Kart {
       bmesh.visible = bm;
       this._bmShown = bm;
     }
-    // 스케일: 무적(반짝 펄스)만
-    const sc = (!bm && this.invincTimer > 0) ? 1 + Math.sin(this.invincTimer * 30) * 0.08 : 1;
-    this.model.scale.setScalar(sc);
+    this.model.scale.setScalar(1);
+    // 스타(무적): 번쩍번쩍 반짝이는 별빛 아우라
+    const aura = this.model.userData.aura;
+    if (aura) {
+      const on = this.invincTimer > 0 && !bm;
+      aura.visible = on;
+      if (on) {
+        aura.rotation.y += 0.35;
+        const hue = (this.invincTimer * 2) % 1;
+        const flash = 0.45 + 0.55 * Math.abs(Math.sin(this.invincTimer * 22));
+        const n = aura.children.length;
+        for (let i = 0; i < n; i++) {
+          const s = aura.children[i];
+          s.material.color.setHSL((hue + i / n) % 1, 1, 0.65);
+          s.material.opacity = flash;
+          s.scale.setScalar(0.6 + flash * 0.7);
+        }
+      }
+    }
 
     // 드리프트 스파크
     const sparks = this.model.userData.sparks;

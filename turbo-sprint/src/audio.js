@@ -90,7 +90,15 @@ export class GameAudio {
   }
   sfxFanfare() {
     if (!this.ctx) return; const t = this.ctx.currentTime;
-    [0, 4, 7, 12].forEach((n, i) => this._tone('square', 523 * Math.pow(2, n / 12), null, t + i * 0.14, 0.32, 0.6));
+    // 승리 팡파레: G G G C - E - G↑ + 마지막 화음
+    const seq = [[67, 0.0, 0.14], [67, 0.16, 0.14], [67, 0.32, 0.14], [72, 0.5, 0.45], [76, 1.0, 0.45], [79, 1.5, 0.9]];
+    for (const [m, off, dur] of seq) {
+      this._tone('square', this._hz(m), null, t + off, dur, 0.55);
+      this._tone('sawtooth', this._hz(m - 12), null, t + off, dur, 0.32);
+    }
+    for (const m of [72, 76, 79, 84]) this._tone('square', this._hz(m), null, t + 1.5, 0.95, 0.32);
+    // 드럼 롤 느낌
+    for (let i = 0; i < 4; i++) this._burst(t + i * 0.12, 0.08, 0.25);
   }
 
   _schedule() {

@@ -59,16 +59,14 @@ export class ItemSystem {
 
   _grant(kart, rank) {
     const roll = Math.abs((Math.sin(this._t * 97.13 + kart.pos.x * 3.7 + kart.pos.z * 1.9) * 43758.5453) % 1);
-    // 버섯이 가장 많고, 불릿은 희귀
+    // 버섯이 가장 많고, 불릿 확률은 이전의 약 2배
     let item;
     if (rank === 1) {
-      // 선두: 버섯 위주, 불릿 거의 없음
-      item = roll < 0.72 ? 'mushroom' : roll < 0.86 ? 'banana' : roll < 0.97 ? 'shell' : 'bullet';
+      item = roll < 0.68 ? 'mushroom' : roll < 0.82 ? 'banana' : roll < 0.94 ? 'shell' : 'bullet'; // 불릿 ~6%
     } else if (rank >= 3) {
-      // 후미: 버섯 최다 + 별, 불릿은 아주 가끔
-      item = roll < 0.5 ? 'mushroom' : roll < 0.72 ? 'star' : roll < 0.86 ? 'shell' : roll < 0.96 ? 'banana' : 'bullet';
+      item = roll < 0.46 ? 'mushroom' : roll < 0.66 ? 'star' : roll < 0.8 ? 'shell' : roll < 0.88 ? 'banana' : 'bullet'; // 불릿 ~12%
     } else {
-      item = roll < 0.58 ? 'mushroom' : roll < 0.78 ? 'star' : roll < 0.9 ? 'shell' : roll < 0.97 ? 'banana' : 'bullet';
+      item = roll < 0.54 ? 'mushroom' : roll < 0.74 ? 'star' : roll < 0.86 ? 'shell' : roll < 0.9 ? 'banana' : 'bullet'; // 불릿 ~10%
     }
     kart.heldItem = item;
     if (kart.isAI) kart.aiUseTimer = 0.8 + roll * 1.8;
@@ -78,7 +76,7 @@ export class ItemSystem {
     const item = kart.heldItem;
     if (!item) return null;
     kart.heldItem = null;
-    if (item === 'mushroom') kart.giveBoost(1.5);
+    if (item === 'mushroom') kart.giveBoost(2.6); // 더 길고 강한 가속
     else if (item === 'star') kart.setInvincible(5);
     else if (item === 'bullet') kart.startBullet(4.5);
     else if (item === 'banana') this._dropBanana(kart);
