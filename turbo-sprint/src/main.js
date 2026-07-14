@@ -13,6 +13,7 @@ import { Scenery } from './scenery.js';
 import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
 import { HUD } from './hud.js';
+import { setupTouch } from './touch.js';
 
 // ---------- 셀 셰이딩용 3단 그라디언트맵 (§9) ----------
 function makeToonGradient() {
@@ -250,6 +251,7 @@ composer.addPass(new OutputPass());
 // ---------- 입력 ----------
 const input = new Input();
 input.onFirstInput(() => { /* Phase 6: AudioContext.resume() */ });
+setupTouch(input); // 터치 조작(폰) 연결
 
 // ---------- 루프: 고정 dt 물리(1/120) + 가변 렌더 ----------
 const FIXED = 1 / 120;
@@ -365,7 +367,7 @@ window.addEventListener('resize', onResize);
 
 // 디버그용 전역 노출
 window.__turbo = {
-  scene, player, karts, track, itemSystem, PHYS, resetRace,
+  scene, player, karts, track, itemSystem, input, PHYS, resetRace,
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },
 };

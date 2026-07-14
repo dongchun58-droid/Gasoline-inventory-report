@@ -93,6 +93,24 @@
       color: #ffd23f; text-shadow: 0 4px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b;
     }
     #lapPopup.show { opacity: 1; }
+    /* 터치 조작 */
+    #touch { position: fixed; inset: 0; z-index: 6; display: none; }
+    #touch.show { display: block; }
+    #touch .tpad { position: absolute; bottom: 22px; display: flex; align-items: flex-end; gap: 14px; }
+    #touch .tleft { left: 22px; }
+    #touch .tright { right: 22px; align-items: flex-end; }
+    .tbtn {
+      pointer-events: auto; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+      border: 3px solid rgba(255,255,255,.8); background: rgba(20,24,60,.4); color: #fff;
+      font-family: system-ui, sans-serif; font-weight: 800; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; touch-action: none;
+    }
+    .tbtn.active { background: rgba(255,210,63,.55); transform: scale(.94); }
+    .tbtn { width: 78px; height: 78px; font-size: 30px; }
+    .tbtn.big { width: 108px; height: 108px; font-size: 26px; background: rgba(46,107,255,.5); }
+    .tbtn.mid { width: 78px; height: 78px; font-size: 30px; background: rgba(255,80,80,.45); }
+    .tbtn.small { width: 66px; height: 66px; font-size: 22px; border-radius: 18px; }
+    #btnRestart.restart { position: absolute; top: 14px; right: 190px; width: 52px; height: 52px; font-size: 24px; }
     /* Portrait warning */
     #rotate {
       position: fixed; inset: 0; display: none; z-index: 10;
@@ -128,6 +146,20 @@
       <div id="rStandings"></div>
       <div id="rHint">R = 다시 하기</div>
     </div>
+  </div>
+  <!-- 터치 조작 (키보드 없는 기기) -->
+  <div id="touch">
+    <div class="tpad tleft">
+      <button id="btnLeft" class="tbtn">◀</button>
+      <button id="btnRight" class="tbtn">▶</button>
+    </div>
+    <div class="tpad tright">
+      <button id="btnItem" class="tbtn small">🎁</button>
+      <button id="btnDrift" class="tbtn small">DRIFT</button>
+      <button id="btnBrake" class="tbtn mid">B</button>
+      <button id="btnGas" class="tbtn big">GAS</button>
+    </div>
+    <button id="btnRestart" class="tbtn restart">↺</button>
   </div>
   <div id="rotate">📱 → 🖥️<br />가로로 돌려주세요</div>
   <script type="module" src="/src/main.js"></script>
