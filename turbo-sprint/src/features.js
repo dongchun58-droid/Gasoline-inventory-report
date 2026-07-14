@@ -21,9 +21,10 @@ function chevronTex(hex) {
 }
 
 export class Features {
-  constructor(track, gm) {
+  constructor(track, gm, pad = {}) {
     this.track = track;
     this.gm = gm;
+    this.pad = { boost: 0x18d6ff, chevron: '#eaffff', jump: '#ff9a2e', jumpHex: 0xff9a2e, jumpEdge: 0xffd23f, ...pad };
     this.group = new THREE.Group();
     this.boostPads = [];
     this.jumpPads = [];
@@ -54,14 +55,14 @@ export class Features {
   _addBoostPad(i0, lengthM, perSample) {
     const t = this.track;
     const width = t.halfWidth * 0.9;
-    const tex = chevronTex('#eaffff');           // 밝은 흰-시안 셰브론
+    const tex = chevronTex(this.pad.chevron);    // 셰브론 색
     tex.repeat.set(1, lengthM / 4.2);            // 큼직한 셰브론
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, lengthM), mat);
     this._orient(mesh, i0, 0.06);
     // 바닥 발광 패널 (도로와 구분되는 밝은 네온 스트립)
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(width, lengthM),
-      new THREE.MeshBasicMaterial({ color: 0x18d6ff, transparent: true, opacity: 0.72, toneMapped: false, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: this.pad.boost, transparent: true, opacity: 0.72, toneMapped: false, depthWrite: false }));
     this._orient(glow, i0, 0.04);
     this.group.add(glow, mesh);
     this.boostPads.push({ i0, half: Math.round((lengthM / 2) / perSample), width: width / 2, tex });
@@ -71,7 +72,7 @@ export class Features {
     const t = this.track;
     const width = t.halfWidth * 0.8;
     // 발광 발판
-    const tex = chevronTex('#ff9a2e');
+    const tex = chevronTex(this.pad.jump);
     tex.repeat.set(1, 3);
     const pad = new THREE.Mesh(new THREE.PlaneGeometry(width, 9),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false }));
@@ -79,7 +80,7 @@ export class Features {
     this.group.add(pad);
     // 실제 램프(경사판): 이전보다 2배 길고 높게
     const lat = t.sampleLat[i0], up = t.sampleUp[i0], tan = t.sampleTan[i0];
-    const lipMat = new THREE.MeshToonMaterial({ color: 0xff9a2e, gradientMap: this.gm, emissive: 0xff9a2e, emissiveIntensity: 0.55 });
+    const lipMat = new THREE.MeshToonMaterial({ color: this.pad.jumpHex, gradientMap: this.gm, emissive: this.pad.jumpHex, emissiveIntensity: 0.55 });
     const rampLen = 7.5, tilt = 0.42;
     const lip = new THREE.Mesh(new THREE.BoxGeometry(width * 1.05, 0.5, rampLen), lipMat);
     _m.makeBasis(lat, up, tan);
@@ -91,7 +92,7 @@ export class Features {
     // 옆 네온 스트립(발광 테두리)
     for (const sx of [-1, 1]) {
       const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, rampLen),
-        new THREE.MeshBasicMaterial({ color: 0xffd23f, toneMapped: false }));
+        new THREE.MeshBasicMaterial({ color: this.pad.jumpEdge, toneMapped: false }));
       edge.quaternion.copy(lip.quaternion);
       edge.position.copy(lip.position).addScaledVector(lat, sx * width * 0.53).addScaledVector(up, 0.28);
       this.group.add(edge);

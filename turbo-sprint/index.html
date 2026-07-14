@@ -102,6 +102,18 @@
     .vbar .vtrack { flex: 1; height: 9px; background: rgba(255,255,255,.15); border-radius: 6px; overflow: hidden; }
     .vbar .vfill { height: 100%; border-radius: 6px; }
     .vfill.spd { background: #37e0ff; } .vfill.pow { background: #ff6b6b; } .vfill.trn { background: #7CFF6B; }
+    .selLabel { font-size: 13px; font-weight: 800; letter-spacing: 2px; opacity: .7; margin: 4px 0 8px; }
+    #mapSelect { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+    .mcard {
+      pointer-events: auto; cursor: pointer; width: 210px; padding: 12px 14px;
+      background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
+      border-radius: 16px; color: #fff; text-align: left; transition: transform .1s, border-color .1s;
+    }
+    .mcard.sel { border-color: #ffd23f; background: rgba(255,210,63,.18); transform: translateY(-4px); }
+    .mswatch { display: flex; gap: 5px; margin-bottom: 8px; }
+    .mswatch .msw { width: 30px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+    .mcard .mname { font-size: 19px; font-weight: 900; }
+    .mcard .mdesc { font-size: 12px; font-weight: 600; opacity: .82; margin-top: 3px; }
     .startbtn {
       pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent;
       font-family: system-ui, sans-serif; font-weight: 900; font-size: 30px; color: #1b2a6b;
@@ -193,8 +205,11 @@
   <div id="startScreen" class="show">
     <div class="sbox">
       <div id="sTitle">TURBO SPRINT</div>
-      <div id="sSub">차량을 선택하세요</div>
+      <div id="sSub">차량과 맵을 선택하세요</div>
+      <div class="selLabel">🏎️ 차량</div>
       <div id="vehicleSelect"></div>
+      <div class="selLabel">🗺️ 맵</div>
+      <div id="mapSelect"></div>
       <button id="btnStart" class="startbtn">START ▶</button>
     </div>
   </div>

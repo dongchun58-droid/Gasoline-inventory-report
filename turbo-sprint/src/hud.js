@@ -21,9 +21,14 @@ export class HUD {
     this._lapHideAt = 0;
 
     // 미니맵 준비
-    this.track = track;
     this.map = document.getElementById('minimap');
     this.mctx = this.map ? this.map.getContext('2d') : null;
+    this.setTrack(track);
+  }
+
+  // 맵 변경 시 미니맵 좌표계/경로 재구성
+  setTrack(track) {
+    this.track = track;
     if (track && this.mctx) {
       const W = this.map.width, H = this.map.height, pad = 16;
       const { minX, maxX, minZ, maxZ } = track.bounds;

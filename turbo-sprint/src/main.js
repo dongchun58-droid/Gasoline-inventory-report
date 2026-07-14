@@ -10,6 +10,7 @@ import { Track } from './track.js';
 import { Kart, PHYS, VEHICLES, VEHICLE_ORDER } from './kart.js';
 import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
+import { MAPS, MAP_ORDER } from './maps.js';
 import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
 import { Features } from './features.js';
@@ -36,18 +37,14 @@ function makeToonGradient() {
   return tex;
 }
 
-// ---------- 밝은 한낮 스카이돔 (마리오 월드풍) + 태양 ----------
-function makeSky() {
+// ---------- 스카이돔 + 태양/달 (맵 테마별) ----------
+function makeSky(cfg) {
   const group = new THREE.Group();
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 256;
   const g = cv.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.0, '#1560D8'); // 천정 (선명한 하늘색 · Astro 톤)
-  grd.addColorStop(0.42, '#3D9BFF');
-  grd.addColorStop(0.72, '#8FD6FF');
-  grd.addColorStop(0.9, '#CFF0FF');
-  grd.addColorStop(1.0, '#F2FCFF'); // 지평선 (밝은 하늘)
+  for (const [pos, col] of cfg.stops) grd.addColorStop(pos, col);
   g.fillStyle = grd;
   g.fillRect(0, 0, 16, 256);
   const tex = new THREE.CanvasTexture(cv);
@@ -56,33 +53,31 @@ function makeSky() {
     new THREE.SphereGeometry(600, 24, 16),
     new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false })
   );
+  dome.userData.noShadow = true;
   group.add(dome);
-  // 태양 (블룸이 먹는 밝은 원반)
+  // 태양/달 원반 (블룸이 먹는 밝은 원반)
   const sunDisc = new THREE.Mesh(
-    new THREE.CircleGeometry(34, 32),
-    new THREE.MeshBasicMaterial({ color: 0xfff6d0, fog: false, toneMapped: false })
+    new THREE.CircleGeometry(cfg.dim ? 26 : 34, 32),
+    new THREE.MeshBasicMaterial({ color: cfg.sun, fog: false, toneMapped: false })
   );
-  sunDisc.position.set(-180, 190, -430);
+  sunDisc.position.set(cfg.sunPos[0], cfg.sunPos[1], cfg.sunPos[2]);
   sunDisc.lookAt(0, 0, 0);
+  sunDisc.userData.noShadow = true;
   group.add(sunDisc);
   return group;
 }
 
 // 환경맵(반사)용 이퀴렉트 텍스처 — 금속/유리 재질 반사에 사용
-function makeEnvTex() {
+function makeEnvTex(stops) {
   const cv = document.createElement('canvas');
   cv.width = 512; cv.height = 256;
   const g = cv.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, 256);
-  grd.addColorStop(0.0, '#1E6FE0');
-  grd.addColorStop(0.5, '#8fd0ff');
-  grd.addColorStop(0.6, '#eaf9ff');   // 지평선
-  grd.addColorStop(0.61, '#6fc45a');  // 그 아래 초록
-  grd.addColorStop(1.0, '#3f8e3a');
+  for (const [pos, col] of stops) grd.addColorStop(pos, col);
   g.fillStyle = grd; g.fillRect(0, 0, 512, 256);
-  // 태양 하이라이트
+  // 태양/광원 하이라이트
   const sg = g.createRadialGradient(120, 60, 4, 120, 60, 60);
-  sg.addColorStop(0, 'rgba(255,255,240,1)'); sg.addColorStop(1, 'rgba(255,255,240,0)');
+  sg.addColorStop(0, 'rgba(255,250,235,0.95)'); sg.addColorStop(1, 'rgba(255,250,235,0)');
   g.fillStyle = sg; g.fillRect(60, 0, 120, 120);
   const tex = new THREE.CanvasTexture(cv);
   tex.mapping = THREE.EquirectangularReflectionMapping;
@@ -110,14 +105,10 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 
 const gradientMap = makeToonGradient();
 
-const sky = makeSky();
-scene.add(sky);
-
-// 환경 반사 (금속 차량 재질)
+// 환경 반사용 PMREM (맵별 재생성)
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromEquirectangular(makeEnvTex()).texture;
 
-// 라이팅 (한낮 햇살 + 실시간 그림자 + 하늘/땅 채움광)
+// ---------- 라이팅 (오브젝트는 영구 유지, 색/세기만 맵별 재설정) ----------
 const sun = new THREE.DirectionalLight(0xfff2d0, 3.0);
 sun.position.set(-60, 90, -40);
 sun.castShadow = true;
@@ -126,30 +117,89 @@ sun.shadow.camera.near = 1; sun.shadow.camera.far = 260;
 sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
 sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
 sun.shadow.bias = -0.0004;
-scene.add(sun);
-scene.add(sun.target);
+scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.95, 0.35).normalize();
-// Astro 톤: 하늘빛/풀빛 소프트 필 (그림자 부분도 화사하게)
 const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x7fd06a, 1.15);
 scene.add(hemi);
-scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+const ambient = new THREE.AmbientLight(0xffffff, 0.18);
+scene.add(ambient);
 
-// ---------- 트랙 ----------
-const track = new Track(gradientMap);
-scene.add(track.group);
+// ---------- 포스트프로세싱: 블룸 (네온/용암/별 발광) (§9) ----------
+const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, { type: THREE.HalfFloatType, samples: 4 });
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+let BLOOM_BASE = 0.5;
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), BLOOM_BASE, 0.5, 0.75);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
-// ---------- 카트들 (플레이어 + AI 3) ----------
+// ---------- 카트 라인업 ----------
 const LAPS = 3;
-// [색, 이름, 레인오프셋, 그리드 lat, 그리드 back]
 const LINEUP = [
-  { color: 0x2e6bff, name: 'YOU',       lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart' },
-  { color: 0xff3b3b, name: 'CRIMSON',   lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports' },
-  { color: 0x18c2c2, name: 'TEAL',      lane: 0,  gLat: -3.5, gBack: 12, ai: true,  type: 'bike' },
-  { color: 0xffc233, name: 'GOLD',      lane: 3,  gLat: 3.5,  gBack: 12, ai: true,  type: 'truck' },
+  { color: 0x2e6bff, name: 'YOU',     lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart' },
+  { color: 0xff3b3b, name: 'CRIMSON', lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports' },
+  { color: 0x18c2c2, name: 'TEAL',    lane: 0,  gLat: -3.5, gBack: 12, ai: true,  type: 'bike' },
+  { color: 0xffc233, name: 'GOLD',    lane: 3,  gLat: 3.5,  gBack: 12, ai: true,  type: 'truck' },
 ];
 const karts = [];
 const ais = [];
 let player;
+let hud;
+
+// ---------- 월드(맵) 상태: 맵 변경 시 재생성 ----------
+let track, itemSystem, obstacles, features, scenery, sky, envTex;
+let currentMapKey = 'meadow';
+
+// 지오메트리/머티리얼만 해제 (텍스처는 공유될 수 있어 해제하지 않음 — 맵 전환은 드묾)
+function disposeGroup(root) {
+  root.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    const m = o.material; if (!m) return;
+    for (const mm of (Array.isArray(m) ? m : [m])) mm.dispose();
+  });
+}
+
+function buildWorld(key) {
+  const map = MAPS[key] || MAPS.meadow;
+  currentMapKey = map.key;
+  // 이전 월드 해제
+  if (track) {
+    scene.remove(track.group, itemSystem.group, obstacles.group, features.group, scenery.group, sky);
+    disposeGroup(track.group); disposeGroup(itemSystem.group); disposeGroup(obstacles.group);
+    disposeGroup(features.group); disposeGroup(scenery.group); disposeGroup(sky);
+    if (envTex) envTex.dispose();
+    if (scene.environment) scene.environment.dispose();
+  }
+  // 하늘 + 환경 반사
+  sky = makeSky(map.sky); scene.add(sky);
+  envTex = makeEnvTex(map.env);
+  scene.environment = pmrem.fromEquirectangular(envTex).texture;
+  // 안개 / 조명 / 톤 (맵별)
+  scene.fog = new THREE.Fog(map.fog.color, map.fog.near, map.fog.far);
+  sun.color.setHex(map.sun.color); sun.intensity = map.sun.intensity;
+  SUN_DIR.set(map.sun.dir[0], map.sun.dir[1], map.sun.dir[2]).normalize();
+  hemi.color.setHex(map.hemi.sky); hemi.groundColor.setHex(map.hemi.ground); hemi.intensity = map.hemi.intensity;
+  ambient.intensity = map.ambient;
+  BLOOM_BASE = map.bloom; bloom.strength = BLOOM_BASE;
+  renderer.toneMappingExposure = map.exposure;
+  // 트랙 + 배경 + 아이템 + 장애물 + 기능
+  track = new Track(gradientMap, map); scene.add(track.group);
+  scenery = new map.Scenery(track, gradientMap); scene.add(scenery.group);
+  itemSystem = new ItemSystem(track, gradientMap); scene.add(itemSystem.group);
+  obstacles = new Obstacles(track, gradientMap, map.obstacle); scene.add(obstacles.group);
+  features = new Features(track, gradientMap, map.pad); scene.add(features.group);
+  enableShadows(scene); // 새 메시에 그림자 적용
+  // 카트/AI/HUD 재타겟팅 (이미 생성된 경우)
+  if (karts.length) {
+    for (const k of karts) k.track = track;
+    for (const ai of ais) ai.track = track;
+    if (hud) hud.setTrack(track);
+  }
+}
+
+// 초기 월드 생성 → 카트 생성 (트랙 참조 필요)
+buildWorld(currentMapKey);
 for (const spec of LINEUP) {
   const k = new Kart(track, spec.color, gradientMap, spec.type);
   k.name = spec.name;
@@ -157,29 +207,15 @@ for (const spec of LINEUP) {
   k.gridLat = spec.gLat; k.gridBack = spec.gBack;
   k.resetToStart(spec.gLat, spec.gBack);
   scene.add(k.model, k.shadow);
+  enableShadows(k.model);
+  k.shadow.visible = false; // 실제 그림자로 대체
   karts.push(k);
   if (spec.ai) ais.push(new AIController(k, track, spec.lane));
   else player = k;
 }
 
-// ---------- 아이템 시스템 ----------
-const itemSystem = new ItemSystem(track, gradientMap);
-scene.add(itemSystem.group);
-
-// ---------- 장애물: 횡단하는 젖소 ----------
-const obstacles = new Obstacles(track, gradientMap);
-scene.add(obstacles.group);
-
-// ---------- 트랙 기능: 네온 부스트 발판 + 점프 램프 ----------
-const features = new Features(track, gradientMap);
-scene.add(features.group);
-
-// ---------- 배경 월드 ----------
-const scenery = new Scenery(track, gradientMap);
-scene.add(scenery.group);
-
 // ---------- HUD ----------
-const hud = new HUD(track);
+hud = new HUD(track);
 
 const chase = new ChaseCamera(camera);
 chase.snap(player);
@@ -306,36 +342,15 @@ function resolveKartCollisions() {
   }
 }
 
-// ---------- 포스트프로세싱: 블룸(네온 발광) (§9) ----------
-const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, {
-  type: THREE.HalfFloatType,
-  samples: 4, // MSAA 유지
-});
-const composer = new EffectComposer(renderer, rt);
-composer.addPass(new RenderPass(scene, camera));
-const BLOOM_BASE = 0.5; // Astro 톤: 은은한 글로우
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  BLOOM_BASE, // strength
-  0.5,  // radius
-  0.75  // threshold (태양·네온·별만 발광)
-);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-
 // ---------- 실시간 그림자 적용 ----------
 function enableShadows(root) {
   root.traverse((o) => {
     if (o.isMesh) {
-      o.castShadow = !o.userData.noShadow; // 잔디 등 대량 인스턴스는 그림자 캐스팅 제외
+      o.castShadow = !o.userData.noShadow; // 잔디/용암 등 대량 인스턴스는 그림자 캐스팅 제외
       o.receiveShadow = true;
     }
   });
 }
-enableShadows(scene);
-sky.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-for (const k of karts) k.shadow.visible = false; // 실제 그림자로 대체
 function updateSun() {
   sun.target.position.copy(player.pos);
   sun.position.copy(player.pos).addScaledVector(SUN_DIR, 130);
@@ -399,6 +414,29 @@ function selectVehicle(type) {
   document.querySelectorAll('#vehicleSelect .vcard').forEach((c) => c.classList.toggle('sel', c.dataset.type === type));
 }
 setupVehicleSelect();
+
+// ---------- 맵 선택 UI ----------
+function setupMapSelect() {
+  const cont = document.getElementById('mapSelect');
+  if (!cont) return;
+  cont.innerHTML = MAP_ORDER.map((k) => {
+    const m = MAPS[k];
+    const sw = m.swatch.map((c) => `<span class="msw" style="background:${c}"></span>`).join('');
+    return `<div class="mcard${k === currentMapKey ? ' sel' : ''}" data-map="${k}">` +
+      `<div class="mswatch">${sw}</div>` +
+      `<div class="mname">${m.name}</div><div class="mdesc">${m.desc}</div></div>`;
+  }).join('');
+  cont.querySelectorAll('.mcard').forEach((card) => {
+    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectMap(card.dataset.map); });
+  });
+}
+function selectMap(key) {
+  if (!MAPS[key] || key === currentMapKey) return;
+  buildWorld(key);
+  resetRace();               // 카트를 새 트랙 그리드로 재배치
+  document.querySelectorAll('#mapSelect .mcard').forEach((c) => c.classList.toggle('sel', c.dataset.map === key));
+}
+setupMapSelect();
 
 // ---------- 루프: 고정 dt 물리(1/120) + 가변 렌더 ----------
 const FIXED = 1 / 120;
@@ -482,9 +520,9 @@ function frame(nowMs) {
     if (player.airborne && !_prevAir) audio.sfxJump();
     if (player.spinTimer > 0 && !_prevSpin) audio.sfxHit();
     _prevBoost = player.boosting; _prevAir = player.airborne; _prevSpin = player.spinTimer > 0;
-    // 젖소 "음메" (근접 시, 쿨다운)
+    // 젖소 "음메" (초원 맵 · 근접 시, 쿨다운)
     _mooCd -= dt;
-    if (_mooCd <= 0) {
+    if (_mooCd <= 0 && currentMapKey === 'meadow') {
       for (const cow of obstacles.cows) {
         if (player.pos.distanceToSquared(cow.mesh.position) < 260) { audio.sfxMoo(); _mooCd = 2.5; break; }
       }
@@ -559,9 +597,15 @@ function maybeDowngrade(fps) {
   }
 }
 
-// 디버그용 전역 노출
+// 디버그용 전역 노출 (월드는 맵 전환 시 재생성되므로 getter로 노출)
 window.__turbo = {
-  scene, player, karts, track, itemSystem, features, obstacles, input, audio, PHYS, resetRace,
+  scene, player, karts, input, audio, PHYS, resetRace,
+  get track() { return track; },
+  get itemSystem() { return itemSystem; },
+  get features() { return features; },
+  get obstacles() { return obstacles; },
+  get scenery() { return scenery; },
+  get mapKey() { return currentMapKey; },
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },
 };

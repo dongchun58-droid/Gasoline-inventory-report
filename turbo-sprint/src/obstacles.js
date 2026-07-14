@@ -39,16 +39,35 @@ function buildCow(gm) {
   return g;
 }
 
+// 불덩이 (성 맵 장애물) — 발광 코어 + 반투명 화염
+function buildFireball() {
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffd24a, toneMapped: false }));
+  g.add(core);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff5a1e, transparent: true, opacity: 0.55, toneMapped: false }));
+  g.add(flame);
+  const outer = new THREE.Mesh(new THREE.SphereGeometry(2.0, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff2a08, transparent: true, opacity: 0.28, toneMapped: false }));
+  g.add(outer);
+  g.userData.core = core; g.userData.flame = flame; g.userData.outer = outer;
+  g.position.y = 1.6;
+  g.scale.setScalar(1.6);
+  return g;
+}
+
 export class Obstacles {
-  constructor(track, gm) {
+  constructor(track, gm, theme = 'cow') {
     this.track = track;
+    this.theme = theme;
     this.group = new THREE.Group();
-    this.cows = [];
+    this.cows = []; // (장애물 배열 — 테마 무관하게 재사용)
     this._t = 0;
     const N = track.samplePos.length;
     for (const [t, phase] of [[0.45, 0], [0.80, 1.7]]) {
       const i0 = Math.floor(t * N) % N;
-      const mesh = buildCow(gm);
+      const mesh = theme === 'fireball' ? buildFireball() : buildCow(gm);
       this.group.add(mesh);
       this.cows.push({ i0, phase, mesh });
     }
@@ -64,14 +83,25 @@ export class Obstacles {
       const phase = this._t * 0.5 + cow.phase;
       const offset = Math.sin(phase) * range;
       const moving = Math.cos(phase); // 이동 방향 부호
-      cow.mesh.position.copy(p).addScaledVector(lat, offset).addScaledVector(up, 0);
-      // 이동방향(±lat)으로 몸을 향하게
-      _md.copy(lat).multiplyScalar(moving >= 0 ? 1 : -1);
-      _rt.copy(_up).cross(_md).normalize();
-      _m.makeBasis(_rt, _up, _md);
-      cow.mesh.quaternion.setFromRotationMatrix(_m);
-      // 걷는 흔들림(높이만)
-      cow.mesh.position.y += Math.abs(Math.sin(this._t * 6)) * 0.06;
+      const lift = this.theme === 'fireball' ? 1.8 : 0;
+      cow.mesh.position.copy(p).addScaledVector(lat, offset).addScaledVector(up, lift);
+      if (this.theme === 'fireball') {
+        // 불덩이: 공중 부유 + 화염 점멸/회전
+        cow.mesh.position.y += Math.sin(this._t * 3 + cow.phase) * 0.4;
+        cow.mesh.rotation.y += dt * 2.2;
+        const ud = cow.mesh.userData;
+        const fl = 0.7 + 0.3 * Math.abs(Math.sin(this._t * 14 + cow.phase));
+        if (ud.flame) { ud.flame.scale.setScalar(1 + fl * 0.25); ud.flame.material.opacity = 0.4 + fl * 0.3; }
+        if (ud.outer) { ud.outer.scale.setScalar(1 + fl * 0.15); }
+      } else {
+        // 이동방향(±lat)으로 몸을 향하게
+        _md.copy(lat).multiplyScalar(moving >= 0 ? 1 : -1);
+        _rt.copy(_up).cross(_md).normalize();
+        _m.makeBasis(_rt, _up, _md);
+        cow.mesh.quaternion.setFromRotationMatrix(_m);
+        // 걷는 흔들림(높이만)
+        cow.mesh.position.y += Math.abs(Math.sin(this._t * 6)) * 0.06;
+      }
 
       // 충돌: 스치면 잠깐 스핀 (공중이면 회피)
       for (const k of karts) {

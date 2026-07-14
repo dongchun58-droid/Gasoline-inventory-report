@@ -2,7 +2,7 @@
 // Phase 1: 도로를 달릴 수 있고, 접지 높이/이탈 판정을 제공한다.
 import * as THREE from 'three';
 
-// §4 제어점 — 지면 주행을 위해 평탄화(y≈0). XZ 레이아웃은 유지.
+// §4 제어점 — 지면 주행을 위해 평탄화(y≈0). XZ 레이아웃은 유지. (맵 미지정 시 기본)
 const CONTROL_POINTS = [
   [0, 0, 0],      [55, 0, -4],    [100, 0, -28],
   [112, 0, -78],  [88, 0, -112],
@@ -16,11 +16,14 @@ export const ROAD_WIDTH = 20;
 const HALF_W = ROAD_WIDTH / 2;
 const SAMPLES = 1100;         // 접지 샘플 수 (조밀할수록 접지가 매끈)
 const CURB_W = 1;             // 연석 폭 (양끝 1m)
-const SCALE = 2.9;            // 트랙 확대 (큰 한 바퀴, 주행거리 ~3배)
+const DEFAULT_SCALE = 2.9;    // 트랙 확대 (큰 한 바퀴, 주행거리 ~3배)
 
 const WIDE_HALF = 18;         // 4차선 구간 반폭
 const MEDIAN_HALF = 1.7;      // 중앙 분리대 반폭
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+// 기본 도로 색 (맵 미지정 시)
+const DEFAULT_ROAD = { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#FFFFFF', median1: 0xffd23f, median2: 0x2a2a32 };
 
 // 임시 벡터 (매 프레임 GC 방지)
 const _v = new THREE.Vector3();
@@ -34,8 +37,12 @@ function widenAt(tt) {
 }
 
 export class Track {
-  constructor(gradientMap) {
-    const pts = CONTROL_POINTS.map((p) => new THREE.Vector3(p[0] * SCALE, p[1], p[2] * SCALE));
+  constructor(gradientMap, opts = {}) {
+    const cps = opts.controlPoints || CONTROL_POINTS;
+    const scale = opts.scale || DEFAULT_SCALE;
+    this._road = opts.road || DEFAULT_ROAD;
+    this._variableWidth = opts.variableWidth !== false; // 기본 true(가변폭+분리대)
+    const pts = cps.map((p) => new THREE.Vector3(p[0] * scale, p[1], p[2] * scale));
     this.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
     this.length = this.curve.getLength();
 
@@ -59,7 +66,7 @@ export class Track {
       lat.normalize();
       const up = new THREE.Vector3().copy(lat).cross(tan).normalize();
       if (prev) acc += pos.distanceTo(prev);
-      const widen = widenAt(t % 1);
+      const widen = this._variableWidth ? widenAt(t % 1) : 0;
       const half = HALF_W + (WIDE_HALF - HALF_W) * widen;
       this.samplePos.push(pos.clone());
       this.sampleTan.push(tan.clone());
@@ -93,8 +100,8 @@ export class Track {
 
   // 4차선 구간 중앙 분리대 (줄무늬 배리어)
   _buildMedian() {
-    const yellow = new THREE.MeshStandardMaterial({ color: 0xffd23f, metalness: 0.2, roughness: 0.55 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x2a2a32, metalness: 0.3, roughness: 0.6 });
+    const yellow = new THREE.MeshStandardMaterial({ color: this._road.median1, metalness: 0.2, roughness: 0.55 });
+    const dark = new THREE.MeshStandardMaterial({ color: this._road.median2, metalness: 0.3, roughness: 0.6 });
     const N = this.samplePos.length;
     for (let i = 0; i < N - 1; i += 3) {
       if (!this.sampleMedian[i]) continue;
@@ -173,26 +180,27 @@ export class Track {
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d');
+    const road = this._road;
 
     // 아스팔트
-    g.fillStyle = '#2A2440';
+    g.fillStyle = road.asphalt;
     g.fillRect(0, 0, W, H);
 
     const curbPx = Math.round((CURB_W / ROAD_WIDTH) * W);
     const checks = 8;
     const cellH = H / checks;
-    // 좌/우 연석 체커 (#FF3355 / #FFFFFF)
+    // 좌/우 연석 체커
     for (let side = 0; side < 2; side++) {
       const x0 = side === 0 ? 0 : W - curbPx;
       for (let c = 0; c < checks; c++) {
-        g.fillStyle = ((c + side) % 2 === 0) ? '#FF3355' : '#FFFFFF';
+        g.fillStyle = ((c + side) % 2 === 0) ? road.curbA : road.curbB;
         g.fillRect(x0, c * cellH, curbPx, cellH);
       }
     }
 
-    // 센터라인 (시안 #00E5FF)
+    // 센터라인
     const lineW = Math.max(2, Math.round(W * 0.03));
-    g.fillStyle = '#00E5FF';
+    g.fillStyle = road.center;
     g.fillRect(W / 2 - lineW / 2, 0, lineW, H);
 
     const tex = new THREE.CanvasTexture(cv);
