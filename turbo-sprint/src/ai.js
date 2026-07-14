@@ -24,6 +24,8 @@ export class AIController {
     // 중앙 분리대 구간에선 레인을 한쪽으로 (센터 회피)
     let lane = this.lane;
     if (track.sampleMedian[li] && Math.abs(lane) < 3) lane = (lane >= 0 ? 1 : -1) * 4.5;
+    // 좁은 다리(용암 추락 위험)에선 정중앙으로 주행
+    if (track.sampleBridge && (track.sampleBridge[li] || track.sampleBridge[k.idx])) lane = 0;
     _toT.set(tp.x + tl.x * lane - k.pos.x, 0, tp.z + tl.z * lane - k.pos.z);
     if (_toT.lengthSq() > 1e-6) _toT.normalize();
 

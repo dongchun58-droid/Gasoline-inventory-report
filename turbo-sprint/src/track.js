@@ -42,6 +42,8 @@ export class Track {
     const scale = opts.scale || DEFAULT_SCALE;
     this._road = opts.road || DEFAULT_ROAD;
     this._variableWidth = opts.variableWidth !== false; // 기본 true(가변폭+분리대)
+    this.bridges = opts.bridges || [];                  // [[t0,t1,반폭], ...] 좁은 다리(용암 추락)
+    this.interior = opts.interior || null;              // [t0,t1] 성 내부 구간
     const pts = cps.map((p) => new THREE.Vector3(p[0] * scale, p[1], p[2] * scale));
     this.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
     this.length = this.curve.getLength();
@@ -54,6 +56,7 @@ export class Track {
     this.sampleDist = [];  // 시작점부터 누적거리
     this.sampleHalf = [];  // 가변 반폭 (2↔4차선)
     this.sampleMedian = []; // 중앙 분리대 존재 여부
+    this.sampleBridge = []; // 좁은 다리(추락 가능) 여부
     this.maxHalf = HALF_W;
     let acc = 0;
     let prev = null;
@@ -66,8 +69,14 @@ export class Track {
       lat.normalize();
       const up = new THREE.Vector3().copy(lat).cross(tan).normalize();
       if (prev) acc += pos.distanceTo(prev);
-      const widen = this._variableWidth ? widenAt(t % 1) : 0;
-      const half = HALF_W + (WIDE_HALF - HALF_W) * widen;
+      const tt = t % 1;
+      const widen = this._variableWidth ? widenAt(tt) : 0;
+      let half = HALF_W + (WIDE_HALF - HALF_W) * widen;
+      // 좁은 다리 구간: 반폭을 좁히고 플래그
+      let bridge = false;
+      for (const b of this.bridges) {
+        if (tt >= b[0] && tt <= b[1]) { half = b[2]; bridge = true; break; }
+      }
       this.samplePos.push(pos.clone());
       this.sampleTan.push(tan.clone());
       this.sampleLat.push(lat.clone());
@@ -75,6 +84,7 @@ export class Track {
       this.sampleDist.push(acc);
       this.sampleHalf.push(half);
       this.sampleMedian.push(widen > 0.75);
+      this.sampleBridge.push(bridge);
       if (half > this.maxHalf) this.maxHalf = half;
       prev = pos;
     }
@@ -281,6 +291,7 @@ export class Track {
     out.lateral = lateral;
     out.half = hw;
     out.median = this.sampleMedian[i];
+    out.bridge = this.sampleBridge[i];
     out.onRoad = Math.abs(lateral) <= hw + 0.5;
     return out;
   }

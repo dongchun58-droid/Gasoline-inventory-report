@@ -72,8 +72,8 @@ export class CastleScenery {
     this._t = 0;
 
     this._stoneTex = stoneTexture();
-    this.stoneMat = new THREE.MeshStandardMaterial({ map: this._stoneTex, color: 0x8a8494, roughness: 0.95, metalness: 0.05 });
-    this.darkStone = new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.95, metalness: 0.05 });
+    this.stoneMat = new THREE.MeshStandardMaterial({ map: this._stoneTex, color: 0x8a8494, roughness: 0.95, metalness: 0.05, emissive: 0x1a0d0a, emissiveIntensity: 0.35 });
+    this.darkStone = new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.95, metalness: 0.05, emissive: 0x140806, emissiveIntensity: 0.3 });
     this.metalMat = new THREE.MeshStandardMaterial({ color: 0x44444c, roughness: 0.5, metalness: 0.85 });
 
     this._buildLava();
@@ -83,6 +83,7 @@ export class CastleScenery {
     this._buildStatues();
     this._buildTorches();
     this._buildGate();
+    this._buildInterior();
     this._buildEmbers();
     this._buildMountains();
   }
@@ -114,7 +115,9 @@ export class CastleScenery {
     const uvs = new Float32Array(N * 2 * 2);
     for (let i = 0; i < N; i++) {
       const p = track.samplePos[i], lat = track.sampleLat[i];
-      const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON;
+      const base = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth);
+      // 좁은 다리 구간: 노반(apron) 없이 얇은 다리 → 이탈 시 용암 추락
+      const hw = track.sampleBridge && track.sampleBridge[i] ? base + 0.6 : base + APRON;
       const li = i * 6;
       positions[li + 0] = p.x - lat.x * hw; positions[li + 1] = ROCK_Y; positions[li + 2] = p.z - lat.z * hw;
       positions[li + 3] = p.x + lat.x * hw; positions[li + 4] = ROCK_Y; positions[li + 5] = p.z + lat.z * hw;
@@ -133,7 +136,8 @@ export class CastleScenery {
     geo.setIndex(indices);
     geo.computeVertexNormals();
     const tex = this._stoneTex.clone(); tex.needsUpdate = true; tex.repeat.set(1, 1);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0x4a4550, roughness: 0.98, metalness: 0.03 });
+    // 노반 바닥: 은은한 자체발광으로 어두운 내부에서도 주행면이 보이게
+    const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0x565060, roughness: 0.98, metalness: 0.03, emissive: 0x241514, emissiveIntensity: 0.5 });
     const rock = new THREE.Mesh(geo, mat);
     rock.receiveShadow = true;
     this.group.add(rock);
@@ -146,6 +150,7 @@ export class CastleScenery {
     const step = 5;
     const merlons = [];
     for (let i = 0; i < N - 1; i += step) {
+      if (track.sampleBridge && track.sampleBridge[i]) continue; // 다리 구간은 난간 없음(추락 가능)
       const p = track.samplePos[i], lat = track.sampleLat[i];
       const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON - 0.4;
       for (const side of [-1, 1]) {
@@ -256,6 +261,7 @@ export class CastleScenery {
     const N = track.samplePos.length;
     const step = 42;
     for (let i = 0; i < N - 1; i += step) {
+      if (track.sampleBridge && track.sampleBridge[i]) continue; // 다리엔 기둥 없음
       const p = track.samplePos[i], lat = track.sampleLat[i], up = track.sampleUp[i];
       const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON - 0.6;
       for (const side of [-1, 1]) {
@@ -310,6 +316,88 @@ export class CastleScenery {
       this._makeChain(gate, anchor, 9);
     }
     this.group.add(gate);
+  }
+
+  // ---- 성 내부 구간: 둘러싼 높은 벽 + 진입/탈출 아치 + 천장 리브 + 내부 횃불/조명 ----
+  _buildInterior() {
+    const track = this.track;
+    if (!track.interior) return;
+    const N = track.samplePos.length;
+    const i0 = Math.floor(track.interior[0] * N);
+    const i1 = Math.floor(track.interior[1] * N);
+    const perSample = track.totalDist / N;
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x3a2028, roughness: 0.9, metalness: 0.05 });
+    const WALL_H = 17;
+
+    // 벽 + 천장 리브
+    for (let i = i0; i < i1; i += 6) {
+      const ii = i % N;
+      if (track.sampleBridge && track.sampleBridge[ii]) continue; // 다리 구간은 벽 없음(개방 → 추락)
+      const p = track.samplePos[ii], lat = track.sampleLat[ii], up = track.sampleUp[ii], tan = track.sampleTan[ii];
+      const hw = (track.sampleHalf ? track.sampleHalf[ii] : track.halfWidth) + 1.6;
+      const segLen = perSample * 6.4;
+      const basis = new THREE.Matrix4().makeBasis(lat, up, tan);
+      for (const side of [-1, 1]) {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(2.0, WALL_H, segLen), this.stoneMat);
+        wall.quaternion.setFromRotationMatrix(basis);
+        wall.position.copy(p).addScaledVector(lat, hw * side).addScaledVector(up, ROCK_Y + WALL_H / 2);
+        this.group.add(wall);
+        // 벽 상단 톱니
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.4, segLen * 0.5), this.darkStone);
+        tooth.quaternion.copy(wall.quaternion);
+        tooth.position.copy(p).addScaledVector(lat, hw * side).addScaledVector(up, ROCK_Y + WALL_H + 0.7);
+        this.group.add(tooth);
+      }
+      // 천장 리브(부분 천장) — 몇 칸 걸러
+      if ((Math.floor(i / 6) % 2) === 0) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 4, 1.2, 1.6), roofMat);
+        rib.quaternion.setFromRotationMatrix(basis);
+        rib.position.copy(p).addScaledVector(up, ROCK_Y + WALL_H + 0.6);
+        this.group.add(rib);
+      }
+      // 내부 벽 횃불 + 조명(가끔)
+      if ((Math.floor(i / 6) % 3) === 0) {
+        for (const side of [-1, 1]) {
+          const flame = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.5, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffb52a, toneMapped: false, transparent: true, opacity: 0.95 }));
+          flame.position.copy(p).addScaledVector(lat, (hw - 0.8) * side).addScaledVector(up, ROCK_Y + 6);
+          this.group.add(flame);
+          this._flames.push(flame);
+        }
+        // 실제 조명(내부 포인트 라이트) — 과하지 않게(전역 필은 hemi/ambient가 담당)
+        if ((Math.floor(i / 6) % 8) === 0) {
+          const lamp = new THREE.PointLight(0xffa048, 20, 58, 2);
+          lamp.castShadow = false;
+          lamp.position.copy(p).addScaledVector(up, ROCK_Y + 9);
+          this.group.add(lamp);
+        }
+      }
+    }
+
+    // 진입/탈출 아치 성문
+    for (const gi of [i0, i1 % N]) {
+      const p = track.samplePos[gi], lat = track.sampleLat[gi], up = track.sampleUp[gi], tan = track.sampleTan[gi];
+      const hw = (track.sampleHalf ? track.sampleHalf[gi] : track.halfWidth) + 1.6;
+      const basis = new THREE.Matrix4().makeBasis(lat, up, tan);
+      for (const side of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(3.4, WALL_H + 6, 3.4), this.stoneMat);
+        post.quaternion.setFromRotationMatrix(basis);
+        post.position.copy(p).addScaledVector(lat, (hw + 0.4) * side).addScaledVector(up, ROCK_Y + (WALL_H + 6) / 2);
+        this.group.add(post);
+      }
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 6, 3.2, 3.4), this.stoneMat);
+      bar.quaternion.setFromRotationMatrix(basis);
+      bar.position.copy(p).addScaledVector(up, ROCK_Y + WALL_H + 5);
+      this.group.add(bar);
+      // 문장(발광 원반)
+      const crest = new THREE.Mesh(new THREE.CircleGeometry(2.0, 18),
+        new THREE.MeshStandardMaterial({ color: 0x200404, emissive: 0xff3a12, emissiveIntensity: 1.6, side: THREE.DoubleSide }));
+      crest.quaternion.setFromRotationMatrix(basis);
+      crest.position.copy(p).addScaledVector(up, ROCK_Y + WALL_H + 5).addScaledVector(tan, 0.1);
+      crest.rotateX(Math.PI / 2);
+      this.group.add(crest);
+      this._eyes.push(crest.material);
+    }
   }
 
   _makeChain(parent, top, links) {

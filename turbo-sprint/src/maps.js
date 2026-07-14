@@ -47,18 +47,28 @@ export const MAPS = {
     controlPoints: [
       [116, 0, 0], [100, 0, 42], [66, 0, 78], [24, 0, 96],
       [-26, 0, 88], [-70, 0, 68], [-100, 0, 40], [-112, 0, 0],
-      [-92, 0, -44], [-52, 0, -70], [-10, 0, -86], [40, 0, -82],
-      [84, 0, -56], [110, 0, -24],
+      // 성 내부 진입 → 좌/우로 굽이치는 구간(하단) → 좁은 다리 → 탈출
+      [-92, 0, -44],
+      [-64, 0, -52],  // 내부 진입
+      [-40, 0, -40],  // 좌
+      [-16, 0, -60],  // 우
+      [8, 0, -46],    // 좌 (이 부근 좁은 다리)
+      [34, 0, -66],   // 우
+      [64, 0, -58],   // 내부 탈출
+      [92, 0, -40], [110, 0, -20],
     ],
+    // 성 내부(벽으로 둘러싸인) 구간 t범위, 좁은 다리 t범위(용암 추락)
+    interior: [0.58, 0.88],
+    bridges: [[0.70, 0.76, 5.5]], // [t0, t1, 반폭]
     obstacle: 'fireball',
     pad: { boost: 0xff7a1e, chevron: '#ffd8a0', jump: '#ff4a2a', jumpHex: 0xff4a2a, jumpEdge: 0xffb02a },
     road: { asphalt: '#231a20', center: '#ff6a2a', curbA: '#ff3311', curbB: '#160c10', median1: 0x5a3020, median2: 0x1a0e0c },
     sky: { stops: [[0, '#120609'], [0.45, '#3a0d12'], [0.72, '#701d18'], [0.88, '#a83a1e'], [1, '#d66a2a']], sun: 0xff7b30, sunPos: [-150, 130, -420], dim: true },
     env: [[0, '#1a0a10'], [0.55, '#5a1820'], [0.6, '#a83a1e'], [0.62, '#3a1008'], [1, '#120604']],
     fog: { color: 0x1a0a0e, near: 90, far: 560 },
-    sun: { color: 0xff9a5a, intensity: 1.35, dir: [0.3, 0.9, -0.35] },
-    hemi: { sky: 0x5a2028, ground: 0x1a0808, intensity: 0.5 },
-    ambient: 0.1,
+    sun: { color: 0xff9a5a, intensity: 1.4, dir: [0.3, 0.9, -0.35] },
+    hemi: { sky: 0x6a3038, ground: 0x24100e, intensity: 0.78 },
+    ambient: 0.22,
     bloom: 0.95,
     bloomThreshold: 0.72,
     exposure: 1.02,

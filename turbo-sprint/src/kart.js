@@ -26,10 +26,10 @@ const _ground = {};
 
 // 차량 종류별 스탯 (speed=최고속·strength=충돌강도/내구·turn=회전력)
 export const VEHICLES = {
-  kart:   { name: 'KART',   speed: 1.00, strength: 1.00, turn: 1.00 },
-  bike:   { name: 'BIKE',   speed: 1.07, strength: 0.55, turn: 1.30 },
-  sports: { name: 'SPORTS', speed: 1.18, strength: 0.80, turn: 0.62 }, // 최고속·조향 어려움
-  truck:  { name: 'TRUCK',  speed: 0.95, strength: 3.00, turn: 0.72 }, // 조금 빠르게·내구 압도적
+  kart:   { name: 'KART',   speed: 1.00, strength: 1.00, turn: 1.00 }, // 올라운더(기준)
+  bike:   { name: 'BIKE',   speed: 1.10, strength: 0.42, turn: 1.55 }, // 최고 민첩·최약 내구(유리대포)
+  sports: { name: 'SPORTS', speed: 1.32, strength: 0.70, turn: 0.52 }, // 최고속·조향 매우 둔함
+  truck:  { name: 'TRUCK',  speed: 0.86, strength: 3.30, turn: 0.84 }, // 가장 느림·내구 압도적(탱크)
 };
 export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
 
@@ -341,6 +341,7 @@ export class Kart {
     this.bulletTimer = 0;  // >0 이면 대형 불릿(미사일) 변신
     this.onGrass = false;
     this.wheelspinTimer = 0; // 로켓스타트 실패(너무 일찍) 페널티
+    this.lavaTimer = 0;      // >0 이면 용암 추락 복구 중(페널티)
 
     // 드리프트/미니터보
     this.hopTimer = 0;
@@ -376,8 +377,19 @@ export class Kart {
     this.vertVel = 0;
     this.airborne = false;
     this.fallTimer = 0;
+    this.lavaTimer = 0;
     this.idx = 0;
     this._syncMesh();
+  }
+
+  // 용암 추락 시작 (좁은 다리 이탈) — 가라앉은 뒤 시간이 걸려 복구
+  _startLavaFall() {
+    if (this.lavaTimer > 0) return;
+    this.lavaTimer = 2.6;           // 복구까지 페널티 시간
+    this._lavaIdx = this.idx;       // 복귀 지점(다리 중앙)
+    this._sinkY = this.pos.y - 5;
+    this.speed = 0; this.boostTimer = 0; this.invincTimer = 0;
+    this.drifting = false; this.driftYaw = 0; this.airborne = false;
   }
 
   respawn() {
@@ -462,6 +474,23 @@ export class Kart {
     if (this.boostTimer > 0) this.boostTimer -= dt;
     if (this.invincTimer > 0) this.invincTimer -= dt;
     if (this._bumpCd > 0) this._bumpCd -= dt;
+
+    // --- 용암 추락 복구 중: 조작 불가, 가라앉았다가 복귀 ---
+    if (this.lavaTimer > 0) {
+      this.lavaTimer -= dt;
+      this.speed = 0; this.vertVel = 0; this.spinAngle = 0;
+      this.pos.y = THREE.MathUtils.lerp(this.pos.y, this._sinkY, 0.12);
+      if (this.lavaTimer <= 0) {
+        // 다리 중앙(마지막 안전 지점)으로 복귀
+        const i = this._lavaIdx != null ? this._lavaIdx : this.idx;
+        const sp = this.track.samplePos[i], tan = this.track.sampleTan[i], up = this.track.sampleUp[i];
+        this.pos.copy(sp).addScaledVector(up, 0.1);
+        this.forward.copy(tan);
+        this.idx = i; this.airborne = false;
+      }
+      this._syncMesh();
+      return;
+    }
 
     // --- 스핀아웃 중: 조작 불가, 제자리 회전 연출 ---
     if (this.spinTimer > 0) {
@@ -637,16 +666,22 @@ export class Kart {
           this.speed *= 0.9;
         }
       }
-      // 도로 밖(잔디): 최고속 제한 + 소프트 월 (추락 없음)
       const over = Math.abs(g.lateral) - g.half;
-      this.onGrass = over > 0.2;
-      if (this.onGrass) {
-        const grassMax = PHYS.maxSpeed * 0.42;
-        if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
-        const maxOff = g.half + 9;
-        if (Math.abs(g.lateral) > maxOff) {
-          const push = Math.abs(g.lateral) - maxOff;
-          this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
+      // 좁은 다리 이탈 → 용암 추락(페널티)
+      if (g.bridge && over > 0.2) {
+        this._startLavaFall();
+        this.onGrass = false;
+      } else {
+        // 도로 밖(잔디/노반): 최고속 제한 + 소프트 월 (추락 없음)
+        this.onGrass = over > 0.2;
+        if (this.onGrass) {
+          const grassMax = PHYS.maxSpeed * 0.42;
+          if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
+          const maxOff = g.half + 9;
+          if (Math.abs(g.lateral) > maxOff) {
+            const push = Math.abs(g.lateral) - maxOff;
+            this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
+          }
         }
       }
     }
