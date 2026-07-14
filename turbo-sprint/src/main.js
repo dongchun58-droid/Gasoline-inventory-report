@@ -12,6 +12,7 @@ import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
 import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
+import { Features } from './features.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
 import { GameAudio } from './audio.js';
@@ -122,6 +123,10 @@ for (const spec of LINEUP) {
 // ---------- 아이템 시스템 ----------
 const itemSystem = new ItemSystem(track, gradientMap);
 scene.add(itemSystem.group);
+
+// ---------- 트랙 기능: 네온 부스트 발판 + 점프 램프 ----------
+const features = new Features(track, gradientMap);
+scene.add(features.group);
 
 // ---------- 배경 월드 ----------
 const scenery = new Scenery(track, gradientMap);
@@ -350,8 +355,9 @@ function frame(nowMs) {
     }
   }
 
-  // 아이템/배경
+  // 아이템/발판/배경
   itemSystem.update(dt, karts);
+  if (raceState === 'racing' || raceState === 'finished') features.update(dt, karts);
   scenery.update(dt);
 
   // 카메라 (피니시 시 줌 연출)
@@ -395,7 +401,7 @@ window.addEventListener('resize', onResize);
 
 // 디버그용 전역 노출
 window.__turbo = {
-  scene, player, karts, track, itemSystem, input, PHYS, resetRace,
+  scene, player, karts, track, itemSystem, features, input, audio, PHYS, resetRace,
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },
 };

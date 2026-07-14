@@ -59,16 +59,16 @@ export class ItemSystem {
 
   _grant(kart, rank) {
     const roll = Math.abs((Math.sin(this._t * 97.13 + kart.pos.x * 3.7 + kart.pos.z * 1.9) * 43758.5453) % 1);
-    // 부스트 계열(버섯/별/불릿) 비중을 높게, 방해 아이템(바나나/등껍질)은 낮게
+    // 버섯이 가장 많고, 불릿은 희귀
     let item;
     if (rank === 1) {
-      // 선두: 강력템 억제, 부스트 위주
-      item = roll < 0.6 ? 'mushroom' : roll < 0.8 ? 'bullet' : roll < 0.92 ? 'banana' : 'shell';
+      // 선두: 버섯 위주, 불릿 거의 없음
+      item = roll < 0.72 ? 'mushroom' : roll < 0.86 ? 'banana' : roll < 0.97 ? 'shell' : 'bullet';
     } else if (rank >= 3) {
-      // 후미: 역전용 강력 부스트 위주
-      item = roll < 0.4 ? 'mushroom' : roll < 0.68 ? 'bullet' : roll < 0.88 ? 'star' : roll < 0.95 ? 'shell' : 'banana';
+      // 후미: 버섯 최다 + 별, 불릿은 아주 가끔
+      item = roll < 0.5 ? 'mushroom' : roll < 0.72 ? 'star' : roll < 0.86 ? 'shell' : roll < 0.96 ? 'banana' : 'bullet';
     } else {
-      item = roll < 0.45 ? 'mushroom' : roll < 0.68 ? 'bullet' : roll < 0.85 ? 'star' : roll < 0.94 ? 'shell' : 'banana';
+      item = roll < 0.58 ? 'mushroom' : roll < 0.78 ? 'star' : roll < 0.9 ? 'shell' : roll < 0.97 ? 'banana' : 'bullet';
     }
     kart.heldItem = item;
     if (kart.isAI) kart.aiUseTimer = 0.8 + roll * 1.8;

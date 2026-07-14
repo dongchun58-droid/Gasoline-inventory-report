@@ -327,6 +327,14 @@ export class Kart {
   setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
   get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
 
+  // 점프 램프: 수직 속도 부여 + 착지 시 부스트
+  jump(vel, landBoost = 0) {
+    if (this.airborne || this.bulletTimer > 0) return;
+    this.airborne = true;
+    this.vertVel = vel;
+    this._landBoost = landBoost;
+  }
+
   // 대형 불릿 변신: 자동으로 트랙을 따라 고속 돌진
   startBullet(t) {
     this.bulletTimer = t;
@@ -505,26 +513,37 @@ export class Kart {
     if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
     this.pos.addScaledVector(_fwd, this.speed * dt);
 
-    // --- 접지 (낙하 없음): 도로 밖은 잔디처럼 감속 ---
+    // --- 접지 ---
     const g = this.track.ground(this.pos, this.idx, _ground);
     this.idx = g.idx;
-    // 항상 도로 평면 높이에 스냅
-    this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
+    if (this.airborne) {
+      // 점프 램프로 뜬 상태: 중력 적용, 도로면 도달 시 착지(+착지 부스트)
+      this.vertVel -= PHYS.gravity * dt;
+      this.pos.y += this.vertVel * dt;
+      if (this.pos.y <= g.height + 0.1 && this.vertVel <= 0) {
+        this.pos.y = g.height + 0.1;
+        this.airborne = false; this.vertVel = 0;
+        if (this._landBoost) { this.giveBoost(this._landBoost); this._landBoost = 0; }
+      }
+      this.onGrass = false;
+    } else {
+      this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
+      // 도로 밖(잔디): 최고속 제한 + 소프트 월 (추락 없음)
+      const over = Math.abs(g.lateral) - this.track.halfWidth;
+      this.onGrass = over > 0.2;
+      if (this.onGrass) {
+        const grassMax = PHYS.maxSpeed * 0.42;
+        if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
+        const maxOff = this.track.halfWidth + 9;
+        if (Math.abs(g.lateral) > maxOff) {
+          const push = Math.abs(g.lateral) - maxOff;
+          this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
+        }
+      }
+    }
     // forward를 도로 접선 평면에 재투영 (경사 대응)
     _tmp.copy(this.forward).addScaledVector(g.up, -this.forward.dot(g.up));
     if (_tmp.lengthSq() > 1e-6) this.forward.copy(_tmp).normalize();
-    // 도로 밖(잔디): 최고속 제한 + 소프트 월 (추락 없음)
-    const over = Math.abs(g.lateral) - this.track.halfWidth;
-    this.onGrass = over > 0.2;
-    if (this.onGrass) {
-      const grassMax = PHYS.maxSpeed * 0.42;
-      if (this.speed > grassMax) this.speed -= PHYS.brake * 0.9 * dt;
-      const maxOff = this.track.halfWidth + 9;
-      if (Math.abs(g.lateral) > maxOff) {
-        const push = Math.abs(g.lateral) - maxOff;
-        this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
-      }
-    }
 
     // --- 휠 회전 누적 ---
     this.wheelSpin += (this.speed / 0.34) * dt; // v / r
