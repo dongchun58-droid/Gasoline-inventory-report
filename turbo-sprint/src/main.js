@@ -67,30 +67,68 @@ function makeSky() {
   return group;
 }
 
+// 환경맵(반사)용 이퀴렉트 텍스처 — 금속/유리 재질 반사에 사용
+function makeEnvTex() {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 256;
+  const g = cv.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0.0, '#1E6FE0');
+  grd.addColorStop(0.5, '#8fd0ff');
+  grd.addColorStop(0.6, '#eaf9ff');   // 지평선
+  grd.addColorStop(0.61, '#6fc45a');  // 그 아래 초록
+  grd.addColorStop(1.0, '#3f8e3a');
+  g.fillStyle = grd; g.fillRect(0, 0, 512, 256);
+  // 태양 하이라이트
+  const sg = g.createRadialGradient(120, 60, 4, 120, 60, 60);
+  sg.addColorStop(0, 'rgba(255,255,240,1)'); sg.addColorStop(1, 'rgba(255,255,240,0)');
+  g.fillStyle = sg; g.fillRect(60, 0, 120, 120);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 // ---------- 렌더러 ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // iPad 60fps 핵심
+let PIX_CAP = 2; // HD (프레임 낮으면 자동 저하)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIX_CAP));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 // ---------- 씬 ----------
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xbfeaff, 180, 620); // 밝은 하늘색 안개
+scene.fog = new THREE.Fog(0xbfeaff, 200, 680);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1200);
 
 const gradientMap = makeToonGradient();
 
-scene.add(makeSky());
+const sky = makeSky();
+scene.add(sky);
 
-// 라이팅 (한낮 햇살)
-const sun = new THREE.DirectionalLight(0xfff2d0, 2.4);
+// 환경 반사 (금속 차량 재질)
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromEquirectangular(makeEnvTex()).texture;
+
+// 라이팅 (한낮 햇살 + 실시간 그림자)
+const sun = new THREE.DirectionalLight(0xfff2d0, 2.6);
 sun.position.set(-60, 90, -40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 260;
+sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+sun.shadow.bias = -0.0004;
 scene.add(sun);
-const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x6bbf5a, 1.0); // 하늘색↑ / 풀색↓
+scene.add(sun.target);
+const SUN_DIR = new THREE.Vector3(0.5, 0.95, 0.35).normalize();
+const hemi = new THREE.HemisphereLight(0x9fd8ff, 0x6bbf5a, 0.9);
 scene.add(hemi);
 
 // ---------- 트랙 ----------
@@ -152,6 +190,8 @@ let goFired = false;
 let accelPressRem = null;          // 로켓스타트 판정용
 let prevPlayerLap = 0;
 let finishSnapped = false;
+// SFX 엣지 감지
+let _prevBoost = false, _prevAir = false, _prevSpin = false, _mooCd = 0, _prevCdRem = 3.2;
 
 function resetRace() {
   for (const k of karts) {
@@ -280,6 +320,19 @@ const bloom = new UnrealBloomPass(
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+// ---------- 실시간 그림자 적용 ----------
+function enableShadows(root) {
+  root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+}
+enableShadows(scene);
+sky.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+for (const k of karts) k.shadow.visible = false; // 실제 그림자로 대체
+function updateSun() {
+  sun.target.position.copy(player.pos);
+  sun.position.copy(player.pos).addScaledVector(SUN_DIR, 130);
+}
+updateSun();
+
 // ---------- 입력 ----------
 const input = new Input();
 setupTouch(input); // 터치 조작(폰) 연결
@@ -332,6 +385,7 @@ function selectVehicle(type) {
   if (!VEHICLES[type] || type === player.type) return;
   const old = player.setType(type);
   scene.remove(old); scene.add(player.model);
+  enableShadows(player.model);
   player.resetToStart(player.gridLat, player.gridBack);
   document.querySelectorAll('#vehicleSelect .vcard').forEach((c) => c.classList.toggle('sel', c.dataset.type === type));
 }
@@ -362,11 +416,14 @@ function frame(nowMs) {
 
   // --- 카운트다운 표시 + 로켓스타트 판정 (ready에선 정지) ---
   if (raceState !== 'ready' && countdownRem > -0.4) {
+    _prevCdRem = countdownRem;
     countdownRem -= dt;
+    for (const thr of [2.4, 1.6]) { if (_prevCdRem > thr && countdownRem <= thr) audio.sfxBeep(false); }
     if (raceState === 'countdown' && accelPressRem === null && input.accel) accelPressRem = countdownRem;
     if (!goFired && countdownRem <= 0.8) {
       goFired = true;
       raceState = 'racing';
+      audio.sfxBeep(true); // GO!
       if (accelPressRem !== null) {
         if (accelPressRem <= 1.15) player.giveBoost(1.2);   // 완벽 스타트
         else player.wheelspinTimer = 0.6;                    // 너무 일찍 → 휠스핀
@@ -380,6 +437,7 @@ function frame(nowMs) {
     // --- 레이싱 / 피니시 ---
     if (raceState === 'racing' && input.consumePressed('item') && player.heldItem && !player.finished) {
       itemSystem.useItem(player, karts);
+      audio.sfxItem();
     }
     accumulator += dt;
     let steps = 0;
@@ -409,6 +467,19 @@ function frame(nowMs) {
     if (player.finished && raceState !== 'finished') {
       raceState = 'finished';
     }
+
+    // --- 효과음 (플레이어 상태 엣지) ---
+    if (player.boosting && !_prevBoost) audio.sfxBoost();
+    if (player.airborne && !_prevAir) audio.sfxJump();
+    if (player.spinTimer > 0 && !_prevSpin) audio.sfxHit();
+    _prevBoost = player.boosting; _prevAir = player.airborne; _prevSpin = player.spinTimer > 0;
+    // 젖소 "음메" (근접 시, 쿨다운)
+    _mooCd -= dt;
+    if (_mooCd <= 0) {
+      for (const cow of obstacles.cows) {
+        if (player.pos.distanceToSquared(cow.mesh.position) < 260) { audio.sfxMoo(); _mooCd = 2.5; break; }
+      }
+    }
   }
 
   // 아이템/발판/배경
@@ -432,31 +503,46 @@ function frame(nowMs) {
   hud.drawMinimap(karts);
   if (raceState === 'finished' && !finishSnapped) {
     finishSnapped = true;
+    audio.sfxFanfare();
     hud.showResult(computeStandings(), player, fmtTime(player.finishTime));
   }
 
   fpsAcc += 1 / Math.max(dt, 1e-4); fpsCount++; fpsTimer += dt;
   if (fpsTimer >= 0.5) {
-    fpsEl.textContent = Math.round(fpsAcc / fpsCount) + ' fps';
+    const f = Math.round(fpsAcc / fpsCount);
+    fpsEl.textContent = f + ' fps';
     fpsAcc = 0; fpsCount = 0; fpsTimer = 0;
+    maybeDowngrade(f);
   }
 
+  updateSun(); // 그림자 프러스텀을 플레이어 주변으로
   input.endFrame();
   composer.render();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// ---------- 리사이즈 ----------
-function onResize() {
+// ---------- 리사이즈 / 적응형 품질 ----------
+function applyResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, PIX_CAP));
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
   bloom.setSize(window.innerWidth, window.innerHeight);
 }
-window.addEventListener('resize', onResize);
+window.addEventListener('resize', applyResize);
+
+let _qChecks = 0, _lowSet = false;
+function maybeDowngrade(fps) {
+  if (_lowSet) return;
+  _qChecks++;
+  if (_qChecks > 6 && fps < 45) { // ~3s 워밍업 후에도 낮으면
+    _lowSet = true;
+    PIX_CAP = 1.3;
+    applyResize();
+  }
+}
 
 // 디버그용 전역 노출
 window.__turbo = {

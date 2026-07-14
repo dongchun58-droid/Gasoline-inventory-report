@@ -7,7 +7,8 @@ export class GameAudio {
     this._timer = null;
     this._next = 0;
     this._step = 0;
-    this.vol = 0.32;
+    this.vol = 0.45;      // BGM (더 크게)
+    this.sfxVol = 0.85;   // 효과음 (더 크게)
   }
 
   _ensure() {
@@ -15,13 +16,20 @@ export class GameAudio {
     const AC = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AC();
 
-    // master → limiter(compressor) → out
+    // (BGM master + SFX) → out 공용 컴프레서
+    const comp = this.ctx.createDynamicsCompressor();
+    comp.threshold.value = -8; comp.knee.value = 20; comp.ratio.value = 5;
+    comp.attack.value = 0.003; comp.release.value = 0.2;
+    comp.connect(this.ctx.destination);
+
     this.master = this.ctx.createGain();
     this.master.gain.value = this.muted ? 0 : this.vol;
-    const comp = this.ctx.createDynamicsCompressor();
-    comp.threshold.value = -10; comp.knee.value = 20; comp.ratio.value = 6;
-    comp.attack.value = 0.003; comp.release.value = 0.2;
-    this.master.connect(comp).connect(this.ctx.destination);
+    this.master.connect(comp);
+
+    // 효과음 버스 (뮤트 공유)
+    this.sfx = this.ctx.createGain();
+    this.sfx.gain.value = this.muted ? 0 : this.sfxVol;
+    this.sfx.connect(comp);
 
     // 리드용 피드백 딜레이 send
     this.delay = this.ctx.createDelay(1.0);
@@ -46,7 +54,43 @@ export class GameAudio {
   toggleMute() {
     this.muted = !this.muted;
     if (this.master) this.master.gain.value = this.muted ? 0 : this.vol;
+    if (this.sfx) this.sfx.gain.value = this.muted ? 0 : this.sfxVol;
     return this.muted;
+  }
+
+  // ---------- 효과음 (SFX) ----------
+  _tone(type, f0, f1, t, dur, gain) {
+    const o = this.ctx.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(this.sfx);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  _burst(t, dur, gain) {
+    const n = this._noise(dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    n.connect(g).connect(this.sfx);
+    n.start(t); n.stop(t + dur);
+  }
+  sfxBeep(hi) { if (!this.ctx) return; const t = this.ctx.currentTime; this._tone('square', hi ? 900 : 520, null, t, 0.2, 0.6); }
+  sfxBoost() { if (!this.ctx) return; const t = this.ctx.currentTime; this._tone('sawtooth', 200, 950, t, 0.35, 0.6); this._burst(t, 0.22, 0.4); }
+  sfxItem() { if (!this.ctx) return; const t = this.ctx.currentTime; [0, 4, 7].forEach((n, i) => this._tone('square', 523 * Math.pow(2, n / 12), null, t + i * 0.08, 0.16, 0.5)); }
+  sfxJump() { if (!this.ctx) return; const t = this.ctx.currentTime; this._tone('sine', 300, 1050, t, 0.32, 0.6); }
+  sfxHit() { if (!this.ctx) return; const t = this.ctx.currentTime; this._tone('sawtooth', 420, 60, t, 0.32, 0.6); this._burst(t, 0.2, 0.5); }
+  sfxMoo() {
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    this._tone('sawtooth', 175, 105, t, 0.55, 0.7);
+    this._tone('sawtooth', 88, 66, t + 0.05, 0.6, 0.5);
+  }
+  sfxFanfare() {
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    [0, 4, 7, 12].forEach((n, i) => this._tone('square', 523 * Math.pow(2, n / 12), null, t + i * 0.14, 0.32, 0.6));
   }
 
   _schedule() {

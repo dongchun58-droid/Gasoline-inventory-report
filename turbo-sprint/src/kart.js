@@ -36,10 +36,13 @@ export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
 // 프로시저럴 차량 모델 (종류별 바디 + 공용 드라이버/휠)
 function buildKartModel(color, gradientMap, type = 'kart') {
   const g = new THREE.Group();
+  // 사실적 PBR(도장 금속 느낌) — 차량은 셀셰이딩 대신 표준 재질
   const toon = (c, emissive = 0x000000, emIntensity = 0) =>
-    new THREE.MeshToonMaterial({ color: c, gradientMap, emissive, emissiveIntensity: emIntensity });
-  const dark = 0x1a1a2a;
-  let wheelSpec, driverY = 0.5, driverScale = 1;
+    new THREE.MeshStandardMaterial({ color: c, metalness: 0.55, roughness: 0.35, emissive, emissiveIntensity: emIntensity });
+  const chromeMat = () => new THREE.MeshStandardMaterial({ color: 0xd2d8de, metalness: 0.95, roughness: 0.22 });
+  const glassMat = () => new THREE.MeshStandardMaterial({ color: 0x0a1420, metalness: 0.4, roughness: 0.1 });
+  const dark = 0x14141c;
+  let wheelSpec, driverY = 0.5, driverScale = 1, driverZ = -0.05;
 
   if (type === 'bike') {
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2.0), toon(color)); body.position.y = 0.55; g.add(body);
@@ -58,12 +61,41 @@ function buildKartModel(color, gradientMap, type = 'kart') {
     wheelSpec = [[-0.88, 0.36, 1.25, true, 0.4], [0.88, 0.36, 1.25, true, 0.4], [-0.88, 0.36, -1.3, false, 0.4], [0.88, 0.36, -1.3, false, 0.4]];
     driverY = 0.5; driverScale = 0.9;
   } else if (type === 'truck') {
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.95, 1.05, 1.5), toon(color)); cab.position.set(0, 0.98, 0.7); g.add(cab);
-    const cargo = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.2, 1.9), toon(0x7a5a34)); cargo.position.set(0, 1.05, -0.85); g.add(cargo);
-    const grille = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.5, 0.3), toon(0x333340)); grille.position.set(0, 0.6, 1.5); g.add(grille);
-    const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.28, 0.4), toon(0x22222c)); bumper.position.set(0, 0.35, 1.55); g.add(bumper);
-    wheelSpec = [[-0.98, 0.52, 1.15, true, 0.55], [0.98, 0.52, 1.15, true, 0.55], [-0.98, 0.52, -1.1, false, 0.55], [0.98, 0.52, -1.1, false, 0.55]];
-    driverY = 1.2; driverScale = 0.9;
+    // 미국식 픽업트럭 (오픈 적재함 · 테일게이트 · 세로 테일라이트 · 범퍼)
+    const bodyCol = toon(color);
+    const clad = toon(dark);
+    const redLite = toon(0x330000, 0xff2323, 1.6);
+    const whiteLite = toon(0x222018, 0xfff2c8, 1.3);
+    // 하부 섀시
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.55, 3.4), clad); chassis.position.set(0, 0.55, -0.05); g.add(chassis);
+    // 캡(운전실) + 지붕
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.9, 1.55), bodyCol); cab.position.set(0, 1.2, 0.75); g.add(cab);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.14, 1.4), bodyCol); roof.position.set(0, 1.68, 0.75); g.add(roof);
+    // 캡 유리 (뒷유리 + 옆유리)
+    const rg = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 0.06), glassMat()); rg.position.set(0, 1.42, 0.02); g.add(rg);
+    for (const sx of [-0.97, 0.97]) { const sg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 1.15), glassMat()); sg.position.set(sx, 1.4, 0.8); g.add(sg); }
+    // 루프 레일 (크롬)
+    for (const sx of [-0.62, 0.62]) { const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.35, 8), chromeMat()); rail.rotation.x = Math.PI / 2; rail.position.set(sx, 1.78, 0.75); g.add(rail); }
+    // 오픈 적재함: 바닥 + 측벽2 + 앞벽 + 테일게이트
+    const bedFloor = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.14, 1.8), clad); bedFloor.position.set(0, 0.98, -0.9); g.add(bedFloor);
+    for (const sx of [-0.88, 0.88]) { const wall = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.52, 1.8), bodyCol); wall.position.set(sx, 1.25, -0.9); g.add(wall); }
+    const frontWall = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.52, 0.16), bodyCol); frontWall.position.set(0, 1.25, -0.02); g.add(frontWall);
+    const tailgate = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.58, 0.16), bodyCol); tailgate.position.set(0, 1.22, -1.78); g.add(tailgate);
+    // 베드 레일 (측벽 위 크롬)
+    for (const sx of [-0.88, 0.88]) { const br = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.8, 8), chromeMat()); br.rotation.x = Math.PI / 2; br.position.set(sx, 1.53, -0.9); g.add(br); }
+    // 세로형 테일라이트 (사진처럼)
+    for (const sx of [-0.82, 0.82]) { const tl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.56, 0.09), redLite); tl.position.set(sx, 1.22, -1.85); g.add(tl); }
+    // 리어 범퍼 + 스텝
+    const rbumper = new THREE.Mesh(new THREE.BoxGeometry(1.98, 0.3, 0.4), clad); rbumper.position.set(0, 0.55, -1.9); g.add(rbumper);
+    const step = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.28), chromeMat()); step.position.set(0, 0.42, -1.96); g.add(step);
+    // 프론트: 그릴 + 헤드라이트 + 앞범퍼
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.55, 0.14), clad); grille.position.set(0, 0.85, 1.62); g.add(grille);
+    for (const sx of [-0.66, 0.66]) { const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.09), whiteLite); hl.position.set(sx, 0.98, 1.63); g.add(hl); }
+    const fbumper = new THREE.Mesh(new THREE.BoxGeometry(1.98, 0.32, 0.4), clad); fbumper.position.set(0, 0.52, 1.68); g.add(fbumper);
+    wheelSpec = [[-1.0, 0.55, 1.15, true, 0.58], [1.0, 0.55, 1.15, true, 0.58], [-1.0, 0.55, -1.05, false, 0.58], [1.0, 0.55, -1.05, false, 0.58]];
+    // 휠아치(펜더)
+    for (const [x, , z] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.14, 6, 12, Math.PI), clad); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.62, z); g.add(arch); }
+    driverY = 0.86; driverScale = 0.78; driverZ = 0.7;
   } else {
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), toon(color)); body.position.y = 0.45; g.add(body);
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), toon(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
@@ -75,7 +107,7 @@ function buildKartModel(color, gradientMap, type = 'kart') {
 
   // --- 귀여운 카툰 아기 드라이버 (큰 머리·볼·눈 / 오리지널) ---
   const driver = new THREE.Group();
-  driver.position.set(0, driverY, -0.05);
+  driver.position.set(0, driverY, driverZ);
   driver.scale.setScalar(driverScale);
   const skin = 0xffd8b8;      // 아기 피부톤
   const romper = color;       // 팀 컬러 우주복

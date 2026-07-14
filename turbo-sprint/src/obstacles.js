@@ -35,7 +35,7 @@ function buildCow(gm) {
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.4, 8), hoof);
     leg.position.set(sx, 0.7, sz); g.add(leg);
   }
-  g.scale.setScalar(1.1);
+  g.scale.setScalar(2.2); // 2배 크게
   return g;
 }
 
@@ -76,7 +76,7 @@ export class Obstacles {
       // 충돌: 스치면 잠깐 스핀 (공중이면 회피)
       for (const k of karts) {
         if (k.airborne || k.bulletTimer > 0 || k.invincTimer > 0) continue;
-        if (k.pos.distanceToSquared(cow.mesh.position) < 8.5) k.spinOut(0.9);
+        if (k.pos.distanceToSquared(cow.mesh.position) < 26) k.spinOut(0.9);
       }
     }
   }

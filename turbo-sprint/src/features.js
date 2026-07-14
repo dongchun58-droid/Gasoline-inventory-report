@@ -72,15 +72,26 @@ export class Features {
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false }));
     this._orient(pad, i0, 0.06);
     this.group.add(pad);
-    // 살짝 솟은 램프 립(시각용)
-    const lipMat = new THREE.MeshToonMaterial({ color: 0xff9a2e, gradientMap: this.gm, emissive: 0xff9a2e, emissiveIntensity: 0.5 });
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(width, 0.15, 2.4), lipMat);
-    _m.makeBasis(t.sampleLat[i0], t.sampleUp[i0], t.sampleTan[i0]);
+    // 실제 램프(경사판): 이전보다 2배 길고 높게
+    const lat = t.sampleLat[i0], up = t.sampleUp[i0], tan = t.sampleTan[i0];
+    const lipMat = new THREE.MeshToonMaterial({ color: 0xff9a2e, gradientMap: this.gm, emissive: 0xff9a2e, emissiveIntensity: 0.55 });
+    const rampLen = 7.5, tilt = 0.42;
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(width * 1.05, 0.5, rampLen), lipMat);
+    _m.makeBasis(lat, up, tan);
     lip.quaternion.setFromRotationMatrix(_m);
-    lip.position.copy(t.samplePos[i0]).addScaledVector(t.sampleTan[i0], 4).addScaledVector(t.sampleUp[i0], 0.5);
-    lip.rotation.x -= 0.35; // 앞이 살짝 들림
+    lip.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(lat, -tilt)); // 앞이 들림
+    // 램프가 도로에서 솟아오르도록 배치(중심을 앞·위로)
+    lip.position.copy(t.samplePos[i0]).addScaledVector(tan, 2.6).addScaledVector(up, 1.05);
     this.group.add(lip);
-    this.jumpPads.push({ i0, half: Math.round(5 / perSample), width: width / 2, tex });
+    // 옆 네온 스트립(발광 테두리)
+    for (const sx of [-1, 1]) {
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, rampLen),
+        new THREE.MeshBasicMaterial({ color: 0xffd23f, toneMapped: false }));
+      edge.quaternion.copy(lip.quaternion);
+      edge.position.copy(lip.position).addScaledVector(lat, sx * width * 0.53).addScaledVector(up, 0.28);
+      this.group.add(edge);
+    }
+    this.jumpPads.push({ i0, half: Math.round(6 / perSample), width: width / 2, tex });
   }
 
   _within(idx, center, half, N) {
