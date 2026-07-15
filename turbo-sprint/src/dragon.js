@@ -211,6 +211,8 @@ export class Dragons {
     this._t = 0;
     this.dragons = [];
     const N = track.samplePos.length;
+    // 용 몸통에 부딪힌 카트를 뒤로 빼낼 거리(약 16m 뒤)
+    this._backSamples = Math.max(6, Math.round(16 / ((track.totalDist || N) / N)));
     const P = 4.6;                                   // 브레스 주기(초)
     spots.forEach((t, k) => {
       const i0 = Math.floor(((t % 1) + 1) % 1 * N) % N;
@@ -279,13 +281,20 @@ export class Dragons {
       // 불 웅덩이: 도로 위 착지 지점(FIRE_LAND_Z*S) 중심의 원 — 시각과 일치, 브레스 중에만
       const splash = _splash.copy(_origin).addScaledVector(face, FIRE_LAND_Z * d.S); splash.y = _origin.y;
       const splashR = d.S * 3.8;
+      const N = t.samplePos.length;
+      const backIdx = ((d.i0 - this._backSamples) % N + N) % N;
       for (const k of karts) {
         if (k.airborne || k.bulletTimer > 0 || k.invincTimer > 0 || k.stunTimer > 0) continue;
         _kxz.copy(k.pos); _kxz.y = _origin.y;
-        // 몸통 충돌
-        if (_kxz.distanceToSquared(_origin) < bodyR * bodyR) { k.stun(1.8); continue; }
+        // 몸통 충돌: 잠깐 멈췄다가 용 뒤(열린 차선)로 빼내 재출발 → 낀 채 반복 스턴 방지
+        if (_kxz.distanceToSquared(_origin) < bodyR * bodyR) {
+          const rp = t.samplePos[backIdx], rlat = t.sampleLat[backIdx], rtan = t.sampleTan[backIdx], rup = t.sampleUp[backIdx];
+          const recPos = rp.clone().addScaledVector(rlat, -d.side * d.hw * 0.42).addScaledVector(rup, 0.1);
+          k.stun(1.6, { pos: recPos, forward: rtan.clone(), idx: backIdx });
+          continue;
+        }
         // 불(도로 웅덩이) 충돌
-        if (breathOn && bt > 0.12 && _kxz.distanceToSquared(splash) < splashR * splashR) { k.stun(1.8); }
+        if (breathOn && bt > 0.12 && _kxz.distanceToSquared(splash) < splashR * splashR) { k.stun(1.6); }
       }
     }
   }

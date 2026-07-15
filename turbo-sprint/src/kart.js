@@ -539,11 +539,13 @@ export class Kart {
   get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
 
   // 스턴: 용의 불/몸통에 맞으면 제자리에 멈췄다가 다시 출발 (용암 낙하와 유사하나 가라앉지 않음)
-  stun(t = 1.8) {
+  // recover={pos,forward,idx} 를 주면 스턴 종료 시 그 위치로 복귀(용 몸통에 낀 경우 뒤로 빼줌)
+  stun(t = 1.8, recover = null) {
     if (this.invincTimer > 0 || this.bulletTimer > 0 || this.stunTimer > 0 || this.lavaTimer > 0) return false;
     this.stunTimer = t;
     this.speed = 0; this.boostTimer = 0;
     this.drifting = false; this.driftYaw = 0; this.driftCharge = 0; this.driftStage = 0;
+    this._stunRecover = recover;
     return true;
   }
 
@@ -635,6 +637,16 @@ export class Kart {
     if (this.stunTimer > 0) {
       this.stunTimer -= dt;
       this.speed = 0; this.vertVel = 0;
+      // 스턴 종료: 복귀 위치가 있으면 그쪽(용 뒤/열린 차선)으로 빼내 재출발
+      if (this.stunTimer <= 0 && this._stunRecover) {
+        const r = this._stunRecover; this._stunRecover = null;
+        this.pos.copy(r.pos);
+        this.forward.copy(r.forward);
+        if (r.idx != null) this.idx = r.idx;
+        this.airborne = false; this.spinAngle = 0;
+        this._syncMesh();
+        return;
+      }
       const gS = this.track.ground(this.pos, this.idx, _ground);
       this.idx = gS.idx;
       if (gS.onRoad) this.pos.y = THREE.MathUtils.lerp(this.pos.y, gS.height + 0.1, 0.4);
