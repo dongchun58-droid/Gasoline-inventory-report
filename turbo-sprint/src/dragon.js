@@ -9,6 +9,7 @@ const _mouth = new THREE.Vector3();
 const _origin = new THREE.Vector3();
 const _samp = new THREE.Vector3();
 const _kxz = new THREE.Vector3();
+const _splash = new THREE.Vector3();
 
 // 매우 디테일한 용 모델 (+Z = 정면/브레스 방향, 발끝 y=0)
 function buildDragon() {
@@ -155,7 +156,8 @@ function buildDragon() {
   return g;
 }
 
-// 브레스 화염(콘 + 코어) — 입에서 도로로 뿜어짐
+// 브레스 화염 — 입에서 "아래 도로로" 내리쬐는 스트림 + 도로에 번지는 화염 웅덩이
+const FIRE_LAND_Z = 8.3;                 // 착지 지점(로컬, +Z=face 방향)
 function buildFire() {
   const g = new THREE.Group();
   const cone = (c, r, h, op) => {
@@ -165,11 +167,38 @@ function buildFire() {
     mesh.position.z = h / 2;
     return mesh;
   };
-  const outer = cone(0xff2a08, 2.0, 7.0, 0.32);
-  const mid = cone(0xff6a1e, 1.35, 6.4, 0.5);
-  const core = cone(0xffd54a, 0.8, 5.8, 0.85);
-  g.add(outer, mid, core);
-  g.userData.layers = [outer, mid, core];
+  // ① 입 → 도로로 기울어진 스트림 (아래-앞으로)
+  const stream = new THREE.Group();
+  stream.position.set(0, 6.15, 1.6);     // 입 위치(로컬)
+  stream.rotation.x = 0.72;              // 아래로 기울여 도로에 닿게
+  const s1 = cone(0xff2a08, 1.7, 9.0, 0.30);
+  const s2 = cone(0xff6a1e, 1.15, 8.4, 0.5);
+  const s3 = cone(0xffd54a, 0.6, 7.8, 0.85);
+  stream.add(s1, s2, s3);
+  g.add(stream);
+  // ② 도로에 번지는 화염 웅덩이(평평) + 낮게 솟는 불길
+  const ground = new THREE.Group();
+  ground.position.set(0, 0.12, FIRE_LAND_Z);
+  const disc = (c, r, op) => {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 22),
+      new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, toneMapped: false, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2;         // 바닥에 눕힘
+    return m;
+  };
+  const d1 = disc(0xff3a12, 3.6, 0.34);
+  const d2 = disc(0xff7a1e, 2.4, 0.5);
+  const d3 = disc(0xffd24a, 1.3, 0.85);
+  const tongues = [];
+  for (const [dx, dz] of [[-1.6, 0], [1.6, 0], [0, -1.7], [0, 1.7], [0, 0]]) {
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.4, 8),
+      new THREE.MeshBasicMaterial({ color: 0xff7a1e, transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false }));
+    fl.position.set(dx, 1.1, dz); ground.add(fl); tongues.push(fl);
+  }
+  ground.add(d1, d2, d3);
+  g.add(ground);
+  g.userData.streamLayers = [s1, s2, s3];
+  g.userData.groundLayers = [d1, d2, d3];
+  g.userData.tongues = tongues;
   g.visible = false;
   return g;
 }
@@ -190,11 +219,8 @@ export class Dragons {
       const model = buildDragon();
       const S = Math.max(1.05, hw * 0.135);          // 도로폭에 맞춘 크기(적당히 큰, 반대편 차선은 열어둠)
       model.scale.setScalar(S);
-      const fire = buildFire();
-      fire.scale.setScalar(S);
+      const fire = buildFire();       // model의 자식 → model 스케일(S) 상속(이중 스케일 금지)
       model.add(fire);
-      // 불 원점을 입 근처로(로컬)
-      fire.position.set(0, 6.15, 1.9);
       this.group.add(model);
       this.dragons.push({
         i0, side, model, fire, S, hw,
@@ -229,14 +255,17 @@ export class Dragons {
       if (d.model.userData.mawMat) d.model.userData.mawMat.opacity = 0.3 + mawI * 0.7;
       // 등지느러미 맥동(브레스 직전 강해짐)
       const pulse = 0.75 + 0.25 * Math.sin(this._t * 3 + d.phase * 6) + (windup ? 0.5 : 0) + (breathOn ? 0.7 : 0);
-      // 화염 표시/크기
+      // 화염 표시/크기 (도로로 내리쬐는 스트림 + 웅덩이)
       const fire = d.fire;
       if (breathOn) {
         fire.visible = true;
         const grow = Math.min(1, bt * 3) * (1 - Math.max(0, bt - 0.85) / 0.15);  // 확장 후 수축
-        const flick = 0.9 + 0.1 * Math.sin(this._t * 40);
-        fire.scale.setScalar(d.S * (0.5 + grow * 0.75) * flick);
-        for (const L of fire.userData.layers) L.material.opacity = (L === fire.userData.layers[2] ? 0.85 : 0.45) * (0.6 + grow * 0.4);
+        const flick = 0.92 + 0.08 * Math.sin(this._t * 40);
+        fire.scale.setScalar((0.72 + grow * 0.34) * flick);   // model 스케일에 곱해짐(≈S)
+        const ud = fire.userData;
+        for (const L of ud.streamLayers) L.material.opacity = (L === ud.streamLayers[2] ? 0.85 : 0.4) * (0.55 + grow * 0.45);
+        for (const L of ud.groundLayers) L.material.opacity = (L === ud.groundLayers[2] ? 0.85 : 0.4) * (0.55 + grow * 0.45);
+        for (const fl of ud.tongues) { fl.material.opacity = 0.5 * grow; fl.scale.y = 0.6 + grow * (0.9 + 0.3 * Math.sin(this._t * 22 + fl.position.x)); }
       } else {
         fire.visible = false;
       }
@@ -247,22 +276,16 @@ export class Dragons {
       // 몸통: 발밑 중심 원기둥
       _origin.copy(p).addScaledVector(lat, sideOff);
       const bodyR = d.S * 2.2;
-      // 불: 발 앞에서 face 방향으로 도로를 가로지르는 위험대(브레스 중에만)
-      const fireLen = d.hw * 0.75;
+      // 불 웅덩이: 도로 위 착지 지점(FIRE_LAND_Z*S) 중심의 원 — 시각과 일치, 브레스 중에만
+      const splash = _splash.copy(_origin).addScaledVector(face, FIRE_LAND_Z * d.S); splash.y = _origin.y;
+      const splashR = d.S * 3.8;
       for (const k of karts) {
         if (k.airborne || k.bulletTimer > 0 || k.invincTimer > 0 || k.stunTimer > 0) continue;
         _kxz.copy(k.pos); _kxz.y = _origin.y;
         // 몸통 충돌
         if (_kxz.distanceToSquared(_origin) < bodyR * bodyR) { k.stun(1.8); continue; }
-        // 불 충돌
-        if (breathOn && bt > 0.15) {
-          for (let s = 0.15; s <= 1.0; s += 0.17) {
-            _samp.copy(_origin).addScaledVector(face, s * fireLen).addScaledVector(lat, d.side * 1.2); // 발 앞에서 시작
-            _samp.y = _origin.y;
-            const rr = (1.4 + s * 2.2) * d.S * 0.5;   // 앞으로 갈수록 넓어짐
-            if (_kxz.distanceToSquared(_samp) < rr * rr) { k.stun(1.8); break; }
-          }
-        }
+        // 불(도로 웅덩이) 충돌
+        if (breathOn && bt > 0.12 && _kxz.distanceToSquared(splash) < splashR * splashR) { k.stun(1.8); }
       }
     }
   }

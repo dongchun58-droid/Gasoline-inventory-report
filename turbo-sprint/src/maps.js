@@ -22,10 +22,9 @@ export const MAPS = {
       [-38, 0, 52], [-8, 0, 24],
     ],
     obstacle: 'cow',
-    // 보스 악당: 불 뿜는 용 — 다른 장애물 없는 구간 2곳(도로 한쪽)에 배치
-    dragonSpots: [0.10, 0.72],
-    dragonSides: [1, -1],
-    pad: { boost: 0x18d6ff, chevron: '#eaffff', jump: '#ff9a2e', jumpHex: 0xff9a2e, jumpEdge: 0xffd23f },
+    // 점프대 2개 — 직선·2차선 구간에 배치(코너 직후 회피). features가 분리대 있으면 자동 스냅
+    pad: { boost: 0x18d6ff, chevron: '#eaffff', jump: '#ff9a2e', jumpHex: 0xff9a2e, jumpEdge: 0xffd23f,
+      jumps: [0.10, 0.46] },
     road: { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#dfe4ea', median1: 0xffd23f, median2: 0x2a2a32 },
     sky: { stops: [[0, '#1560D8'], [0.42, '#3D9BFF'], [0.72, '#8FD6FF'], [0.9, '#CFF0FF'], [1, '#F2FCFF']], sun: 0xfff6d0, sunPos: [-180, 190, -430] },
     env: [[0, '#1E6FE0'], [0.5, '#8fd0ff'], [0.6, '#eaf9ff'], [0.61, '#6fc45a'], [1, '#3f8e3a']],
@@ -71,6 +70,9 @@ export const MAPS = {
     // (느린 트럭도 넘도록 폭을 좁게 유지)
     gaps: [[0.907, 0.911]],
     obstacle: 'fireball',
+    // 보스 악당: 불 뿜는 용(고질라형) — 성 외곽 주로 2곳(도로 한쪽)에 배치, 불은 도로로 내리쬠
+    dragonSpots: [0.14, 0.34],
+    dragonSides: [1, -1],
     pad: { boost: 0xff7a1e, chevron: '#ffd8a0', jump: '#ff4a2a', jumpHex: 0xff4a2a, jumpEdge: 0xffb02a },
     road: { asphalt: '#231a20', center: '#ff6a2a', curbA: '#ff3311', curbB: '#160c10', median1: 0x5a3020, median2: 0x1a0e0c },
     sky: { stops: [[0, '#120609'], [0.45, '#3a0d12'], [0.72, '#701d18'], [0.88, '#a83a1e'], [1, '#d66a2a']], sun: 0xff7b30, sunPos: [-150, 130, -420], dim: true },

@@ -32,17 +32,21 @@ export class Features {
     const N = track.samplePos.length;
     const perSample = track.totalDist / N;
 
-    // 네온 부스트 발판 (지속 가속)
-    for (const t of [0.30, 0.58, 0.88]) {
+    // 네온 부스트 발판 (지속 가속) — 맵별 설정 가능
+    const boosts = pad.boosts || [0.30, 0.58, 0.88];
+    for (const t of boosts) {
       this._addBoostPad(Math.floor(t * N) % N, 28, perSample);
     }
-    // 점프 램프 — 중앙 분리대가 없는 구간(t≈0.90)에 설치해야 점프 가능
-    let ji = Math.floor(0.90 * N) % N;
-    // 만약을 대비해 분리대가 없는 가장 가까운 샘플로 스냅
-    if (track.sampleMedian && track.sampleMedian[ji]) {
-      for (let d = 1; d < N; d++) { const c = (ji + d) % N; if (!track.sampleMedian[c]) { ji = c; break; } }
+    // 점프 램프 — 중앙 분리대가 없는 구간에 설치해야 점프 가능 (맵별 설정 가능)
+    const jumps = pad.jumps || [0.90];
+    for (const jt of jumps) {
+      let ji = Math.floor(jt * N) % N;
+      // 만약을 대비해 분리대가 없는 가장 가까운 샘플로 스냅
+      if (track.sampleMedian && track.sampleMedian[ji]) {
+        for (let d = 1; d < N; d++) { const c = (ji + d) % N; if (!track.sampleMedian[c]) { ji = c; break; } }
+      }
+      this._addJumpPad(ji, perSample);
     }
-    this._addJumpPad(ji, perSample);
   }
 
   _orient(mesh, i0, lift) {
