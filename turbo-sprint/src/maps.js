@@ -61,7 +61,8 @@ export const MAPS = {
     interior: [0.58, 0.88],
     bridges: [[0.70, 0.76, 5.5]], // [t0, t1, 반폭]
     // 점프대(t≈0.90) 바로 뒤의 용암 강: 점프로만 통과, 일반 주행 시 추락
-    gaps: [[0.906, 0.913]],
+    // (느린 트럭도 넘도록 폭을 좁게 유지)
+    gaps: [[0.907, 0.911]],
     obstacle: 'fireball',
     pad: { boost: 0xff7a1e, chevron: '#ffd8a0', jump: '#ff4a2a', jumpHex: 0xff4a2a, jumpEdge: 0xffb02a },
     road: { asphalt: '#231a20', center: '#ff6a2a', curbA: '#ff3311', curbB: '#160c10', median1: 0x5a3020, median2: 0x1a0e0c },

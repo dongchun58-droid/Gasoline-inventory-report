@@ -510,25 +510,32 @@ export class CastleScenery {
       const th = new THREE.Mesh(new THREE.ConeGeometry(w, 3.0, 6), bone);
       th.position.set(x, 4.6, 11.4); th.rotation.x = Math.PI; skull.add(th);
     }
-    // 아래턱(하악) — 벌어진 입: 양옆 하악지 + 낮은 앞턱 + 위로 향한 아랫니
+    // 아래턱(하악) — 경첩(jawG)으로 여닫이: 차가 다가오면 입을 크게 벌림
+    const jawG = new THREE.Group();
+    const hY = 7.5, hZ = 2.5;                     // 경첩(턱관절) 위치
+    jawG.position.set(0, hY, hZ);
     for (const sx of [-1, 1]) {
       const ramus = new THREE.Mesh(new THREE.BoxGeometry(3, 10, 4.5), bone);
-      ramus.position.set(sx * (MW + 0.5), 3.5, 5); ramus.rotation.x = -0.25; skull.add(ramus);
+      ramus.position.set(sx * (MW + 0.5), 3.5 - hY, 5 - hZ); ramus.rotation.x = -0.25; jawG.add(ramus);
     }
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(MW * 2, 2.2, 5), bone);
-    jaw.position.set(0, 0.6, 12); skull.add(jaw); // 낮은 앞턱(차가 위로 지나감)
+    jaw.position.set(0, 0.6 - hY, 12 - hZ); jawG.add(jaw); // 낮은 앞턱(차가 위로 지나감)
     for (let x = -MW + 1.2; x <= MW - 1.2; x += 2.3) {
       // 아랫니는 가장자리에서만 위로(가운데 주행선은 비움)
       if (Math.abs(x) < hw - 1) continue;
       const th = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.6, 6), bone);
-      th.position.set(x, 2.2, 12.4); skull.add(th);
+      th.position.set(x, 2.2 - hY, 12.4 - hZ); jawG.add(th);
     }
+    skull.add(jawG);
+    this._skullJaw = jawG;
+    this._skullOpen = 0;
 
     // 배치: 정면(입, 로컬 +Z)을 진입 카트(-tan)로 향하게 — 우수좌표 기저(반사 아님)
     const basis = new THREE.Matrix4().makeBasis(s.lat, s.up, s.tan.clone().negate());
     skull.quaternion.setFromRotationMatrix(basis);
     skull.position.copy(s.pos).addScaledVector(s.up, -0.3);
     this.group.add(skull);
+    this._skullPos = s.pos.clone();               // 카트 근접 판정용
 
     // 해골 전용 조명(어두운 성에서도 또렷하게)
     for (const sx of [-1, 1]) {
@@ -997,6 +1004,14 @@ export class CastleScenery {
       const fl = 0.75 + 0.25 * Math.sin(t * 13 + i * 1.7) + 0.1 * Math.sin(t * 31 + i);
       f.scale.set(0.8 + fl * 0.5, 0.7 + fl * 0.7, 0.8 + fl * 0.5);
       f.material.opacity = 0.8 + 0.2 * fl;
+    }
+    // 해골 입: 카트가 가까이 오면 크게 벌어짐
+    if (this._skullJaw && this._skullPos) {
+      let near = false;
+      if (karts) for (const kt of karts) { if (kt.pos.distanceToSquared(this._skullPos) < 1000) { near = true; break; } } // ≈32m
+      const target = near ? 0.6 : 0.0;
+      this._skullOpen += (target - this._skullOpen) * Math.min(1, dt * 7);
+      this._skullJaw.rotation.x = this._skullOpen;
     }
     // 마왕 눈/문장 발광 맥동
     for (const m of this._eyes) m.emissiveIntensity = 1.8 + 1.2 * Math.abs(Math.sin(t * 2.2));
