@@ -22,6 +22,9 @@ export const MAPS = {
       [-38, 0, 52], [-8, 0, 24],
     ],
     obstacle: 'cow',
+    // 보스 악당: 불 뿜는 용 — 다른 장애물 없는 구간 2곳(도로 한쪽)에 배치
+    dragonSpots: [0.10, 0.72],
+    dragonSides: [1, -1],
     pad: { boost: 0x18d6ff, chevron: '#eaffff', jump: '#ff9a2e', jumpHex: 0xff9a2e, jumpEdge: 0xffd23f },
     road: { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#dfe4ea', median1: 0xffd23f, median2: 0x2a2a32 },
     sky: { stops: [[0, '#1560D8'], [0.42, '#3D9BFF'], [0.72, '#8FD6FF'], [0.9, '#CFF0FF'], [1, '#F2FCFF']], sun: 0xfff6d0, sunPos: [-180, 190, -430] },

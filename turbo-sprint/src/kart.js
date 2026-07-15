@@ -460,6 +460,7 @@ export class Kart {
     this.onGrass = false;
     this.wheelspinTimer = 0; // 로켓스타트 실패(너무 일찍) 페널티
     this.lavaTimer = 0;      // >0 이면 용암 추락 복구 중(페널티)
+    this.stunTimer = 0;      // >0 이면 스턴(용의 불/충돌로 정지 후 재출발)
 
     // 드리프트/미니터보
     this.hopTimer = 0;
@@ -496,6 +497,7 @@ export class Kart {
     this.airborne = false;
     this.fallTimer = 0;
     this.lavaTimer = 0;
+    this.stunTimer = 0;
     this.idx = 0;
     this._syncMesh();
   }
@@ -535,6 +537,15 @@ export class Kart {
   }
   setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
   get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
+
+  // 스턴: 용의 불/몸통에 맞으면 제자리에 멈췄다가 다시 출발 (용암 낙하와 유사하나 가라앉지 않음)
+  stun(t = 1.8) {
+    if (this.invincTimer > 0 || this.bulletTimer > 0 || this.stunTimer > 0 || this.lavaTimer > 0) return false;
+    this.stunTimer = t;
+    this.speed = 0; this.boostTimer = 0;
+    this.drifting = false; this.driftYaw = 0; this.driftCharge = 0; this.driftStage = 0;
+    return true;
+  }
 
   // 차량 종류 변경(모델 재생성). 이전 모델을 반환 → 호출자가 씬에서 교체.
   setType(type) {
@@ -617,6 +628,18 @@ export class Kart {
         this.idx = i; this.airborne = false;
       }
       this._syncMesh();
+      return;
+    }
+
+    // --- 스턴 중: 조작 불가, 제자리에 멈춤(약한 떨림) 후 재출발 ---
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt;
+      this.speed = 0; this.vertVel = 0;
+      const gS = this.track.ground(this.pos, this.idx, _ground);
+      this.idx = gS.idx;
+      if (gS.onRoad) this.pos.y = THREE.MathUtils.lerp(this.pos.y, gS.height + 0.1, 0.4);
+      this.spinAngle = Math.sin(this.stunTimer * 40) * 0.12; // 부르르 떨림
+      this._syncMesh(gS);
       return;
     }
 

@@ -18,6 +18,7 @@ import { AIController } from './ai.js';
 import { ItemSystem } from './items.js';
 import { Features } from './features.js';
 import { Obstacles } from './obstacles.js';
+import { Dragons } from './dragon.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
 import { GameAudio } from './audio.js';
@@ -190,7 +191,7 @@ let player;
 let hud;
 
 // ---------- 월드(맵) 상태: 맵 변경 시 재생성 ----------
-let track, itemSystem, obstacles, features, scenery, sky, envTex;
+let track, itemSystem, obstacles, features, scenery, sky, envTex, dragons;
 let currentMapKey = 'meadow';
 
 // ---------- HDRI 환경(IBL) — Phase 7 Step 1 ----------
@@ -254,6 +255,7 @@ function buildWorld(key) {
   // 이전 월드 해제
   if (track) {
     scene.remove(track.group, itemSystem.group, obstacles.group, features.group, scenery.group, sky);
+    if (dragons) { scene.remove(dragons.group); disposeGroup(dragons.group); dragons = null; }
     disposeGroup(track.group); disposeGroup(itemSystem.group); disposeGroup(obstacles.group);
     disposeGroup(features.group); disposeGroup(scenery.group); disposeGroup(sky);
     if (envTex) envTex.dispose();
@@ -283,6 +285,7 @@ function buildWorld(key) {
   itemSystem = new ItemSystem(track, gradientMap); scene.add(itemSystem.group);
   obstacles = new Obstacles(track, gradientMap, map.obstacle); scene.add(obstacles.group);
   features = new Features(track, gradientMap, map.pad); scene.add(features.group);
+  if (map.dragonSpots) { dragons = new Dragons(track, map.dragonSpots, map.dragonSides); scene.add(dragons.group); }
   enableShadows(scene); // 새 메시에 그림자 적용
   boostAnisotropy(track.group); boostAnisotropy(scenery.group); // 도로/지면 선명도(레이싱 필수)
   // 카트/AI/HUD 재타겟팅 (이미 생성된 경우)
@@ -695,6 +698,7 @@ function frame(nowMs) {
   if (raceState === 'racing' || raceState === 'finished') {
     features.update(dt, karts);
     obstacles.update(dt, karts);
+    if (dragons) dragons.update(dt, karts);
   }
   scenery.update(dt, karts, raceState);
 
@@ -769,12 +773,13 @@ function maybeDowngrade(fps) {
 
 // 디버그용 전역 노출 (월드는 맵 전환 시 재생성되므로 getter로 노출)
 window.__turbo = {
-  scene, player, karts, input, audio, PHYS, resetRace,
+  scene, camera, renderer, player, karts, input, audio, PHYS, resetRace,
   get track() { return track; },
   get itemSystem() { return itemSystem; },
   get features() { return features; },
   get obstacles() { return obstacles; },
   get scenery() { return scenery; },
+  get dragons() { return dragons; },
   get mapKey() { return currentMapKey; },
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },
