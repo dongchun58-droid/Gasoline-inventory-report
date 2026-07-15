@@ -502,12 +502,17 @@ export class Kart {
     this._syncMesh();
   }
 
-  // 용암 추락 시작 (좁은 다리 이탈 · 용암 강) — 가라앉은 뒤 시간이 걸려 복구
-  _startLavaFall() {
+  // 추락 시작 (좁은 다리 이탈 · 용암/바다 · 정상 못넘은 점프 단절) — 가라앉은 뒤 복구
+  // toClimbBase=true 이면 맵 지정 복귀 지점(성 아래 재등반)으로 이동
+  _startLavaFall(toClimbBase = false) {
     if (this.lavaTimer > 0) return;
     this.lavaTimer = 2.6;                              // 복구까지 페널티 시간
-    this._lavaIdx = this._safeIdx != null ? this._safeIdx : this.idx; // 마지막 안전 지점으로 복귀
-    this._sinkY = this.pos.y - 5;
+    if (toClimbBase && this.track.fallRespawnIdx != null) {
+      this._lavaIdx = this.track.fallRespawnIdx;       // 성 아래(재등반 시작점)로 복귀
+    } else {
+      this._lavaIdx = this._safeIdx != null ? this._safeIdx : this.idx; // 마지막 안전 지점
+    }
+    this._sinkY = this.pos.y - 8;
     this.speed = 0; this.boostTimer = 0; this.invincTimer = 0;
     this.drifting = false; this.driftYaw = 0; this.airborne = false;
   }
@@ -814,8 +819,8 @@ export class Kart {
       this.pos.y += this.vertVel * dt;
       if (this.pos.y <= g.height + 0.1 && this.vertVel <= 0) {
         if (g.gap) {
-          // 용암 강 위로 착지 → 추락 (점프대를 못 넘긴 것)
-          this._startLavaFall();
+          // 단절 위로 착지 → 추락 (점프대를 정확히 못 넘긴 것) → 성 아래 재등반 지점으로
+          this._startLavaFall(true);
         } else {
           this.pos.y = g.height + 0.1;
           this.airborne = false; this.vertVel = 0;
@@ -824,8 +829,8 @@ export class Kart {
       }
       this.onGrass = false;
     } else if (g.gap) {
-      // 용암 강(도로 단절)에 지면으로 진입 → 추락. 점프대로만 통과 가능
-      this._startLavaFall();
+      // 도로 단절에 지면으로 진입 → 추락. 점프대로만 통과 (얼음 정상=성 아래 재등반)
+      this._startLavaFall(true);
       this.onGrass = false;
     } else {
       this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
@@ -841,6 +846,10 @@ export class Kart {
       const over = Math.abs(g.lateral) - g.half;
       // 좁은 다리 이탈 → 용암 추락(페널티)
       if (g.bridge && over > 0.2) {
+        this._startLavaFall();
+        this.onGrass = false;
+      } else if (g.sea && over > 1.5 && Math.sign(g.lateral) === Math.sign(g.sea)) {
+        // 바다 쪽 도로 이탈 → 바다 추락(딜레이 후 마지막 안전지점 복귀)
         this._startLavaFall();
         this.onGrass = false;
       } else {

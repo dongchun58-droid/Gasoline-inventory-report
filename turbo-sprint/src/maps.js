@@ -1,8 +1,9 @@
 // maps.js — 맵(테마) 정의: 트랙 레이아웃 + 배경 클래스 + 조명/하늘/도로 색
 import { Scenery } from './scenery.js';
 import { CastleScenery } from './castle.js';
+import { IceScenery } from './ice.js';
 
-export const MAP_ORDER = ['meadow', 'castle'];
+export const MAP_ORDER = ['meadow', 'castle', 'ice'];
 
 export const MAPS = {
   // ☀️ 초원 서킷 (기존 맵)
@@ -93,5 +94,52 @@ export const MAPS = {
     bloom: 0.45,
     bloomThreshold: 0.95,
     exposure: 1.06,
+  },
+
+  // ❄️ 얼음 왕국 (신규 맵) — 춥고 연파란색. 거대 얼음성을 크게 돌아 올라가는 코스
+  ice: {
+    key: 'ice',
+    name: 'ICE KINGDOM',
+    desc: '얼음성을 돌아 오르는 설원 코스',
+    swatch: ['#bfe4ff', '#ffffff', '#1f6ea8'],
+    Scenery: IceScenery,
+    scale: 2.6,
+    variableWidth: false,  // 일정 폭(오르막/동굴/바다 다리)
+    // 중앙 거대 얼음성을 크게 돌아 올라갔다가(뒤쪽), 꼭대기에서 점프해 내려오는 루프
+    // x,z만 scale 적용 / y(높이)는 그대로. 앞쪽(0~0.3) 평지: 출발문·바다·동굴, 뒤쪽 등반
+    controlPoints: [
+      [0, 0, 120],      // 0 출발문(앞)
+      [72, 0, 96],      // 1 바다 직선
+      [112, 0, 42],     // 2
+      [122, 0, -18],    // 3 얼음동굴(동쪽)
+      [98, 0, -74],     // 4 동굴 탈출
+      [50, 10, -110],   // 5 등반 시작(성 아래)
+      [-8, 24, -118],   // 6 등반(북)
+      [-66, 38, -96],   // 7 등반
+      [-112, 48, -44],  // 8 정상 근처
+      [-124, 52, 6],    // 9 정상(점프대+단절)
+      [-116, 38, 52],   // 10 하강(착지측)
+      [-84, 22, 92],    // 11 하강
+      [-40, 8, 116],    // 12 하강
+      [-6, 0, 124],     // 13 지면(출발 복귀)
+    ],
+    caveRange: [0.185, 0.275],       // 얼음동굴 구간(동쪽)
+    gaps: [[0.648, 0.6505]],         // 정상 단절(점프대 직후, 좁게 → 정상 접근이면 넘고 저속이면 추락)
+    fallRespawn: 0.355,              // 못 넘으면 성 아래(등반 시작)로 복귀 재등반
+    seaEdges: [[0.03, 0.16, -1]],    // 앞쪽 직선 왼쪽(-lat)은 바다 → 이탈 시 추락
+    obstacle: 'snowball',
+    pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
+      jumps: [0.643], boosts: [0.12, 0.42, 0.88] },
+    penguinSpots: [0.08, 0.50], penguinSides: [1, -1],
+    road: { asphalt: '#5f9fd4', center: '#ffffff', curbA: '#2170b0', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
+    sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
+    env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],
+    fog: { color: 0xdff0ff, near: 260, far: 1100 },
+    sun: { color: 0xeaf4ff, intensity: 2.2, dir: [0.35, 0.95, 0.25] },
+    hemi: { sky: 0xdff0ff, ground: 0xbfe4ff, intensity: 1.2 },
+    ambient: 0.32,
+    bloom: 0.4,
+    bloomThreshold: 0.9,
+    exposure: 1.12,
   },
 };

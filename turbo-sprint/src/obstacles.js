@@ -57,6 +57,25 @@ function buildFireball() {
   return g;
 }
 
+// 굴러다니는 거대 눈덩이 (얼음 왕국) — 흰 구 + 파랑 얼룩
+function buildSnowball() {
+  const g = new THREE.Group();
+  const snow = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.85, metalness: 0.0 });
+  const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 1), snow);
+  g.add(ball);
+  for (let k = 0; k < 8; k++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.28 + (k % 3) * 0.1, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xcfe8ff, roughness: 0.8 }));
+    const a = k * 0.9, r = 1.5;
+    s.position.set(Math.cos(a) * r, Math.sin(a * 1.7) * 0.9, Math.sin(a) * r);
+    g.add(s);
+  }
+  g.userData.ball = ball;
+  g.position.y = 1.6;
+  g.scale.setScalar(1.9);
+  return g;
+}
+
 export class Obstacles {
   constructor(track, gm, theme = 'cow') {
     this.track = track;
@@ -67,7 +86,7 @@ export class Obstacles {
     const N = track.samplePos.length;
     for (const [t, phase] of [[0.45, 0], [0.80, 1.7]]) {
       const i0 = Math.floor(t * N) % N;
-      const mesh = theme === 'fireball' ? buildFireball() : buildCow(gm);
+      const mesh = theme === 'fireball' ? buildFireball() : theme === 'snowball' ? buildSnowball() : buildCow(gm);
       this.group.add(mesh);
       this.cows.push({ i0, phase, mesh });
     }
@@ -83,7 +102,7 @@ export class Obstacles {
       const phase = this._t * 0.5 + cow.phase;
       const offset = Math.sin(phase) * range;
       const moving = Math.cos(phase); // 이동 방향 부호
-      const lift = this.theme === 'fireball' ? 1.8 : 0;
+      const lift = this.theme === 'fireball' ? 1.8 : this.theme === 'snowball' ? 3.0 : 0;
       cow.mesh.position.copy(p).addScaledVector(lat, offset).addScaledVector(up, lift);
       if (this.theme === 'fireball') {
         // 불덩이: 공중 부유 + 화염 점멸/회전
@@ -93,6 +112,12 @@ export class Obstacles {
         const fl = 0.7 + 0.3 * Math.abs(Math.sin(this._t * 14 + cow.phase));
         if (ud.flame) { ud.flame.scale.setScalar(1 + fl * 0.25); ud.flame.material.opacity = 0.4 + fl * 0.3; }
         if (ud.outer) { ud.outer.scale.setScalar(1 + fl * 0.15); }
+      } else if (this.theme === 'snowball') {
+        // 굴러가는 눈덩이: 이동 방향으로 구르기
+        const dir = moving >= 0 ? 1 : -1;
+        const b = cow.mesh.userData.ball;
+        if (b) b.rotation.z -= dir * dt * 3.2;
+        cow.mesh.rotation.z -= dir * dt * 3.2;
       } else {
         // 이동방향(±lat)으로 몸을 향하게
         _md.copy(lat).multiplyScalar(moving >= 0 ? 1 : -1);

@@ -773,7 +773,7 @@ function maybeDowngrade(fps) {
 
 // 디버그용 전역 노출 (월드는 맵 전환 시 재생성되므로 getter로 노출)
 window.__turbo = {
-  scene, camera, renderer, player, karts, input, audio, PHYS, resetRace,
+  scene, camera, renderer, player, karts, ais, input, audio, PHYS, resetRace,
   get track() { return track; },
   get itemSystem() { return itemSystem; },
   get features() { return features; },

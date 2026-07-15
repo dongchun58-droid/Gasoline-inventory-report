@@ -46,6 +46,9 @@ export class Track {
     this.bridges = opts.bridges || [];                  // [[t0,t1,반폭], ...] 좁은 다리(용암 추락)
     this.gaps = opts.gaps || [];                        // [[t0,t1], ...] 도로 단절(용암 강) — 점프대로만 통과
     this.interior = opts.interior || null;              // [t0,t1] 성 내부 구간
+    this.caveRange = opts.caveRange || null;            // [t0,t1] 얼음동굴 구간(배경용)
+    this.seaEdges = opts.seaEdges || [];                // [[t0,t1,side]] 한쪽이 바다(이탈 시 추락), side=+1/-1
+    this._fallRespawnT = opts.fallRespawn != null ? opts.fallRespawn : null; // 단절 추락 시 복귀 t(성 아래 재등반)
     const pts = cps.map((p) => new THREE.Vector3(p[0] * scale, p[1], p[2] * scale));
     this.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
     this.length = this.curve.getLength();
@@ -60,6 +63,7 @@ export class Track {
     this.sampleMedian = []; // 중앙 분리대 존재 여부
     this.sampleBridge = []; // 좁은 다리(추락 가능) 여부
     this.sampleGap = [];    // 도로 단절(용암 강) 여부 — 지면이면 추락
+    this.sampleSea = [];    // 한쪽 바다 side(0/±1) — 그 쪽으로 이탈 시 추락
     this.maxHalf = HALF_W;
     let acc = 0;
     let prev = null;
@@ -84,6 +88,11 @@ export class Track {
       for (const gg of this.gaps) {
         if (tt >= gg[0] && tt <= gg[1]) { gap = true; break; }
       }
+      let seaSide = 0;
+      for (const se of this.seaEdges) {
+        if (tt >= se[0] && tt <= se[1]) { seaSide = se[2]; break; }
+      }
+      this.sampleSea.push(seaSide);
       this.samplePos.push(pos.clone());
       this.sampleTan.push(tan.clone());
       this.sampleLat.push(lat.clone());
@@ -97,6 +106,9 @@ export class Track {
       prev = pos;
     }
     this.totalDist = acc;
+    // 단절 추락 시 복귀 지점(성 아래 재등반) — 지정 없으면 null(기존 안전지점 복귀)
+    this.fallRespawnIdx = this._fallRespawnT != null
+      ? Math.floor(((this._fallRespawnT % 1) + 1) % 1 * (this.samplePos.length - 1)) : null;
 
     // 트랙 경계/중심/반경 (미니맵·배경 크기 계산용)
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -310,6 +322,7 @@ export class Track {
     out.median = this.sampleMedian[i];
     out.bridge = this.sampleBridge[i];
     out.gap = this.sampleGap[i];
+    out.sea = this.sampleSea[i];
     out.onRoad = Math.abs(lateral) <= hw + 0.5;
     return out;
   }
