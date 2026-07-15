@@ -125,7 +125,7 @@ export class Features {
       if (!k.airborne && k.speed > 9) {
         for (const p of this.jumpPads) {
           if (Math.abs(lateral) < p.width && this._within(k.idx, p.i0, p.half, N)) {
-            k.jump(14.5, 0.8); // 더 높고 박진감 있게 + 착지 부스트
+            k.jump(16.5, 0.9); // 더 높고 길게 (용암 강을 넘도록) + 착지 부스트
           }
         }
       }

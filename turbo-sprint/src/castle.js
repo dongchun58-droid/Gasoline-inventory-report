@@ -75,6 +75,7 @@ export class CastleScenery {
     this.stoneMat = new THREE.MeshStandardMaterial({ map: this._stoneTex, color: 0x8a8494, roughness: 0.95, metalness: 0.05, emissive: 0x1a0d0a, emissiveIntensity: 0.35 });
     this.darkStone = new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.95, metalness: 0.05, emissive: 0x140806, emissiveIntensity: 0.3 });
     this.metalMat = new THREE.MeshStandardMaterial({ color: 0x44444c, roughness: 0.5, metalness: 0.85 });
+    this.boneMat = new THREE.MeshStandardMaterial({ color: 0xe7e1d0, roughness: 0.72, metalness: 0.0, emissive: 0x241c14, emissiveIntensity: 0.28 });
 
     this._buildLava();
     this._buildCauseway();
@@ -82,8 +83,12 @@ export class CastleScenery {
     this._buildTowers();
     this._buildStatues();
     this._buildTorches();
-    this._buildGate();
     this._buildInterior();
+    this._buildLavaRiver();
+    this._buildSkullGate();
+    this._buildMeteors();
+    this._buildBats();
+    this._buildBoneFish();
     this._buildEmbers();
     this._buildMountains();
   }
@@ -127,7 +132,9 @@ export class CastleScenery {
     }
     const indices = [];
     for (let i = 0; i < N; i++) {
-      const a = i * 2, b = i * 2 + 1, nxt = (i + 1) % N, c = nxt * 2, d = nxt * 2 + 1;
+      const nxt = (i + 1) % N;
+      if (track.sampleGap && (track.sampleGap[i] || track.sampleGap[nxt])) continue; // 용암 강 단절
+      const a = i * 2, b = i * 2 + 1, c = nxt * 2, d = nxt * 2 + 1;
       indices.push(a, b, c, b, d, c);
     }
     const geo = new THREE.BufferGeometry();
@@ -151,6 +158,7 @@ export class CastleScenery {
     const merlons = [];
     for (let i = 0; i < N - 1; i += step) {
       if (track.sampleBridge && track.sampleBridge[i]) continue; // 다리 구간은 난간 없음(추락 가능)
+      if (track.sampleGap && track.sampleGap[i]) continue;       // 용암 강 구간도 개방
       const p = track.samplePos[i], lat = track.sampleLat[i];
       const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON - 0.4;
       for (const side of [-1, 1]) {
@@ -262,6 +270,7 @@ export class CastleScenery {
     const step = 42;
     for (let i = 0; i < N - 1; i += step) {
       if (track.sampleBridge && track.sampleBridge[i]) continue; // 다리엔 기둥 없음
+      if (track.sampleGap && track.sampleGap[i]) continue;
       const p = track.samplePos[i], lat = track.sampleLat[i], up = track.sampleUp[i];
       const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON - 0.6;
       for (const side of [-1, 1]) {
@@ -414,6 +423,188 @@ export class CastleScenery {
     parent.add(chain);
   }
 
+  // ---- 점프대 앞 용암 강 (도로 단절 gap을 흐르는 용암으로 시각화) ----
+  _buildLavaRiver() {
+    const track = this.track;
+    if (!track.gaps || !track.gaps.length) return;
+    const N = track.samplePos.length;
+    const tex = lavaTexture(); tex.repeat.set(2, 4);
+    this._riverTex = tex;
+    this._riverMat = new THREE.MeshStandardMaterial({
+      map: tex, emissiveMap: tex, emissive: 0xff6a1e, emissiveIntensity: 2.3,
+      color: 0x2a0c04, roughness: 0.4, metalness: 0.0,
+    });
+    for (const [t0, t1] of track.gaps) {
+      const i0 = Math.floor(t0 * N) - 2, i1 = Math.floor(t1 * N) + 2;
+      const cnt = i1 - i0 + 1;
+      const positions = new Float32Array(cnt * 2 * 3);
+      const uvs = new Float32Array(cnt * 2 * 2);
+      for (let k = 0; k < cnt; k++) {
+        const i = ((i0 + k) % N + N) % N;
+        const p = track.samplePos[i], lat = track.sampleLat[i];
+        const hw = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + 6;
+        const li = k * 6;
+        positions[li] = p.x - lat.x * hw; positions[li + 1] = -0.5; positions[li + 2] = p.z - lat.z * hw;
+        positions[li + 3] = p.x + lat.x * hw; positions[li + 4] = -0.5; positions[li + 5] = p.z + lat.z * hw;
+        const ui = k * 4; uvs[ui] = 0; uvs[ui + 1] = k * 0.5; uvs[ui + 2] = 2; uvs[ui + 3] = k * 0.5;
+      }
+      const idx = [];
+      for (let k = 0; k < cnt - 1; k++) { const a = k * 2, b = k * 2 + 1, c = (k + 1) * 2, d = (k + 1) * 2 + 1; idx.push(a, b, c, b, d, c); }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+      geo.setIndex(idx); geo.computeVertexNormals();
+      const river = new THREE.Mesh(geo, this._riverMat);
+      river.userData.noShadow = true;
+      this.group.add(river);
+    }
+  }
+
+  // ---- 스타트: 거대한 뿔 해골 성문(입을 통과) ----
+  _buildSkullGate() {
+    const s = this.track.startInfo();
+    const hw = this.track.halfWidth;
+    const bone = this.boneMat;
+    const socket = new THREE.MeshStandardMaterial({ color: 0x120a0c, roughness: 0.9, metalness: 0 });
+    const skull = new THREE.Group();
+    // 좌우 광대뼈 기둥(입 옆)
+    for (const sx of [-1, 1]) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(3.2, 9, 4), bone);
+      pillar.position.set(sx * (hw + 3), 4.5, 0); skull.add(pillar);
+      // 송곳니(입 옆)
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.9, 3.4, 7), bone);
+      fang.position.set(sx * (hw + 0.5), 6.5, 2.4); fang.rotation.x = Math.PI; skull.add(fang);
+    }
+    // 윗턱 빔
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 8, 3.2, 5), bone);
+    beam.position.set(0, 9.4, 0); skull.add(beam);
+    // 윗니(아래로 매달림)
+    for (let x = -hw + 1; x <= hw - 1; x += 2.8) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.95, 3.4, 6), bone);
+      tooth.position.set(x, 7.4, 2.2); tooth.rotation.x = Math.PI; skull.add(tooth);
+    }
+    // 두개골(넓적한 큰 구)
+    const cran = new THREE.Mesh(new THREE.SphereGeometry(7, 18, 14), bone);
+    cran.scale.set(1.5, 1.05, 1.1); cran.position.set(0, 15, -0.5); skull.add(cran);
+    // 이마 아래 눈두덩(살짝 앞으로)
+    for (const sx of [-1, 1]) {
+      const sockM = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 12), socket);
+      sockM.scale.set(1, 1.1, 0.7); sockM.position.set(sx * 5, 15, 6); skull.add(sockM);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0x220200, emissive: 0xff2a08, emissiveIntensity: 2.6 }));
+      pupil.position.set(sx * 5, 15, 7.6); skull.add(pupil);
+      this._eyes.push(pupil.material);
+    }
+    // 코 구멍(역삼각 어둠)
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 3), socket);
+    nose.position.set(0, 11.8, 7); nose.rotation.x = Math.PI; skull.add(nose);
+    // 뿔 2개(위로 휘어 오름)
+    for (const sx of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(1.5, 9, 8), bone);
+      horn.position.set(sx * 8, 22, -1); horn.rotation.z = sx * 0.7; skull.add(horn);
+      const horn2 = new THREE.Mesh(new THREE.ConeGeometry(0.9, 4.5, 8), bone);
+      horn2.position.set(sx * 10.5, 25.5, -1); horn2.rotation.z = sx * 1.15; skull.add(horn2);
+    }
+    // 배치: 입이 진입 카트(그리드 쪽)를 향하도록
+    const basis = new THREE.Matrix4().makeBasis(s.lat, s.up, s.tan);
+    skull.quaternion.setFromRotationMatrix(basis);
+    skull.rotateY(Math.PI); // 정면을 -tan(그리드)로
+    skull.position.copy(s.pos).addScaledVector(s.up, -0.2);
+    this.group.add(skull);
+    // 턱에서 늘어진 쇠사슬
+    for (const sx of [-0.5, 0.5]) {
+      const anchor = new THREE.Vector3().copy(s.pos).addScaledVector(s.lat, hw * sx).addScaledVector(s.up, 8.2);
+      this._makeChain(this.group, anchor, 7);
+    }
+  }
+
+  // ---- 하늘에서 떨어지는 불덩이(운석) 2곳 ----
+  _buildMeteors() {
+    const track = this.track;
+    const N = track.samplePos.length;
+    this._meteors = [];
+    const targetsT = [0.15, 0.46];
+    targetsT.forEach((tt, k) => {
+      const i = Math.floor(tt * N) % N;
+      const target = track.samplePos[i].clone(); target.y = 0.4;
+      const up = new THREE.Vector3(0, 1, 0);
+      const start = target.clone()
+        .addScaledVector(up, 130)
+        .addScaledVector(track.sampleTan[i], -70 + k * 40)
+        .addScaledVector(track.sampleLat[i], (k ? 1 : -1) * 46);
+      const m = new THREE.Group();
+      const core = new THREE.Mesh(new THREE.SphereGeometry(1.4, 14, 12), new THREE.MeshBasicMaterial({ color: 0xffe79a, toneMapped: false }));
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(2.3, 14, 12), new THREE.MeshBasicMaterial({ color: 0xff5a12, transparent: true, opacity: 0.6, toneMapped: false }));
+      const trail = new THREE.Mesh(new THREE.ConeGeometry(1.7, 9, 12), new THREE.MeshBasicMaterial({ color: 0xff9a3a, transparent: true, opacity: 0.5, toneMapped: false }));
+      trail.position.set(0, 4.5, 0);
+      m.add(trail, flame, core);
+      m.userData.noShadow = true; m.visible = false;
+      this.group.add(m);
+      const light = new THREE.PointLight(0xff7a2a, 0, 44, 2); light.castShadow = false; this.group.add(light);
+      const flash = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 12), new THREE.MeshBasicMaterial({ color: 0xffdf8a, transparent: true, opacity: 0, toneMapped: false }));
+      flash.position.copy(target); flash.userData.noShadow = true; this.group.add(flash);
+      this._meteors.push({ m, light, flash, start, target, period: 5.5, phase: k * 2.75, travel: 2.6 });
+    });
+  }
+
+  // ---- 하늘의 뼈 박쥐 ----
+  _makeBat() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.9, 4, 6), this.boneMat); body.rotation.x = Math.PI / 2; g.add(body);
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), this.boneMat); skull.position.z = 0.8; g.add(skull);
+    for (const sx of [-0.2, 0.2]) { const ear = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 5), this.boneMat); ear.position.set(sx, 0.35, 0.8); g.add(ear); }
+    const wings = [];
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(side * 0.2, 0, 0); g.add(pivot);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.08), this.boneMat); arm.position.set(side * 0.9, 0, 0); pivot.add(arm);
+      for (let f = 0; f < 3; f++) { const fin = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.05), this.boneMat); fin.position.set(side * 1.5, 0, (f - 1) * 0.4); fin.rotation.y = side * (f - 1) * 0.5; pivot.add(fin); }
+      wings.push(pivot);
+    }
+    g.userData.noShadow = true; g.scale.setScalar(2.2);
+    return { group: g, wings };
+  }
+  _buildBats() {
+    this._bats = [];
+    const CX = this.track.center.x, CZ = this.track.center.z, RAD = this.track.radius;
+    for (let k = 0; k < 6; k++) {
+      const bat = this._makeBat();
+      this.group.add(bat.group);
+      this._bats.push({ group: bat.group, wings: bat.wings, cx: CX, cz: CZ, radius: RAD * (0.4 + (k % 3) * 0.22), y: 32 + (k % 4) * 9, ang0: k * 1.05, speed: 0.22 + (k % 3) * 0.07, phase: k });
+    }
+  }
+
+  // ---- 도로 양옆 뼈 물고기(용암에서 점프) ----
+  _makeBoneFish() {
+    const g = new THREE.Group();
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 5, 6), this.boneMat); spine.rotation.z = Math.PI / 2; g.add(spine);
+    for (let r = 0; r < 6; r++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(0.9 - r * 0.1, 0.08, 6, 10, Math.PI), this.boneMat); rib.position.x = 2 - r * 0.7; rib.rotation.y = Math.PI / 2; g.add(rib); }
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.7, 7), this.boneMat); head.rotation.z = -Math.PI / 2; head.position.x = 3.0; g.add(head);
+    for (const sz of [-0.35, 0.35]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.17, 8, 8), new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff3010, emissiveIntensity: 1.8 }));
+      eye.position.set(2.9, 0.18, sz); g.add(eye); this._eyes.push(eye.material);
+    }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(1.1, 1.7, 4), this.boneMat); tail.rotation.z = Math.PI / 2; tail.position.x = -3.0; tail.scale.set(1, 1, 0.3); g.add(tail);
+    g.userData.noShadow = true; g.scale.setScalar(2.4);
+    return { group: g };
+  }
+  _buildBoneFish() {
+    this._fish = [];
+    const track = this.track, N = track.samplePos.length;
+    const spotsT = [0.05, 0.30, 0.52, 0.83];
+    spotsT.forEach((tt, k) => {
+      const i = Math.floor(tt * N) % N;
+      if (track.sampleBridge[i] || track.sampleGap[i]) return;
+      const side = (k % 2) ? 1 : -1;
+      const p = track.samplePos[i], lat = track.sampleLat[i], tan = track.sampleTan[i];
+      const off = (track.sampleHalf ? track.sampleHalf[i] : track.halfWidth) + APRON + 10;
+      const base = new THREE.Vector3(p.x + lat.x * off * side, LAVA_Y, p.z + lat.z * off * side);
+      const fish = this._makeBoneFish();
+      fish.group.position.copy(base); fish.group.visible = false;
+      this.group.add(fish.group);
+      this._fish.push({ group: fish.group, base, yaw: Math.atan2(tan.x, tan.z), period: 6, phase: k * 1.5, arc: 17 });
+    });
+  }
+
   // ---- 상승하는 불티(ember) 파티클 ----
   _buildEmbers() {
     const track = this.track;
@@ -459,12 +650,71 @@ export class CastleScenery {
     }
   }
 
-  update(dt) {
+  update(dt, karts, raceState) {
     this._t += dt;
     const t = this._t;
     // 용암 흐름 + 맥동 발광 (긴장감)
     if (this._lavaTex) this._lavaTex.offset.y = (this._lavaTex.offset.y - dt * 0.02) % 1;
     if (this._lavaMat) this._lavaMat.emissiveIntensity = 1.35 + 0.5 * Math.sin(t * 1.3);
+    if (this._riverTex) this._riverTex.offset.y = (this._riverTex.offset.y - dt * 0.28) % 1;
+    if (this._riverMat) this._riverMat.emissiveIntensity = 2.0 + 0.6 * Math.sin(t * 3.1);
+
+    // 하늘에서 떨어지는 불덩이(운석)
+    if (this._meteors) {
+      const _b = _p; // 재사용 벡터
+      for (const me of this._meteors) {
+        const local = (t + me.phase) % me.period;
+        if (local < me.travel) {
+          me.m.visible = true;
+          const pr = local / me.travel;
+          const e = pr * pr;                       // 가속 낙하
+          me.m.position.lerpVectors(me.start, me.target, e);
+          me.m.scale.setScalar(0.3 + e * 2.4);
+          _b.copy(me.start).sub(me.target).normalize();
+          me.m.quaternion.setFromUnitVectors(_up, _b); // 꼬리를 진행 반대(하늘쪽)로
+          me.light.position.copy(me.m.position); me.light.intensity = 6 + e * 22;
+          me.flash.material.opacity = 0;
+          // 착탄 근처에서 카트와 가까우면 스핀(피할 수 있게 좁은 판정)
+          if (pr > 0.82 && raceState === 'racing' && karts) {
+            for (const kt of karts) {
+              if (kt.airborne || kt.invincTimer > 0 || kt.bulletTimer > 0 || kt.lavaTimer > 0) continue;
+              if (kt.pos.distanceToSquared(me.target) < 22) kt.spinOut(1.0);
+            }
+          }
+        } else {
+          me.m.visible = false; me.light.intensity = 0;
+          const since = local - me.travel;          // 착탄 직후 플래시
+          if (since < 0.4) { me.flash.material.opacity = 0.85 * (1 - since / 0.4); me.flash.scale.setScalar(1 + since * 20); }
+          else me.flash.material.opacity = 0;
+        }
+      }
+    }
+    // 뼈 박쥐 비행 + 날갯짓
+    if (this._bats) {
+      for (const b of this._bats) {
+        const ang = b.ang0 + t * b.speed;
+        b.group.position.set(b.cx + Math.cos(ang) * b.radius, b.y + Math.sin(t * 1.4 + b.phase) * 4, b.cz + Math.sin(ang) * b.radius);
+        b.group.rotation.y = -ang + Math.PI / 2;
+        const flap = Math.sin(t * 8 + b.phase) * 0.7;
+        b.wings[0].rotation.z = flap; b.wings[1].rotation.z = -flap;
+      }
+    }
+    // 뼈 물고기 점프(아치)
+    if (this._fish) {
+      const jumpDur = 1.8;
+      for (const f of this._fish) {
+        const local = (t + f.phase) % f.period;
+        if (local < jumpDur) {
+          f.group.visible = true;
+          const pr = local / jumpDur;
+          const h = Math.sin(pr * Math.PI) * f.arc;
+          f.group.position.set(f.base.x, LAVA_Y + h, f.base.z);
+          f.group.rotation.set(0, f.yaw, Math.cos(pr * Math.PI) * 1.1); // 상승 머리↑ 하강 머리↓
+        } else {
+          f.group.visible = false;
+        }
+      }
+    }
     // 횃불 점멸
     for (let i = 0; i < this._flames.length; i++) {
       const f = this._flames[i];

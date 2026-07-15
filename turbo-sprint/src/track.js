@@ -43,6 +43,7 @@ export class Track {
     this._road = opts.road || DEFAULT_ROAD;
     this._variableWidth = opts.variableWidth !== false; // 기본 true(가변폭+분리대)
     this.bridges = opts.bridges || [];                  // [[t0,t1,반폭], ...] 좁은 다리(용암 추락)
+    this.gaps = opts.gaps || [];                        // [[t0,t1], ...] 도로 단절(용암 강) — 점프대로만 통과
     this.interior = opts.interior || null;              // [t0,t1] 성 내부 구간
     const pts = cps.map((p) => new THREE.Vector3(p[0] * scale, p[1], p[2] * scale));
     this.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
@@ -57,6 +58,7 @@ export class Track {
     this.sampleHalf = [];  // 가변 반폭 (2↔4차선)
     this.sampleMedian = []; // 중앙 분리대 존재 여부
     this.sampleBridge = []; // 좁은 다리(추락 가능) 여부
+    this.sampleGap = [];    // 도로 단절(용암 강) 여부 — 지면이면 추락
     this.maxHalf = HALF_W;
     let acc = 0;
     let prev = null;
@@ -77,6 +79,10 @@ export class Track {
       for (const b of this.bridges) {
         if (tt >= b[0] && tt <= b[1]) { half = b[2]; bridge = true; break; }
       }
+      let gap = false;
+      for (const gg of this.gaps) {
+        if (tt >= gg[0] && tt <= gg[1]) { gap = true; break; }
+      }
       this.samplePos.push(pos.clone());
       this.sampleTan.push(tan.clone());
       this.sampleLat.push(lat.clone());
@@ -85,6 +91,7 @@ export class Track {
       this.sampleHalf.push(half);
       this.sampleMedian.push(widen > 0.75);
       this.sampleBridge.push(bridge);
+      this.sampleGap.push(gap);
       if (half > this.maxHalf) this.maxHalf = half;
       prev = pos;
     }
@@ -159,12 +166,13 @@ export class Track {
       uvs[ui + 2] = 1; uvs[ui + 3] = vCoord;
     }
 
-    // 인덱스 (closed loop)
+    // 인덱스 (closed loop) — 용암 강(gap) 구간은 도로 면을 뚫어 아래 용암이 보이게
     const indices = [];
     for (let i = 0; i < N; i++) {
+      const next = (i + 1) % N;
+      if (this.sampleGap[i] || this.sampleGap[next]) continue; // 도로 단절(구멍)
       const a = i * 2;
       const b = i * 2 + 1;
-      const next = (i + 1) % N;
       const c = next * 2;
       const dd = next * 2 + 1;
       indices.push(a, b, c);
@@ -292,6 +300,7 @@ export class Track {
     out.half = hw;
     out.median = this.sampleMedian[i];
     out.bridge = this.sampleBridge[i];
+    out.gap = this.sampleGap[i];
     out.onRoad = Math.abs(lateral) <= hw + 0.5;
     return out;
   }

@@ -382,11 +382,11 @@ export class Kart {
     this._syncMesh();
   }
 
-  // 용암 추락 시작 (좁은 다리 이탈) — 가라앉은 뒤 시간이 걸려 복구
+  // 용암 추락 시작 (좁은 다리 이탈 · 용암 강) — 가라앉은 뒤 시간이 걸려 복구
   _startLavaFall() {
     if (this.lavaTimer > 0) return;
-    this.lavaTimer = 2.6;           // 복구까지 페널티 시간
-    this._lavaIdx = this.idx;       // 복귀 지점(다리 중앙)
+    this.lavaTimer = 2.6;                              // 복구까지 페널티 시간
+    this._lavaIdx = this._safeIdx != null ? this._safeIdx : this.idx; // 마지막 안전 지점으로 복귀
     this._sinkY = this.pos.y - 5;
     this.speed = 0; this.boostTimer = 0; this.invincTimer = 0;
     this.drifting = false; this.driftYaw = 0; this.airborne = false;
@@ -650,10 +650,19 @@ export class Kart {
       this.vertVel -= PHYS.gravity * dt;
       this.pos.y += this.vertVel * dt;
       if (this.pos.y <= g.height + 0.1 && this.vertVel <= 0) {
-        this.pos.y = g.height + 0.1;
-        this.airborne = false; this.vertVel = 0;
-        if (this._landBoost) { this.giveBoost(this._landBoost); this._landBoost = 0; }
+        if (g.gap) {
+          // 용암 강 위로 착지 → 추락 (점프대를 못 넘긴 것)
+          this._startLavaFall();
+        } else {
+          this.pos.y = g.height + 0.1;
+          this.airborne = false; this.vertVel = 0;
+          if (this._landBoost) { this.giveBoost(this._landBoost); this._landBoost = 0; }
+        }
       }
+      this.onGrass = false;
+    } else if (g.gap) {
+      // 용암 강(도로 단절)에 지면으로 진입 → 추락. 점프대로만 통과 가능
+      this._startLavaFall();
       this.onGrass = false;
     } else {
       this.pos.y = THREE.MathUtils.lerp(this.pos.y, g.height + 0.1, 0.5);
@@ -683,6 +692,8 @@ export class Kart {
             this.pos.addScaledVector(g.lat, -Math.sign(g.lateral) * push);
           }
         }
+        // 안전 지점 기록(도로 중앙 근처, 단절/다리이탈 아님) → 추락 복귀 지점
+        if (g.onRoad && !g.gap && Math.abs(g.lateral) < g.half - 1.5) this._safeIdx = g.idx;
       }
     }
     // forward를 도로 접선 평면에 재투영 (경사 대응)

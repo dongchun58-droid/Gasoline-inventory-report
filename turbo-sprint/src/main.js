@@ -544,7 +544,7 @@ function frame(nowMs) {
     features.update(dt, karts);
     obstacles.update(dt, karts);
   }
-  scenery.update(dt);
+  scenery.update(dt, karts, raceState);
 
   // 카메라 (피니시 시 줌 연출)
   if (raceState === 'finished') chase.updateFinish(player, dt);
