@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { N8AOPass } from 'n8ao';
 import { Input } from './input.js';
 import { Track } from './track.js';
-import { Kart, PHYS, VEHICLES, VEHICLE_ORDER } from './kart.js';
+import { Kart, PHYS, VEHICLES, VEHICLE_ORDER, CHARACTERS, CHARACTER_ORDER } from './kart.js';
 import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
 import { MAPS, MAP_ORDER } from './maps.js';
@@ -179,10 +179,10 @@ composer.addPass(new OutputPass());
 // ---------- 카트 라인업 ----------
 const LAPS = 3;
 const LINEUP = [
-  { color: 0x2e6bff, name: 'YOU',     lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart' },
-  { color: 0xff3b3b, name: 'CRIMSON', lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports' },
-  { color: 0x18c2c2, name: 'TEAL',    lane: 0,  gLat: -3.5, gBack: 12, ai: true,  type: 'bike' },
-  { color: 0xffc233, name: 'GOLD',    lane: 3,  gLat: 3.5,  gBack: 12, ai: true,  type: 'truck' },
+  { color: 0x2e6bff, name: 'YOU',     lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart',   character: 'cool' },
+  { color: 0xff3b3b, name: 'CRIMSON', lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports', character: 'hulk' },
+  { color: 0x18c2c2, name: 'TEAL',    lane: 0,  gLat: -3.5, gBack: 12, ai: true,  type: 'bike',   character: 'princess' },
+  { color: 0xffc233, name: 'GOLD',    lane: 3,  gLat: 3.5,  gBack: 12, ai: true,  type: 'truck',  character: 'bearded' },
 ];
 const karts = [];
 const ais = [];
@@ -296,7 +296,7 @@ function buildWorld(key) {
 // 초기 월드 생성 → 카트 생성 (트랙 참조 필요)
 buildWorld(currentMapKey);
 for (const spec of LINEUP) {
-  const k = new Kart(track, spec.color, gradientMap, spec.type);
+  const k = new Kart(track, spec.color, gradientMap, spec.type, spec.character);
   k.name = spec.name;
   k.isAI = spec.ai;
   k.gridLat = spec.gLat; k.gridBack = spec.gBack;
@@ -497,23 +497,53 @@ function setupVehicleSelect() {
       `</div>`;
   }).join('');
   cont.querySelectorAll('.vcard').forEach((card) => {
-    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectVehicle(card.dataset.type); showStep(2); });
+    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectVehicle(card.dataset.type); showStep(3); });
   });
 }
 
-// 시작 화면 단계 전환 (1: 차량 / 2: 맵+시작)
+// 시작 화면 단계 전환 (1: 캐릭터 / 2: 차량 / 3: 맵+시작)
+let curStep = 1;
 function showStep(n) {
-  document.getElementById('step1')?.classList.toggle('on', n === 1);
-  document.getElementById('step2')?.classList.toggle('on', n === 2);
-  document.getElementById('btnBack')?.classList.toggle('on', n === 2);
+  curStep = n;
+  for (let i = 1; i <= 3; i++) document.getElementById('step' + i)?.classList.toggle('on', n === i);
+  document.getElementById('btnBack')?.classList.toggle('on', n > 1);
 }
-document.getElementById('btnBack')?.addEventListener('pointerdown', (e) => { e.preventDefault(); showStep(1); });
+document.getElementById('btnBack')?.addEventListener('pointerdown', (e) => { e.preventDefault(); showStep(Math.max(1, curStep - 1)); });
+
+// ---------- 캐릭터 선택 UI ----------
+function setupCharacterSelect() {
+  const cont = document.getElementById('characterSelect');
+  if (!cont) return;
+  cont.innerHTML = CHARACTER_ORDER.map((c) => {
+    const ch = CHARACTERS[c];
+    return `<div class="ccard${c === player.character ? ' sel' : ''}" data-char="${c}">` +
+      `<div class="cface" style="background:#${ch.skin.toString(16).padStart(6, '0')}"></div>` +
+      `<div class="cname">${ch.name}</div></div>`;
+  }).join('');
+  cont.querySelectorAll('.ccard').forEach((card) => {
+    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectCharacter(card.dataset.char); showStep(2); });
+  });
+}
+function selectCharacter(character) {
+  if (!CHARACTERS[character]) return;
+  if (character !== player.character) {
+    const old = player.setCharacter(character);
+    scene.remove(old); scene.add(player.model);
+    enableShadows(player.model);
+    player.resetToStart(player.gridLat, player.gridBack);
+  }
+  document.querySelectorAll('#characterSelect .ccard').forEach((c) => c.classList.toggle('sel', c.dataset.char === character));
+}
+setupCharacterSelect();
+
 function selectVehicle(type) {
-  if (!VEHICLES[type] || type === player.type) return;
-  const old = player.setType(type);
-  scene.remove(old); scene.add(player.model);
-  enableShadows(player.model);
-  player.resetToStart(player.gridLat, player.gridBack);
+  if (!VEHICLES[type]) return;
+  if (type !== player.type) {
+    const old = player.setType(type);
+    scene.remove(old); scene.add(player.model);
+    enableShadows(player.model);
+    player.resetToStart(player.gridLat, player.gridBack);
+  }
   document.querySelectorAll('#vehicleSelect .vcard').forEach((c) => c.classList.toggle('sel', c.dataset.type === type));
 }
 setupVehicleSelect();

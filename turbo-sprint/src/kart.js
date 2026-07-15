@@ -33,8 +33,124 @@ export const VEHICLES = {
 };
 export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
 
+// 선택 가능한 드라이버 캐릭터 (오리지널 카툰 — 특정 IP 아님)
+export const CHARACTERS = {
+  hulk:    { name: 'SMASHER', skin: 0x63b84a, outfit: 0x2e2350 },  // 초록 근육맨
+  princess:{ name: 'PRINCESS', skin: 0xffd8b8, outfit: 0xff6fae }, // 왕관 공주
+  cool:    { name: 'COOL GUY', skin: 0xf0c096, outfit: 0x24242c }, // 썬글라스 미남
+  bearded: { name: 'BIG BOSS', skin: 0xeab98c, outfit: 0x7a4a24 }, // 빡빡머리 털보
+};
+export const CHARACTER_ORDER = ['hulk', 'princess', 'cool', 'bearded'];
+
+// 드라이버(캐릭터) 모델 — 큰 머리 카툰 스타일, 캐릭터별 헤어/액세서리
+function buildDriver(character, teamColor) {
+  const C = CHARACTERS[character] || CHARACTERS.cool;
+  const M = (c, em = 0x000000, ei = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.0, emissive: em, emissiveIntensity: ei });
+  const driver = new THREE.Group();
+  const skin = C.skin, outfit = C.outfit;
+  const big = character === 'hulk';
+
+  // 몸통 (헐크는 넓고 우람하게)
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(big ? 0.34 : 0.25, 0.16, 4, 10), M(outfit));
+  torso.position.set(0, 0.3, 0); driver.add(torso);
+  // 팀 컬러 목도리(팀 식별용)
+  const collar = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.33 : 0.24, 12, 10), M(teamColor));
+  collar.scale.set(1, 0.5, 0.95); collar.position.set(0, 0.46, 0); driver.add(collar);
+  // 팔 + 핸들 잡은 손
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(big ? 0.11 : 0.08, 0.24, 4, 8), M(outfit));
+    arm.position.set(sx * (big ? 0.3 : 0.24), 0.32, 0.28); arm.rotation.x = 0.9; driver.add(arm);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(big ? 0.12 : 0.1, 10, 8), M(skin));
+    hand.position.set(sx * 0.19, 0.2, 0.52); driver.add(hand);
+  }
+  // 스티어링 휠
+  const steer = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 16), M(0x222230));
+  steer.position.set(0, 0.2, 0.55); steer.rotation.x = 1.1; driver.add(steer);
+
+  // 머리 그룹 (기울임 카운터용) — 얼굴은 +Z를 향함
+  const head = new THREE.Group();
+  head.position.set(0, 0.86, 0.03);
+  driver.add(head);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 16), M(skin));
+  if (big) skull.scale.set(1.08, 0.98, 1.0);
+  head.add(skull);
+
+  // --- 공통 눈 헬퍼 ---
+  const addEyes = (pupilY = 0.04) => {
+    for (const sx of [-0.15, 0.15]) {
+      const w = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), M(0xffffff));
+      w.scale.set(0.85, 1.05, 0.55); w.position.set(sx, 0.04, 0.27); head.add(w);
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), M(0x201828));
+      p.position.set(sx, pupilY - 0.01, 0.34); head.add(p);
+      const g = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), M(0xffffff, 0xffffff, 1.2));
+      g.position.set(sx + 0.02, 0.07, 0.39); head.add(g);
+    }
+  };
+  const addBrows = (col, angry) => {
+    for (const sx of [-1, 1]) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.045, 0.05), M(col));
+      b.position.set(sx * 0.15, 0.19, 0.36); b.rotation.z = sx * (angry ? 0.5 : 0.12); head.add(b);
+    }
+  };
+  const addNose = () => {
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), M(skin === 0x63b84a ? 0x4e9c39 : 0xe0a878));
+    n.position.set(0, -0.04, 0.4); head.add(n);
+  };
+
+  if (character === 'hulk') {
+    addEyes(0.02); addBrows(0x223018, true); addNose();
+    // 성난 이빨 문 입 (그르렁)
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.09, 0.05), M(0x2a1414)); mouth.position.set(0, -0.17, 0.38); head.add(mouth);
+    for (let x = -0.08; x <= 0.08; x += 0.08) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.06, 0.04), M(0xffffff)); t.position.set(x, -0.15, 0.4); head.add(t); }
+    // 귀
+    for (const sx of [-1, 1]) { const ear = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), M(skin)); ear.position.set(sx * 0.4, 0, 0.02); head.add(ear); }
+  } else if (character === 'princess') {
+    // 긴 금발 (뒤통수 + 양갈래 + 앞머리)
+    const gold = 0xffe07a;
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.44, 16, 14), M(gold)); back.scale.set(1, 1.05, 0.9); back.position.set(0, 0.02, -0.12); head.add(back);
+    for (const sx of [-1, 1]) { const lock = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.3, 4, 8), M(gold)); lock.position.set(sx * 0.34, -0.12, -0.02); head.add(lock); }
+    const bang = new THREE.Mesh(new THREE.SphereGeometry(0.41, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), M(gold)); bang.position.set(0, 0.12, 0.06); head.add(bang);
+    addEyes(0.03); addNose();
+    // 속눈썹
+    for (const sx of [-0.15, 0.15]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.03, 0.04), M(0x201018)); l.position.set(sx, 0.11, 0.35); l.rotation.z = sx > 0 ? -0.2 : 0.2; head.add(l); }
+    // 볼 홍조
+    for (const sx of [-0.26, 0.26]) { const ch = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), M(0xffa9c7)); ch.scale.set(1, 0.7, 0.4); ch.position.set(sx, -0.1, 0.28); head.add(ch); }
+    // 미소
+    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.018, 8, 14, Math.PI), M(0xd05a72)); smile.position.set(0, -0.14, 0.38); smile.rotation.z = Math.PI; head.add(smile);
+    // 금관 (티아라)
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 8, 20, Math.PI), M(0xffd23c, 0xffb000, 0.4)); band.position.set(0, 0.3, 0.05); band.rotation.x = 0.3; head.add(band);
+    for (const dx of [-0.16, 0, 0.16]) { const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.14, 6), M(0xffd23c, 0xffb000, 0.4)); spike.position.set(dx, 0.42 - Math.abs(dx) * 0.3, 0.02); head.add(spike); const gem = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), M(0xff4f7f, 0xff2f5f, 0.6)); gem.position.set(dx, 0.48 - Math.abs(dx) * 0.3, 0.02); head.add(gem); }
+  } else if (character === 'cool') {
+    // 갈색 스웹트 헤어
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55), M(0x4a3320)); hair.position.set(0, 0.1, -0.02); hair.rotation.x = -0.15; head.add(hair);
+    const bang = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.16), M(0x4a3320)); bang.position.set(0.08, 0.22, 0.3); bang.rotation.z = 0.25; head.add(bang);
+    addNose();
+    // 썬글라스 (검정 렌즈 2 + 브릿지 + 다리)
+    for (const sx of [-0.15, 0.15]) { const lens = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.05), M(0x0a0a10, 0x101018, 0.4)); lens.position.set(sx, 0.05, 0.37); head.add(lens); }
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.04), M(0x1a1a22)); bridge.position.set(0, 0.06, 0.38); head.add(bridge);
+    for (const sx of [-1, 1]) { const temple = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.04), M(0x1a1a22)); temple.position.set(sx * 0.28, 0.07, 0.28); head.add(temple); }
+    // 여유로운 미소
+    const smirk = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.018, 8, 14, Math.PI), M(0xc86a58)); smirk.position.set(0, -0.16, 0.37); smirk.rotation.z = Math.PI - 0.3; head.add(smirk);
+  } else { // bearded — 빡빡머리 털보
+    addEyes(0.03); addBrows(0x3a2a1a, false); addNose();
+    // 큰 수염 (턱·볼 감싸기)
+    const beardCol = 0x5a3d24;
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 14), M(beardCol)); beard.scale.set(1.02, 0.85, 0.7); beard.position.set(0, -0.24, 0.16); head.add(beard);
+    for (const sx of [-1, 1]) { const side = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.24, 4, 8), M(beardCol)); side.position.set(sx * 0.34, -0.08, 0.14); head.add(side); }
+    // 콧수염
+    const mus = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.06, 0.06), M(beardCol)); mus.position.set(0, -0.1, 0.38); head.add(mus);
+    // 살짝 보이는 입
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.04), M(0x7a2a2a)); mouth.position.set(0, -0.16, 0.37); head.add(mouth);
+    // 반짝이는 대머리 하이라이트
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), M(0xffffff, 0xffffff, 0.25)); shine.scale.set(1, 0.5, 0.4); shine.position.set(-0.1, 0.28, 0.18); head.add(shine);
+  }
+
+  driver.userData.head = head;
+  return driver;
+}
+
 // 프로시저럴 차량 모델 (종류별 바디 + 공용 드라이버/휠)
-export function buildKartModel(color, gradientMap, type = 'kart') {
+export function buildKartModel(color, gradientMap, type = 'kart', character = 'cool') {
   const g = new THREE.Group();
   // 사실적 PBR(도장 금속 느낌) — 차량은 셀셰이딩 대신 표준 재질
   const toon = (c, emissive = 0x000000, emIntensity = 0) =>
@@ -141,14 +257,19 @@ export function buildKartModel(color, gradientMap, type = 'kart') {
     const whiteLite = toon(0x222018, 0xfff2c8, 1.3);
     // 하부 섀시
     const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.55, 3.4), clad); chassis.position.set(0, 0.55, -0.05); g.add(chassis);
-    // 캡(운전실) + 지붕
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.9, 1.55), bodyCol); cab.position.set(0, 1.2, 0.75); g.add(cab);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.14, 1.4), bodyCol); roof.position.set(0, 1.68, 0.75); g.add(roof);
-    // 캡 유리 (뒷유리 + 옆유리)
-    const rg = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 0.06), glassMat()); rg.position.set(0, 1.42, 0.02); g.add(rg);
-    for (const sx of [-0.97, 0.97]) { const sg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 1.15), glassMat()); sg.position.set(sx, 1.4, 0.8); g.add(sg); }
-    // 루프 레일 (크롬)
-    for (const sx of [-0.62, 0.62]) { const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.35, 8), chromeMat()); rail.rotation.x = Math.PI / 2; rail.position.set(sx, 1.78, 0.75); g.add(rail); }
+    // 오픈탑 운전실 — 천장을 뚫어 운전자가 보이는 컨버터블/버기 스타일
+    // 낮은 도어/대시 라인까지만 벽을 세우고 위는 개방
+    const cabBase = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.5, 1.55), bodyCol); cabBase.position.set(0, 1.0, 0.75); g.add(cabBase);
+    // 좌석 파묻힘 방지용 안쪽 어두운 실내(대비)
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 1.3), clad); inner.position.set(0, 1.12, 0.75); g.add(inner);
+    // 앞유리 프레임 + 윈드실드(경사)
+    const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.5, 0.05), glassMat()); windshield.position.set(0, 1.5, 1.46); windshield.rotation.x = -0.32; g.add(windshield);
+    for (const sx of [-0.84, 0.84]) { const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.62, 0.09), clad); pillar.position.set(sx, 1.48, 1.42); pillar.rotation.x = -0.28; g.add(pillar); }
+    // 뒤쪽 롤바(크롬 아치) — 천장 대신 안전바
+    const roll = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.06, 8, 18, Math.PI), chromeMat()); roll.position.set(0, 1.02, 0.1); g.add(roll);
+    for (const sx of [-0.62, 0.62]) { const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8), chromeMat()); brace.position.set(sx, 1.2, 0.0); brace.rotation.x = 0.5; g.add(brace); }
+    // 도어 상단 트림(팀 도색)
+    for (const sx of [-0.95, 0.95]) { const trim = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 1.5), chromeMat()); trim.position.set(sx, 1.26, 0.78); g.add(trim); }
     // 오픈 적재함: 바닥 + 측벽2 + 앞벽 + 테일게이트
     const bedFloor = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.14, 1.8), clad); bedFloor.position.set(0, 0.98, -0.9); g.add(bedFloor);
     for (const sx of [-0.88, 0.88]) { const wall = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.52, 1.8), bodyCol); wall.position.set(sx, 1.25, -0.9); g.add(wall); }
@@ -168,7 +289,7 @@ export function buildKartModel(color, gradientMap, type = 'kart') {
     wheelSpec = [[-1.0, 0.55, 1.15, true, 0.58], [1.0, 0.55, 1.15, true, 0.58], [-1.0, 0.55, -1.05, false, 0.58], [1.0, 0.55, -1.05, false, 0.58]];
     // 휠아치(펜더)
     for (const [x, , z] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.14, 6, 12, Math.PI), clad); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.62, z); g.add(arch); }
-    driverY = 0.86; driverScale = 0.78; driverZ = 0.7;
+    driverY = 1.0; driverScale = 0.82; driverZ = 0.7;
   } else {
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), carPaint(color)); body.position.y = 0.45; g.add(body);
     const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), carPaint(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
@@ -178,90 +299,13 @@ export function buildKartModel(color, gradientMap, type = 'kart') {
     wheelSpec = [[-0.82, 0.34, 1.0, true, 0.34], [0.82, 0.34, 1.0, true, 0.34], [-0.82, 0.34, -0.95, false, 0.34], [0.82, 0.34, -0.95, false, 0.34]];
   }
 
-  // --- 귀여운 카툰 아기 드라이버 (큰 머리·볼·눈 / 오리지널) ---
-  const driver = new THREE.Group();
+  // --- 드라이버(선택 캐릭터) ---
+  const driver = buildDriver(character, color);
   driver.position.set(0, driverY, driverZ);
   driver.scale.setScalar(driverScale);
-  const skin = 0xffd8b8;      // 아기 피부톤
-  const romper = color;       // 팀 컬러 우주복
-  const shirt = 0xfff4e6;     // 크림색
-
-  // 몸통 (작고 통통한 우주복)
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.14, 4, 10), toon(romper));
-  torso.position.set(0, 0.3, 0);
-  driver.add(torso);
-  const collar = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), toon(shirt));
-  collar.scale.set(1, 0.5, 0.95);
-  collar.position.set(0, 0.46, 0);
-  driver.add(collar);
-
-  // 큰 머리
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 16), toon(skin));
-  head.position.set(0, 0.86, 0.03);
-  driver.add(head);
-  // 배냇머리 한 가닥 (곱슬 컬)
-  const curl = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.022, 8, 14, Math.PI * 1.6), toon(0x6b4a2a));
-  curl.position.set(0, 1.22, 0.05);
-  curl.rotation.z = 0.4;
-  driver.add(curl);
-  // 큰 눈 (흰자 + 큰 눈동자 + 반짝 하이라이트)
-  for (const sx of [-0.15, 0.15]) {
-    const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), toon(0xffffff));
-    eyeW.scale.set(0.85, 1.05, 0.55);
-    eyeW.position.set(sx, 0.9, 0.3);
-    driver.add(eyeW);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 8), toon(0x201828));
-    pupil.position.set(sx, 0.89, 0.37);
-    driver.add(pupil);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), toon(0xffffff, 0xffffff, 1.2));
-    glint.position.set(sx + 0.02, 0.93, 0.42);
-    driver.add(glint);
-  }
-  // 통통 볼
-  for (const sx of [-0.26, 0.26]) {
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(0xffa9c7));
-    cheek.scale.set(1, 0.8, 0.5);
-    cheek.position.set(sx, 0.76, 0.26);
-    driver.add(cheek);
-  }
-  // 작은 코
-  const noseFace = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), toon(0xffc59e));
-  noseFace.position.set(0, 0.82, 0.4);
-  driver.add(noseFace);
-  // 쪽쪽이(공갈젖꼭지)
-  const paci = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.02, 8, 14), toon(0xff8fb0, 0xff8fb0, 0.2));
-  paci.position.set(0, 0.7, 0.4);
-  driver.add(paci);
-  const paciNub = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), toon(0xffe08a));
-  paciNub.position.set(0, 0.7, 0.36);
-  driver.add(paciNub);
-  // 팀 컬러 보닛(작은 모자, 뒤통수쪽)
-  const bonnet = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.42), toon(color));
-  bonnet.position.set(0, 0.92, -0.02);
-  driver.add(bonnet);
-  const pom = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), toon(0xffffff));
-  pom.position.set(0, 1.24, -0.05);
-  driver.add(pom);
-
-  // 팔 + 핸들 잡은 손 (통통)
-  for (const sx of [-0.24, 0.24]) {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.24, 4, 8), toon(romper));
-    arm.position.set(sx, 0.32, 0.28);
-    arm.rotation.x = 0.9;
-    driver.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(skin));
-    hand.position.set(sx * 0.75, 0.2, 0.52);
-    driver.add(hand);
-  }
-  // 스티어링 휠
-  const steerWheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.035, 8, 16), toon(0x222230));
-  steerWheel.position.set(0, 0.2, 0.55);
-  steerWheel.rotation.x = 1.1;
-  driver.add(steerWheel);
-
   g.add(driver);
   g.userData.driver = driver;
-  g.userData.head = head;
+  g.userData.head = driver.userData.head;
 
   // 휠 (종류별 스펙) — 조향/서스펜션/회전 반영. 고무: 무광(roughness 0.95)
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111119, roughness: 0.95, metalness: 0.0 });
@@ -381,14 +425,15 @@ function makeBlobShadow() {
 }
 
 export class Kart {
-  constructor(track, color, gradientMap, type = 'kart') {
+  constructor(track, color, gradientMap, type = 'kart', character = 'cool') {
     this.track = track;
     this.color = color;
     this._gm = gradientMap;
     this.type = type;
+    this.character = character;
     this.stats = VEHICLES[type] || VEHICLES.kart;
 
-    this.model = buildKartModel(color, gradientMap, type);
+    this.model = buildKartModel(color, gradientMap, type, character);
     this.shadow = makeBlobShadow();
 
     // 충돌 넉백
@@ -496,7 +541,17 @@ export class Kart {
     const old = this.model;
     this.type = type;
     this.stats = VEHICLES[type] || VEHICLES.kart;
-    this.model = buildKartModel(this.color, this._gm, type);
+    this.model = buildKartModel(this.color, this._gm, type, this.character);
+    this._bmShown = undefined;
+    this._syncMesh();
+    return old;
+  }
+
+  // 캐릭터 변경(모델 재생성). 이전 모델을 반환 → 호출자가 씬에서 교체.
+  setCharacter(character) {
+    const old = this.model;
+    this.character = character;
+    this.model = buildKartModel(this.color, this._gm, this.type, character);
     this._bmShown = undefined;
     this._syncMesh();
     return old;

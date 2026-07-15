@@ -98,6 +98,17 @@
     /* 차량 카드 (가로 한 줄) */
     #vehicleSelect { display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
       max-width: 100%; overflow-x: auto; padding-bottom: 4px; }
+    #characterSelect { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+      max-width: 100%; padding-bottom: 4px; margin-bottom: 6px; }
+    .ccard {
+      pointer-events: auto; cursor: pointer; width: 108px; flex: 0 0 auto; padding: 10px 9px;
+      background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
+      border-radius: 14px; color: #fff; transition: transform .1s, border-color .1s; text-align: center;
+    }
+    .ccard.sel { border-color: #ffd23f; background: rgba(255,210,63,.18); transform: translateY(-4px); }
+    .ccard .cface { width: 54px; height: 54px; border-radius: 50%; margin: 2px auto 8px;
+      border: 3px solid rgba(255,255,255,.5); box-shadow: inset -4px -6px 10px rgba(0,0,0,.35); }
+    .ccard .cname { font-size: 13px; font-weight: 900; letter-spacing: .3px; }
     .vcard {
       pointer-events: auto; cursor: pointer; width: 126px; flex: 0 0 auto; padding: 10px 9px;
       background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
@@ -239,15 +250,21 @@
     <button id="btnBack">‹ 뒤로</button>
     <div class="sbox">
       <div id="sTitle">TURBO SPRINT</div>
-      <!-- 1단계: 차량 선택 -->
+      <!-- 1단계: 캐릭터 선택 -->
       <div id="step1" class="step on">
-        <div id="sSub">① 차량을 선택하세요</div>
+        <div id="sSub">① 캐릭터를 선택하세요</div>
+        <div id="characterSelect"></div>
+        <div class="vhint">캐릭터를 탭하면 차량 선택으로 넘어갑니다 →</div>
+      </div>
+      <!-- 2단계: 차량 선택 -->
+      <div id="step2" class="step">
+        <div class="sSub2">② 차량을 선택하세요</div>
         <div id="vehicleSelect"></div>
         <div class="vhint">차량을 탭하면 맵 선택으로 넘어갑니다 →</div>
       </div>
-      <!-- 2단계: 맵 선택 + 시작 -->
-      <div id="step2" class="step">
-        <div class="sSub2">② 맵을 선택하세요</div>
+      <!-- 3단계: 맵 선택 + 시작 -->
+      <div id="step3" class="step">
+        <div class="sSub2">③ 맵을 선택하세요</div>
         <div id="mapSelect"></div>
         <button id="btnStart" class="startbtn">START ▶</button>
       </div>
