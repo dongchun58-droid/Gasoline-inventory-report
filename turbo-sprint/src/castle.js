@@ -537,9 +537,9 @@ export class CastleScenery {
     this.group.add(skull);
     this._skullPos = s.pos.clone();               // 카트 근접 판정용
 
-    // 해골 전용 조명(어두운 성에서도 또렷하게)
+    // 해골 전용 조명(어두운 성에서도 또렷하게 — HDRI 도입 후 과노출 방지 위해 약하게)
     for (const sx of [-1, 1]) {
-      const lamp = new THREE.PointLight(0xffd0a0, 40, 90, 2);
+      const lamp = new THREE.PointLight(0xffd0a0, 12, 80, 2);
       lamp.castShadow = false;
       lamp.position.copy(s.pos).addScaledVector(s.lat, sx * (hw + 6)).addScaledVector(s.up, 10).addScaledVector(s.tan, -8);
       this.group.add(lamp);

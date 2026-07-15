@@ -62,7 +62,7 @@ export class Features {
     this._orient(mesh, i0, 0.06);
     // 바닥 발광 패널 (도로와 구분되는 밝은 네온 스트립)
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(width, lengthM),
-      new THREE.MeshBasicMaterial({ color: this.pad.boost, transparent: true, opacity: 0.72, toneMapped: false, depthWrite: false }));
+      new THREE.MeshBasicMaterial({ color: this.pad.boost, transparent: true, opacity: 0.5, toneMapped: false, depthWrite: false }));
     this._orient(glow, i0, 0.04);
     this.group.add(glow, mesh);
     this.boostPads.push({ i0, half: Math.round((lengthM / 2) / perSample), width: width / 2, tex });

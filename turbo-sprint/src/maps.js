@@ -26,6 +26,10 @@ export const MAPS = {
     road: { asphalt: '#2A2440', center: '#00E5FF', curbA: '#FF3355', curbB: '#dfe4ea', median1: 0xffd23f, median2: 0x2a2a32 },
     sky: { stops: [[0, '#1560D8'], [0.42, '#3D9BFF'], [0.72, '#8FD6FF'], [0.9, '#CFF0FF'], [1, '#F2FCFF']], sun: 0xfff6d0, sunPos: [-180, 190, -430] },
     env: [[0, '#1E6FE0'], [0.5, '#8fd0ff'], [0.6, '#eaf9ff'], [0.61, '#6fc45a'], [1, '#3f8e3a']],
+    // Phase 7 Step 1: 주간 HDRI를 간접광·반사로만 사용 (배경은 Astro 톤 하늘 유지)
+    hdri: 'assets/env/quarry_01_1k.hdr',
+    hdriBackground: false,
+    envIntensity: 0.5,
     fog: { color: 0xd8f2ff, near: 320, far: 1000 },
     sun: { color: 0xfff2d0, intensity: 2.4, dir: [0.5, 0.95, 0.35] },
     hemi: { sky: 0xbfe6ff, ground: 0x7fd06a, intensity: 1.15 },
@@ -68,12 +72,21 @@ export const MAPS = {
     road: { asphalt: '#231a20', center: '#ff6a2a', curbA: '#ff3311', curbB: '#160c10', median1: 0x5a3020, median2: 0x1a0e0c },
     sky: { stops: [[0, '#120609'], [0.45, '#3a0d12'], [0.72, '#701d18'], [0.88, '#a83a1e'], [1, '#d66a2a']], sun: 0xff7b30, sunPos: [-150, 130, -420], dim: true },
     env: [[0, '#1a0a10'], [0.55, '#5a1820'], [0.6, '#a83a1e'], [0.62, '#3a1008'], [1, '#120604']],
-    fog: { color: 0x1a0a0e, near: 90, far: 560 },
-    sun: { color: 0xff9a5a, intensity: 1.4, dir: [0.3, 0.9, -0.35] },
-    hemi: { sky: 0x6a3038, ground: 0x24100e, intensity: 0.78 },
-    ambient: 0.22,
-    bloom: 0.95,
-    bloomThreshold: 0.72,
-    exposure: 1.02,
+    // Phase 7 Step 1: 노을 HDRI를 간접광·반사(IBL)로만 사용 (CC0, ASSETS.md)
+    // 배경까지 사진으로 바꾸면 실사 속 건물/해변이 마왕성 세계관과 충돌 →
+    // 배경은 스타일라이즈드 하늘 유지(hdriBackground: false)
+    hdri: 'assets/env/venice_sunset_1k.hdr',
+    hdriBackground: false,
+    envIntensity: 0.55,
+    // 안개: 지평선(어두운 노을) 톤과 일치
+    fog: { color: 0x2a120c, near: 100, far: 620 },
+    // IBL이 간접광 공급 → 채움광 낮춤, 태양은 노을색
+    sun: { color: 0xff8850, intensity: 2.0, dir: [0.3, 0.9, -0.35] },
+    hemi: { sky: 0x6a3038, ground: 0x24100e, intensity: 0.45 },
+    ambient: 0.1,
+    // 과노출 정리: "빛나되 형태가 보이게"
+    bloom: 0.45,
+    bloomThreshold: 0.95,
+    exposure: 1.06,
   },
 };

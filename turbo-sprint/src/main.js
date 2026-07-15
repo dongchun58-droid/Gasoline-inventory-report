@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Input } from './input.js';
 import { Track } from './track.js';
 import { Kart, PHYS, VEHICLES, VEHICLE_ORDER } from './kart.js';
@@ -114,9 +115,10 @@ sun.position.set(-60, 90, -40);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.near = 1; sun.shadow.camera.far = 260;
-sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
-sun.shadow.bias = -0.0004;
+sun.shadow.camera.left = -45; sun.shadow.camera.right = 45;
+sun.shadow.camera.top = 45; sun.shadow.camera.bottom = -45;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.95, 0.35).normalize();
 const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x7fd06a, 1.15);
@@ -151,6 +153,38 @@ let hud;
 let track, itemSystem, obstacles, features, scenery, sky, envTex;
 let currentMapKey = 'meadow';
 
+// ---------- HDRI 환경(IBL) — Phase 7 Step 1 ----------
+// CC0 HDRI (three.js 저장소에 미러된 Poly Haven/HDRI Haven 에셋) — ASSETS.md 참조
+const hdrCache = {};        // mapKey -> { bg: Texture, env: PMREM Texture } (세션 캐시)
+let envIsCached = false;    // 현재 scene.environment가 캐시 소유인지 (dispose 방지)
+function applyHdri(map) {
+  const key = map.key;
+  const apply = (entry) => {
+    if (currentMapKey !== key) return;             // 로딩 중 맵이 바뀐 경우 무시
+    if (scene.environment && !envIsCached) scene.environment.dispose();
+    scene.environment = entry.env;                 // 간접광(IBL) + 반사
+    scene.environmentIntensity = map.envIntensity != null ? map.envIntensity : 1;
+    envIsCached = true;
+    // 사진을 배경으로도 쓸지는 맵별 선택 — 실사 사진 속 건물 등이
+    // 판타지 세계관과 충돌하면 배경은 스타일라이즈드 하늘 유지
+    if (map.hdriBackground) {
+      scene.background = entry.bg;
+      scene.backgroundIntensity = map.bgIntensity != null ? map.bgIntensity : 1;
+      if (sky) sky.visible = false;
+    }
+  };
+  if (hdrCache[key]) { apply(hdrCache[key]); return; }
+  const url = import.meta.env.BASE_URL + map.hdri;
+  new RGBELoader().load(url, (hdr) => {
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    const env = pmrem.fromEquirectangular(hdr).texture;
+    hdrCache[key] = { bg: hdr, env };
+    apply(hdrCache[key]);
+  }, undefined, (err) => {
+    console.warn('[hdri] load failed:', url, err); // 실패 시 절차적 하늘 유지(폴백)
+  });
+}
+
 // 지오메트리/머티리얼만 해제 (텍스처는 공유될 수 있어 해제하지 않음 — 맵 전환은 드묾)
 function disposeGroup(root) {
   root.traverse((o) => {
@@ -169,12 +203,17 @@ function buildWorld(key) {
     disposeGroup(track.group); disposeGroup(itemSystem.group); disposeGroup(obstacles.group);
     disposeGroup(features.group); disposeGroup(scenery.group); disposeGroup(sky);
     if (envTex) envTex.dispose();
-    if (scene.environment) scene.environment.dispose();
+    if (scene.environment && !envIsCached) scene.environment.dispose(); // HDR 캐시는 보존
   }
-  // 하늘 + 환경 반사
+  // 하늘 + 환경 반사 (절차적 폴백 → HDRI 로드되면 교체)
+  scene.background = null;
+  scene.backgroundIntensity = 1;
+  scene.environmentIntensity = 1;
+  envIsCached = false;
   sky = makeSky(map.sky); scene.add(sky);
   envTex = makeEnvTex(map.env);
   scene.environment = pmrem.fromEquirectangular(envTex).texture;
+  if (map.hdri) applyHdri(map);
   // 안개 / 조명 / 톤 (맵별)
   scene.fog = new THREE.Fog(map.fog.color, map.fog.near, map.fog.far);
   sun.color.setHex(map.sun.color); sun.intensity = map.sun.intensity;
@@ -599,9 +638,9 @@ let _qChecks = 0, _lowSet = false;
 function maybeDowngrade(fps) {
   if (_lowSet) return;
   _qChecks++;
-  if (_qChecks > 6 && fps < 45) { // ~3s 워밍업 후에도 낮으면
+  if (_qChecks > 6 && fps < 50) { // ~3s 워밍업 후에도 낮으면
     _lowSet = true;
-    PIX_CAP = 1.3;
+    PIX_CAP = 1.5; // 스펙: 2.0 시도 → 미달 시 1.5
     applyResize();
   }
 }
