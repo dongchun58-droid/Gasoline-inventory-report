@@ -673,7 +673,7 @@ function frame(nowMs) {
     bloom.strength = BLOOM_BASE;
   }
   // 부스트 래디얼 블러 (0 ↔ 0.26 러프)
-  const boostTarget = (raceState === 'racing' && player.boosting) ? 0.26 : 0;
+  const boostTarget = (raceState === 'racing' && player.boosting) ? 0.09 : 0;
   speedFx.uniforms.uBoost.value += (boostTarget - speedFx.uniforms.uBoost.value) * Math.min(1, dt * 6);
   input.endFrame();
   composer.render();

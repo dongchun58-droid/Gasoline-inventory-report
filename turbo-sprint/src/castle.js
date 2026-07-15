@@ -506,32 +506,36 @@ export class CastleScenery {
       const cheek = new THREE.Mesh(new THREE.SphereGeometry(3.2, 14, 12), bone);
       cheek.scale.set(1, 0.8, 1.2); cheek.position.set(sx * 9.5, 8.5, 9); skull.add(cheek);
     }
-    // 윗턱(위 잇몸) — 입천장 + 아래로 향한 윗니 (팁이 차 위로)
+    // 윗니 문(위쪽 이빨문) — upperG 그룹이 통째로 위로 올라감
+    const upperG = new THREE.Group();
+    upperG.position.set(0, 6.2, 0);
     const maxilla = new THREE.Mesh(new THREE.BoxGeometry(MW * 2, 2.4, 5), bone);
-    maxilla.position.set(0, 6.2, 10.5); skull.add(maxilla);
+    maxilla.position.set(0, 0, 10.5); upperG.add(maxilla);
     for (let x = -MW + 1.2; x <= MW - 1.2; x += 2.3) {
       const w = (Math.abs(x) < 3) ? 1.15 : 0.85; // 앞니 크게
       const th = new THREE.Mesh(new THREE.ConeGeometry(w, 3.0, 6), bone);
-      th.position.set(x, 4.6, 11.4); th.rotation.x = Math.PI; skull.add(th);
+      th.position.set(x, -1.6, 11.4); th.rotation.x = Math.PI; upperG.add(th); // 팁이 아래로
     }
-    // 아래턱(하악) — 경첩(jawG)으로 여닫이: 차가 다가오면 입을 크게 벌림
+    skull.add(upperG);
+    // 아랫니 문(아래쪽 이빨문) — jawG 그룹이 통째로 아래로 내려감
     const jawG = new THREE.Group();
-    const hY = 7.5, hZ = 2.5;                     // 경첩(턱관절) 위치
-    jawG.position.set(0, hY, hZ);
+    jawG.position.set(0, 1.6, 0);
     for (const sx of [-1, 1]) {
       const ramus = new THREE.Mesh(new THREE.BoxGeometry(3, 10, 4.5), bone);
-      ramus.position.set(sx * (MW + 0.5), 3.5 - hY, 5 - hZ); ramus.rotation.x = -0.25; jawG.add(ramus);
+      ramus.position.set(sx * (MW + 0.5), 2, 4.5); ramus.rotation.x = -0.12; jawG.add(ramus);
     }
     const jaw = new THREE.Mesh(new THREE.BoxGeometry(MW * 2, 2.2, 5), bone);
-    jaw.position.set(0, 0.6 - hY, 12 - hZ); jawG.add(jaw); // 낮은 앞턱(차가 위로 지나감)
+    jaw.position.set(0, -1, 11.5); jawG.add(jaw); // 앞턱
     for (let x = -MW + 1.2; x <= MW - 1.2; x += 2.3) {
-      // 아랫니는 가장자리에서만 위로(가운데 주행선은 비움)
-      if (Math.abs(x) < hw - 1) continue;
-      const th = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.6, 6), bone);
-      th.position.set(x, 2.2 - hY, 12.4 - hZ); jawG.add(th);
+      const w = (Math.abs(x) < 3) ? 1.05 : 0.8; // 아랫니도 촘촘히(위로 향한 팁)
+      const th = new THREE.Mesh(new THREE.ConeGeometry(w, 2.8, 6), bone);
+      th.position.set(x, 0.6, 11.9); jawG.add(th);
     }
     skull.add(jawG);
     this._skullJaw = jawG;
+    this._skullUpper = upperG;
+    this._jawBaseY = 1.6;                          // 아랫니문 닫힘 Y
+    this._upperBaseY = 6.2;                        // 윗니문 닫힘 Y
     this._skullOpen = 0;
 
     // 배치: 정면(입, 로컬 +Z)을 진입 카트(-tan)로 향하게 — 우수좌표 기저(반사 아님)
@@ -1052,13 +1056,15 @@ export class CastleScenery {
       f.scale.set(0.8 + fl * 0.5, 0.7 + fl * 0.7, 0.8 + fl * 0.5);
       f.material.opacity = 0.8 + 0.2 * fl;
     }
-    // 해골 입: 카트가 다가오면 성문처럼 무겁게 크게 열림
+    // 해골 입: 카트가 다가오면 이빨문이 위아래로 열림(윗니↑ / 아랫니↓)
     if (this._skullJaw && this._skullPos) {
       let near = false;
       if (karts) for (const kt of karts) { if (kt.pos.distanceToSquared(this._skullPos) < 1600) { near = true; break; } } // ≈40m
-      const target = near ? 0.95 : 0.0;
+      const target = near ? 1.0 : 0.0;
       this._skullOpen += (target - this._skullOpen) * Math.min(1, dt * 4);
-      this._skullJaw.rotation.x = this._skullOpen;
+      const gap = this._skullOpen * 5.0;           // 벌어지는 거리
+      this._skullUpper.position.y = this._upperBaseY + gap; // 윗니문 위로
+      this._skullJaw.position.y = this._jawBaseY - gap;     // 아랫니문 아래로
     }
     // 마왕 눈/문장 발광 맥동
     for (const m of this._eyes) m.emissiveIntensity = 1.8 + 1.2 * Math.abs(Math.sin(t * 2.2));

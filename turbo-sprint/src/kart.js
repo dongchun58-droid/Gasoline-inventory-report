@@ -34,7 +34,7 @@ export const VEHICLES = {
 export const VEHICLE_ORDER = ['kart', 'bike', 'sports', 'truck'];
 
 // 프로시저럴 차량 모델 (종류별 바디 + 공용 드라이버/휠)
-function buildKartModel(color, gradientMap, type = 'kart') {
+export function buildKartModel(color, gradientMap, type = 'kart') {
   const g = new THREE.Group();
   // 사실적 PBR(도장 금속 느낌) — 차량은 셀셰이딩 대신 표준 재질
   const toon = (c, emissive = 0x000000, emIntensity = 0) =>
@@ -49,21 +49,90 @@ function buildKartModel(color, gradientMap, type = 'kart') {
   let wheelSpec, driverY = 0.5, driverScale = 1, driverZ = -0.05;
 
   if (type === 'bike') {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2.0), carPaint(color)); body.position.y = 0.55; g.add(body);
-    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), carPaint(color)); tank.scale.set(1, 0.75, 1.3); tank.position.set(0, 0.82, 0.35); g.add(tank);
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.8), toon(0x222230)); seat.position.set(0, 0.82, -0.45); g.add(seat);
-    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.85, 8), toon(0x333340)); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.98, 0.92); g.add(bar);
-    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), toon(0xffffff, 0xfff2a0, 1.2)); hl.position.set(0, 0.72, 1.05); g.add(hl);
-    wheelSpec = [[0, 0.42, 1.05, true, 0.42], [0, 0.44, -1.05, false, 0.44]];
-    driverY = 0.62;
+    // 풀페어링 슈퍼스포츠 (CBR 계열 스타일 — 로고 없음)
+    const paintM = carPaint(color);
+    const white = toon(0xeef2f8);
+    const accent = toon(0x1a4fd0);                 // 블루 그래픽
+    const blackTrim = toon(0x0c0c12);
+    const engineM = new THREE.MeshStandardMaterial({ color: 0x2a2a30, roughness: 0.5, metalness: 0.6 });
+    const chrome = chromeMat();
+    const headL = toon(0x111118, 0xdff0ff, 1.5);
+    // 엔진 블록(가운데 낮게)
+    const engine = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.55, 0.95), engineM); engine.position.set(0, 0.5, 0.05); g.add(engine);
+    for (const sz of [-0.2, 0.15, 0.4]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.08), chrome); fin.position.set(0, 0.55, sz); g.add(fin); }
+    // 벨리팬(하부 카울, 팀컬러)
+    const belly = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.3, 1.15), paintM); belly.position.set(0, 0.32, 0.45); g.add(belly);
+    // 연료탱크
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.28, 14, 10), paintM); tank.scale.set(1.05, 0.7, 1.6); tank.position.set(0, 0.94, 0.42); g.add(tank);
+    // 프론트 페어링(뾰족) + 그래픽
+    const fairing = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.66, 0.95), paintM); fairing.position.set(0, 0.76, 1.05); g.add(fairing);
+    const fairNose = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.55), paintM); fairNose.position.set(0, 0.64, 1.58); g.add(fairNose);
+    const graphic = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.22, 0.5), accent); graphic.position.set(0, 0.7, 1.3); g.add(graphic);
+    for (const sx of [-1, 1]) { const gw = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.44, 0.66), sx < 0 ? white : accent); gw.position.set(sx * 0.3, 0.76, 1.12); g.add(gw); }
+    // 사이드 카울 벤트(각진 슬릿) — 평평한 페어링 면 디테일
+    for (const sx of [-1, 1]) for (const dz of [0, 0.16, 0.32]) {
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.1), blackTrim);
+      vent.position.set(sx * 0.31, 0.62, 0.98 - dz); vent.rotation.x = 0.5; g.add(vent);
+    }
+    // 윈드스크린(작은 버블) + 듀얼 헤드라이트
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.24, 0.04), glassMat()); screen.position.set(0, 1.02, 1.32); screen.rotation.x = -0.62; g.add(screen);
+    for (const sx of [-1, 1]) { const hl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.17, 0.1), headL); hl.position.set(sx * 0.15, 0.66, 1.7); hl.rotation.z = sx * 0.35; g.add(hl); }
+    // 시트 + 치켜올린 리어 카울 + 테일라이트
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.13, 0.7), blackTrim); seat.position.set(0, 0.92, -0.25); g.add(seat);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.32, 0.66), paintM); tail.position.set(0, 1.03, -0.66); tail.rotation.x = 0.4; g.add(tail);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.06), toon(0x220000, 0xff2222, 1.6)); tl.position.set(0, 1.06, -0.96); g.add(tl);
+    // 클립온 핸들바 + 미러
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.66, 8), blackTrim); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.98, 0.82); g.add(bar);
+    for (const sx of [-1, 1]) { const mir = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.05), blackTrim); mir.position.set(sx * 0.33, 1.02, 0.98); g.add(mir); }
+    // USD 포크(2) + 프론트 펜더
+    for (const sx of [-1, 1]) { const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.72, 8), chrome); fork.position.set(sx * 0.13, 0.52, 1.32); fork.rotation.x = 0.26; g.add(fork); }
+    const fender = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.07, 0.5), blackTrim); fender.position.set(0, 0.56, 1.34); g.add(fender);
+    // 스윙암 + 크롬 배기(우측)
+    const swing = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.9), engineM); swing.position.set(0.16, 0.42, -0.6); g.add(swing);
+    const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.85, 12), chrome); exh.rotation.x = Math.PI / 2 + 0.05; exh.position.set(0.28, 0.42, -0.55); g.add(exh);
+    wheelSpec = [[0, 0.46, 1.18, true, 0.48, 0.17], [0, 0.48, -1.1, false, 0.5, 0.18]];
+    driverY = 0.82; driverScale = 0.92; driverZ = 0.1;
   } else if (type === 'sports') {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 2.9), carPaint(color)); body.position.y = 0.4; g.add(body);
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.0), carPaint(color)); nose.position.set(0, 0.32, 1.55); g.add(nose);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.42, 1.2), toon(0x101018)); cabin.position.set(0, 0.74, -0.15); g.add(cabin);
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.08, 0.4), toon(dark)); wing.position.set(0, 0.78, -1.55); g.add(wing);
-    for (const sx of [-0.75, 0.75]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.6, -1.55); g.add(post); }
-    wheelSpec = [[-0.88, 0.36, 1.25, true, 0.4], [0.88, 0.36, 1.25, true, 0.4], [-0.88, 0.36, -1.3, false, 0.4], [0.88, 0.36, -1.3, false, 0.4]];
-    driverY = 0.5; driverScale = 0.9;
+    // 미드십 슈퍼카 (오렌지 GR 컨셉 스타일 — 로고 없음)
+    const paintM = carPaint(color);
+    const carbon = new THREE.MeshStandardMaterial({ color: 0x15151c, roughness: 0.5, metalness: 0.4 });
+    const blackTrim = toon(0x0c0c12);
+    const headL = toon(0x0e1420, 0xbfe4ff, 1.5);   // 시안 LED
+    const tailL = toon(0x220000, 0xff2222, 1.7);
+    // 로워 바디(낮고 넓은 플로어)
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.3, 3.05), paintM); floor.position.y = 0.34; g.add(floor);
+    // 프론트 후드(웨지) + 노즈 + 센터 캐릭터 라인
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.24, 1.5), paintM); hood.position.set(0, 0.52, 1.0); g.add(hood);
+    const noseTip = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.2, 0.7), paintM); noseTip.position.set(0, 0.4, 1.85); g.add(noseTip);
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 1.4), paintM); ridge.position.set(0, 0.64, 1.05); g.add(ridge);
+    // 프론트 스플리터(카본) + 허니컴 인테이크
+    const splitter = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.07, 0.5), carbon); splitter.position.set(0, 0.2, 1.95); g.add(splitter);
+    const grille = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.26, 0.12), blackTrim); grille.position.set(0, 0.33, 2.02); g.add(grille);
+    for (const sx of [-0.62, 0.62]) { const intake = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.12), blackTrim); intake.position.set(sx, 0.32, 1.98); g.add(intake); }
+    // 얇은 각진 헤드라이트
+    for (const sx of [-1, 1]) { const hl = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.09, 0.14), headL); hl.position.set(sx * 0.62, 0.55, 1.72); hl.rotation.z = sx * 0.14; g.add(hl); }
+    // 사이드 포드 + 사이드 인테이크
+    for (const sx of [-1, 1]) {
+      const pod = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.4, 1.4), paintM); pod.position.set(sx * 0.86, 0.5, -0.3); g.add(pod);
+      const sideIntake = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.7), blackTrim); sideIntake.position.set(sx * 1.0, 0.5, -0.35); g.add(sideIntake);
+    }
+    // 리어 하운치(넓은 뒤태)
+    const haunch = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.42, 1.2), paintM); haunch.position.set(0, 0.5, -0.9); g.add(haunch);
+    // 오픈 콕핏: 앞유리 + 롤후프(아기 드라이버 노출)
+    const windsh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.34, 0.45), glassMat()); windsh.position.set(0, 0.74, 0.5); windsh.rotation.x = -0.4; g.add(windsh);
+    const hoop = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.12), blackTrim); hoop.position.set(0, 0.86, -0.55); g.add(hoop);
+    // 리어 엔진 슬랫
+    for (let i = 0; i < 4; i++) { const slat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.1), blackTrim); slat.position.set(0, 0.72 - i * 0.015, -0.75 - i * 0.16); g.add(slat); }
+    // 테일라이트 스트립 + 디퓨저 + 듀얼 배기 + 덕테일
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.1), tailL); tail.position.set(0, 0.6, -1.55); g.add(tail);
+    const diff = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.24, 0.4), carbon); diff.position.set(0, 0.3, -1.6); g.add(diff);
+    for (const sx of [-0.3, 0.3]) { const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.3, 10), chromeMat()); exh.rotation.x = Math.PI / 2; exh.position.set(sx, 0.36, -1.72); g.add(exh); }
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.06, 0.3), carbon); wing.position.set(0, 0.74, -1.5); g.add(wing);
+    // 사이드 미러
+    for (const sx of [-1, 1]) { const mir = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.08), blackTrim); mir.position.set(sx * 0.78, 0.78, 0.68); g.add(mir); }
+    wheelSpec = [[-0.9, 0.38, 1.2, true, 0.42, 0.36], [0.9, 0.38, 1.2, true, 0.42, 0.36], [-0.92, 0.4, -1.25, false, 0.44, 0.36], [0.92, 0.4, -1.25, false, 0.44, 0.36]];
+    for (const [x, , z, , r] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(r + 0.12, 0.12, 6, 14, Math.PI), blackTrim); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.42, z); g.add(arch); }
+    driverY = 0.56; driverScale = 0.78; driverZ = 0.0;
   } else if (type === 'truck') {
     // 미국식 픽업트럭 (오픈 적재함 · 테일게이트 · 세로 테일라이트 · 범퍼)
     const bodyCol = carPaint(0xdd7a1f); // 앰버/오렌지 도장 (클리어코트)
@@ -197,8 +266,8 @@ function buildKartModel(color, gradientMap, type = 'kart') {
   // 휠 (종류별 스펙) — 조향/서스펜션/회전 반영. 고무: 무광(roughness 0.95)
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111119, roughness: 0.95, metalness: 0.0 });
   const wheels = [];
-  for (const [x, y, z, steer, r] of wheelSpec) {
-    const w = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.47, 8, 14), wheelMat);
+  for (const [x, y, z, steer, r, tubeRatio] of wheelSpec) {
+    const w = new THREE.Mesh(new THREE.TorusGeometry(r, r * (tubeRatio ?? 0.47), 8, 16), wheelMat);
     w.rotation.y = Math.PI / 2; // 토러스 면을 옆으로
     const pivot = new THREE.Group();
     pivot.position.set(x, y, z);
