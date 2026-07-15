@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { N8AOPass } from 'n8ao';
 import { Input } from './input.js';
 import { Track } from './track.js';
-import { Kart, PHYS, VEHICLES, VEHICLE_ORDER, CHARACTERS, CHARACTER_ORDER } from './kart.js';
+import { Kart, PHYS, VEHICLES, VEHICLE_ORDER, CHARACTERS, CHARACTER_ORDER, buildDriver } from './kart.js';
 import { ChaseCamera } from './camera.js';
 import { Scenery } from './scenery.js';
 import { MAPS, MAP_ORDER } from './maps.js';
@@ -511,13 +511,41 @@ function showStep(n) {
 document.getElementById('btnBack')?.addEventListener('pointerdown', (e) => { e.preventDefault(); showStep(Math.max(1, curStep - 1)); });
 
 // ---------- 캐릭터 선택 UI ----------
+// 각 캐릭터의 실제 3D 얼굴을 작은 썸네일(데이터 URL)로 렌더링
+function makeCharacterThumbs() {
+  const size = 160;
+  const rn = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  rn.setSize(size, size); rn.setPixelRatio(1);
+  rn.outputColorSpace = THREE.SRGBColorSpace;
+  rn.toneMapping = THREE.ACESFilmicToneMapping; rn.toneMappingExposure = 1.05;
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+  cam.position.set(0, 0.92, 2.15); cam.lookAt(0, 0.9, 0.1);
+  const thumbs = {};
+  for (const c of CHARACTER_ORDER) {
+    const sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x60708a, 1.3));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(2, 3, 4); sc.add(dl);
+    const drv = buildDriver(c, player.color);
+    sc.add(drv);
+    rn.render(sc, cam);
+    thumbs[c] = rn.domElement.toDataURL('image/png');
+    drv.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  }
+  rn.dispose();
+  return thumbs;
+}
 function setupCharacterSelect() {
   const cont = document.getElementById('characterSelect');
   if (!cont) return;
+  let thumbs = {};
+  try { thumbs = makeCharacterThumbs(); } catch (e) { console.warn('[thumb] failed', e); }
   cont.innerHTML = CHARACTER_ORDER.map((c) => {
     const ch = CHARACTERS[c];
+    const face = thumbs[c]
+      ? `background-image:url(${thumbs[c]});background-size:cover;background-position:center;`
+      : `background:#${ch.skin.toString(16).padStart(6, '0')};`;
     return `<div class="ccard${c === player.character ? ' sel' : ''}" data-char="${c}">` +
-      `<div class="cface" style="background:#${ch.skin.toString(16).padStart(6, '0')}"></div>` +
+      `<div class="cface" style="${face}"></div>` +
       `<div class="cname">${ch.name}</div></div>`;
   }).join('');
   cont.querySelectorAll('.ccard').forEach((card) => {

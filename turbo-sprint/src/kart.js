@@ -43,7 +43,7 @@ export const CHARACTERS = {
 export const CHARACTER_ORDER = ['hulk', 'princess', 'cool', 'bearded'];
 
 // 드라이버(캐릭터) 모델 — 큰 머리 카툰 스타일, 캐릭터별 헤어/액세서리
-function buildDriver(character, teamColor) {
+export function buildDriver(character, teamColor) {
   const C = CHARACTERS[character] || CHARACTERS.cool;
   const M = (c, em = 0x000000, ei = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.0, emissive: em, emissiveIntensity: ei });
   const driver = new THREE.Group();
