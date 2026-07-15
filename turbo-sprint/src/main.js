@@ -19,6 +19,7 @@ import { ItemSystem } from './items.js';
 import { Features } from './features.js';
 import { Obstacles } from './obstacles.js';
 import { Dragons } from './dragon.js';
+import { Penguins } from './penguin.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
 import { GameAudio } from './audio.js';
@@ -191,7 +192,7 @@ let player;
 let hud;
 
 // ---------- 월드(맵) 상태: 맵 변경 시 재생성 ----------
-let track, itemSystem, obstacles, features, scenery, sky, envTex, dragons;
+let track, itemSystem, obstacles, features, scenery, sky, envTex, dragons, penguins;
 let currentMapKey = 'meadow';
 
 // ---------- HDRI 환경(IBL) — Phase 7 Step 1 ----------
@@ -256,6 +257,7 @@ function buildWorld(key) {
   if (track) {
     scene.remove(track.group, itemSystem.group, obstacles.group, features.group, scenery.group, sky);
     if (dragons) { scene.remove(dragons.group); disposeGroup(dragons.group); dragons = null; }
+    if (penguins) { scene.remove(penguins.group); disposeGroup(penguins.group); penguins = null; }
     disposeGroup(track.group); disposeGroup(itemSystem.group); disposeGroup(obstacles.group);
     disposeGroup(features.group); disposeGroup(scenery.group); disposeGroup(sky);
     if (envTex) envTex.dispose();
@@ -286,6 +288,7 @@ function buildWorld(key) {
   obstacles = new Obstacles(track, gradientMap, map.obstacle); scene.add(obstacles.group);
   features = new Features(track, gradientMap, map.pad); scene.add(features.group);
   if (map.dragonSpots) { dragons = new Dragons(track, map.dragonSpots, map.dragonSides); scene.add(dragons.group); }
+  if (map.penguinSpots) { penguins = new Penguins(track, map.penguinSpots, map.penguinSides); scene.add(penguins.group); }
   enableShadows(scene); // 새 메시에 그림자 적용
   boostAnisotropy(track.group); boostAnisotropy(scenery.group); // 도로/지면 선명도(레이싱 필수)
   // 카트/AI/HUD 재타겟팅 (이미 생성된 경우)
@@ -699,6 +702,7 @@ function frame(nowMs) {
     features.update(dt, karts);
     obstacles.update(dt, karts);
     if (dragons) dragons.update(dt, karts);
+    if (penguins) penguins.update(dt, karts);
   }
   scenery.update(dt, karts, raceState);
 
@@ -780,6 +784,7 @@ window.__turbo = {
   get obstacles() { return obstacles; },
   get scenery() { return scenery; },
   get dragons() { return dragons; },
+  get penguins() { return penguins; },
   get mapKey() { return currentMapKey; },
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },

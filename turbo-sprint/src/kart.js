@@ -461,6 +461,7 @@ export class Kart {
     this.wheelspinTimer = 0; // 로켓스타트 실패(너무 일찍) 페널티
     this.lavaTimer = 0;      // >0 이면 용암 추락 복구 중(페널티)
     this.stunTimer = 0;      // >0 이면 스턴(용의 불/충돌로 정지 후 재출발)
+    this.iceTimer = 0;       // >0 이면 미끄러운 얼음 위(조향 저하·미끄러짐)
 
     // 드리프트/미니터보
     this.hopTimer = 0;
@@ -542,6 +543,7 @@ export class Kart {
   }
   setInvincible(t) { this.invincTimer = Math.max(this.invincTimer, t); this.giveBoost(t); }
   get boosting() { return this.boostTimer > 0 || this.bulletTimer > 0; }
+  setIce(t = 0.22) { this.iceTimer = Math.max(this.iceTimer, t); }  // 미끄러운 빙판
 
   // 스턴: 용의 불/몸통에 맞으면 제자리에 멈췄다가 다시 출발 (용암 낙하와 유사하나 가라앉지 않음)
   // recover={pos,forward,idx} 를 주면 스턴 종료 시 그 위치로 복귀(용 몸통에 낀 경우 뒤로 빼줌)
@@ -785,10 +787,13 @@ export class Kart {
       }
     }
 
+    // 미끄러운 빙판: 타이머 감소
+    if (this.iceTimer > 0) this.iceTimer -= dt;
     // 통상 조향 (드리프트 아닐 때)
     if (!this.drifting && steer !== 0) {
       const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
-      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * this.stats.turn;
+      const iceGrip = this.iceTimer > 0 ? 0.45 : 1;   // 빙판에선 조향력 저하(미끄러짐)
+      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * this.stats.turn * iceGrip;
       const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
       const dir = this.speed >= 0 ? 1 : -1;
       const ang = -steer * turnRate * steerAuthority * dir * dt;

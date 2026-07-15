@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 const _m = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0);
+const _p2 = new THREE.Vector3();
 
 export const SEA_Y = -3.2;         // 바다 수면 높이(도로보다 낮음)
 
@@ -34,6 +35,94 @@ export class IceScenery {
     this._buildPines();
     this._buildBergs();
     this._buildAuroraGlow();
+    this._buildSlippery();
+    this._buildFallingSnow();
+  }
+
+  // ---- 미끄러운 빙판(도로 위 광택 얼음 패치) ----
+  _buildSlippery() {
+    const t = this.track;
+    const N = t.samplePos.length;
+    const mat = new THREE.MeshPhysicalMaterial({ color: 0xd6f2ff, roughness: 0.05, metalness: 0.0,
+      transmission: 0.3, transparent: true, opacity: 0.55, clearcoat: 1.0, depthWrite: false });
+    this._icePatches = [];
+    const spots = [0.05, 0.235, 0.80, 0.90, 0.965, 0.42];
+    for (const tt of spots) {
+      const i = Math.floor(tt * N) % N;
+      const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
+      const off = (((i * 17) % 100) / 100 - 0.5) * (t.halfWidth * 0.9);
+      const r = 5 + ((i * 7) % 4);
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(r, 22), mat);
+      _m.makeBasis(lat, up, tan);
+      patch.quaternion.setFromRotationMatrix(_m);
+      patch.rotateX(-Math.PI / 2);
+      patch.position.copy(p).addScaledVector(lat, off).addScaledVector(up, 0.06);
+      this.group.add(patch);
+      this._icePatches.push({ pos: patch.position.clone(), r2: (r + 1.5) * (r + 1.5) });
+    }
+  }
+
+  // ---- 하늘에서 떨어지는 눈덩이 (2곳) ----
+  _buildFallingSnow() {
+    const t = this.track;
+    const N = t.samplePos.length;
+    const snow = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.85 });
+    this._snowballs = [];
+    const spots = [0.47, 0.86];
+    for (let s = 0; s < spots.length; s++) {
+      const i = Math.floor(spots[s] * N) % N;
+      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), snow);
+      this.group.add(ball);
+      // 경고 링(착지 지점)
+      const ring = new THREE.Mesh(new THREE.RingGeometry(2.2, 3.0, 20),
+        new THREE.MeshBasicMaterial({ color: 0x2f8fd6, transparent: true, opacity: 0.6, toneMapped: false, side: THREE.DoubleSide, depthWrite: false }));
+      this.group.add(ring);
+      this._snowballs.push({ i0: i, ball, ring, phase: s * 1.4, P: 3.2 });
+    }
+  }
+
+  _updateHazards(dt, karts) {
+    const t = this.track;
+    // 미끄러운 빙판
+    if (this._icePatches && karts) {
+      for (const k of karts) {
+        for (const ip of this._icePatches) {
+          const dx = k.pos.x - ip.pos.x, dz = k.pos.z - ip.pos.z;
+          if (dx * dx + dz * dz < ip.r2) { k.setIce(0.25); break; }
+        }
+      }
+    }
+    // 떨어지는 눈덩이
+    if (this._snowballs) {
+      for (const sb of this._snowballs) {
+        const i = sb.i0;
+        const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i];
+        const off = Math.sin((this._t + sb.phase) * 0.7) * (t.halfWidth * 0.6);
+        const cyc = ((this._t / sb.P) + sb.phase) % 1;
+        const groundP = _p2.copy(p).addScaledVector(lat, off);
+        // 낙하: cyc 0→0.85 하강, 이후 리셋
+        const fall = Math.min(1, cyc / 0.82);
+        const y = 95 * (1 - fall) + 2.4;
+        sb.ball.position.copy(groundP).addScaledVector(up, y);
+        sb.ball.rotation.x += dt * 4; sb.ball.rotation.z += dt * 3;
+        sb.ball.visible = cyc < 0.86;
+        // 경고 링
+        sb.ring.position.copy(groundP).addScaledVector(up, 0.1);
+        sb.ring.quaternion.copy(sb.ball.quaternion).identity();
+        _m.makeBasis(lat, up, t.sampleTan[i]); sb.ring.quaternion.setFromRotationMatrix(_m); sb.ring.rotateX(-Math.PI / 2);
+        sb.ring.material.opacity = 0.3 + 0.5 * fall;
+        sb.ring.scale.setScalar(1 + (1 - fall) * 0.5);
+        sb.ring.visible = cyc < 0.9;
+        // 착지 순간 충돌
+        if (cyc > 0.78 && cyc < 0.9 && karts) {
+          for (const k of karts) {
+            if (k.airborne || k.invincTimer > 0 || k.bulletTimer > 0) continue;
+            const dx = k.pos.x - groundP.x, dz = k.pos.z - groundP.z;
+            if (dx * dx + dz * dz < 20) { k.spinOut(0.9); k.setIce(0.4); }
+          }
+        }
+      }
+    }
   }
 
   // ---- 눈밭 지면 ----
@@ -322,8 +411,9 @@ export class IceScenery {
     }
   }
 
-  update(dt) {
+  update(dt, karts) {
     this._t += dt;
+    this._updateHazards(dt, karts);
     // 전구/별 반짝임
     const tw = 0.6 + 0.4 * Math.abs(Math.sin(this._t * 3));
     for (let i = 0; i < this._twinkle.length; i++) {
