@@ -77,7 +77,7 @@
     .rrow.you { background: rgba(255,210,63,.22); }
     .rrow span:first-child { width: 30px; text-align: center; }
     #rHint { margin-top: 18px; font-size: 18px; font-weight: 700; opacity: .9; }
-    /* 시작 화면 */
+    /* 시작 화면 (2단계 위저드: 차량 → 맵) */
     #startScreen {
       position: fixed; inset: 0; z-index: 12; display: none;
       align-items: center; justify-content: center; text-align: center;
@@ -86,27 +86,35 @@
       font-family: system-ui, sans-serif; color: #fff;
     }
     #startScreen.show { display: flex; animation: fadein .4s ease; }
-    #sTitle { font-size: 64px; font-weight: 900; letter-spacing: 2px;
-      text-shadow: 0 5px 0 #1b2a6b, -3px 0 #1b2a6b, 3px 0 #1b2a6b; }
-    #sSub { font-size: 20px; font-weight: 700; opacity: .9; margin: 6px 0 18px; }
-    #vehicleSelect { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+    .sbox { width: 100%; max-height: 100vh; overflow-y: auto; box-sizing: border-box;
+      padding: 12px; display: flex; flex-direction: column; align-items: center; }
+    #sTitle { font-size: 40px; font-weight: 900; letter-spacing: 2px;
+      text-shadow: 0 4px 0 #1b2a6b, -2px 0 #1b2a6b, 2px 0 #1b2a6b; margin-bottom: 4px; }
+    #sSub, .sSub2 { font-size: 17px; font-weight: 700; opacity: .9; margin: 4px 0 12px; }
+    /* 단계 전환 */
+    .step { display: none; flex-direction: column; align-items: center; width: 100%; }
+    .step.on { display: flex; animation: fadein .25s ease; }
+    .vhint { font-size: 13px; opacity: .68; margin-top: 10px; font-weight: 700; }
+    /* 차량 카드 (가로 한 줄) */
+    #vehicleSelect { display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap;
+      max-width: 100%; overflow-x: auto; padding-bottom: 4px; }
     .vcard {
-      pointer-events: auto; cursor: pointer; width: 150px; padding: 12px;
+      pointer-events: auto; cursor: pointer; width: 126px; flex: 0 0 auto; padding: 10px 9px;
       background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
-      border-radius: 16px; color: #fff; transition: transform .1s, border-color .1s;
+      border-radius: 14px; color: #fff; transition: transform .1s, border-color .1s;
     }
     .vcard.sel { border-color: #ffd23f; background: rgba(255,210,63,.18); transform: translateY(-4px); }
-    .vcard .vname { font-size: 20px; font-weight: 900; margin-bottom: 8px; }
-    .vbar { display: flex; align-items: center; gap: 7px; margin: 6px 0; font-size: 11px; font-weight: 800; }
-    .vbar .vlab { width: 40px; text-align: left; opacity: .95; letter-spacing: .5px; }
-    .vbar .vtrack { display: block; flex: 1; height: 12px; background: rgba(0,0,0,.45); border-radius: 6px; overflow: hidden;
+    .vcard .vname { font-size: 17px; font-weight: 900; margin-bottom: 7px; }
+    .vbar { display: flex; align-items: center; gap: 6px; margin: 5px 0; font-size: 10px; font-weight: 800; }
+    .vbar .vlab { width: 34px; text-align: left; opacity: .95; letter-spacing: .3px; }
+    .vbar .vtrack { display: block; flex: 1; height: 11px; background: rgba(0,0,0,.45); border-radius: 6px; overflow: hidden;
       box-shadow: inset 0 1px 2px rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.12); }
     .vbar .vfill { display: block; height: 100%; border-radius: 6px; min-width: 4px; transition: width .2s; }
     .vfill.spd { background: linear-gradient(90deg,#0aa6d6,#4df0ff); box-shadow: 0 0 8px rgba(55,224,255,.8); }
     .vfill.pow { background: linear-gradient(90deg,#d63b3b,#ff8a6b); box-shadow: 0 0 8px rgba(255,107,107,.8); }
     .vfill.trn { background: linear-gradient(90deg,#3ec24a,#9dff6b); box-shadow: 0 0 8px rgba(124,255,107,.8); }
     .selLabel { font-size: 13px; font-weight: 800; letter-spacing: 2px; opacity: .7; margin: 4px 0 8px; }
-    #mapSelect { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 22px; }
+    #mapSelect { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; }
     .mcard {
       pointer-events: auto; cursor: pointer; width: 210px; padding: 12px 14px;
       background: rgba(20,24,60,.5); border: 3px solid rgba(255,255,255,.35);
@@ -117,16 +125,38 @@
     .mswatch .msw { width: 30px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
     .mcard .mname { font-size: 19px; font-weight: 900; }
     .mcard .mdesc { font-size: 12px; font-weight: 600; opacity: .82; margin-top: 3px; }
+    /* 뒤로 버튼 (좌상단) */
+    #btnBack {
+      position: absolute; left: 14px; top: 14px; z-index: 13; display: none;
+      pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      font-family: system-ui, sans-serif; font-weight: 800; font-size: 16px; color: #fff;
+      background: rgba(20,24,60,.6); border: 2px solid rgba(255,255,255,.55);
+      border-radius: 999px; padding: 9px 18px;
+    }
+    #btnBack.on { display: block; }
+    #btnBack:active { transform: scale(.94); }
     .startbtn {
       pointer-events: auto; cursor: pointer; -webkit-tap-highlight-color: transparent;
-      font-family: system-ui, sans-serif; font-weight: 900; font-size: 30px; color: #1b2a6b;
+      font-family: system-ui, sans-serif; font-weight: 900; font-size: 28px; color: #1b2a6b;
       background: #ffd23f; border: 5px solid #fff; border-radius: 999px;
-      padding: 14px 44px; box-shadow: 0 6px 0 #b98a1f, 0 10px 20px rgba(0,0,0,.35);
+      padding: 13px 42px; box-shadow: 0 6px 0 #b98a1f, 0 10px 20px rgba(0,0,0,.35);
       animation: pulse 1.1s ease-in-out infinite;
     }
     .startbtn:active { transform: translateY(3px); box-shadow: 0 3px 0 #b98a1f; }
     #btnAgain { margin-top: 18px; }
     .startbtn.slowin { animation: pulse 1.1s ease-in-out infinite, slowin 1.6s ease both; }
+    /* 좁은 화면(폰 가로): 타이틀·카드 축소 */
+    @media (max-width: 720px), (max-height: 430px) {
+      #sTitle { font-size: 30px; margin-bottom: 2px; }
+      #sSub, .sSub2 { font-size: 15px; margin: 2px 0 10px; }
+      .vcard { width: 108px; padding: 8px 7px; }
+      .vcard .vname { font-size: 15px; margin-bottom: 5px; }
+      .vbar { font-size: 9px; gap: 5px; margin: 4px 0; }
+      .vbar .vlab { width: 28px; }
+      .vbar .vtrack { height: 10px; }
+      .startbtn { font-size: 23px; padding: 11px 34px; }
+      .mcard { width: 180px; padding: 10px 12px; }
+    }
     @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slowin { 0% { opacity: 0; transform: scale(.7); } 60% { opacity: 0; } 100% { opacity: 1; transform: scale(1); } }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
@@ -206,14 +236,21 @@
     <button id="btnMute" title="음소거">🔊</button>
   </div>
   <div id="startScreen" class="show">
+    <button id="btnBack">‹ 뒤로</button>
     <div class="sbox">
       <div id="sTitle">TURBO SPRINT</div>
-      <div id="sSub">차량과 맵을 선택하세요</div>
-      <div class="selLabel">🏎️ 차량</div>
-      <div id="vehicleSelect"></div>
-      <div class="selLabel">🗺️ 맵</div>
-      <div id="mapSelect"></div>
-      <button id="btnStart" class="startbtn">START ▶</button>
+      <!-- 1단계: 차량 선택 -->
+      <div id="step1" class="step on">
+        <div id="sSub">① 차량을 선택하세요</div>
+        <div id="vehicleSelect"></div>
+        <div class="vhint">차량을 탭하면 맵 선택으로 넘어갑니다 →</div>
+      </div>
+      <!-- 2단계: 맵 선택 + 시작 -->
+      <div id="step2" class="step">
+        <div class="sSub2">② 맵을 선택하세요</div>
+        <div id="mapSelect"></div>
+        <button id="btnStart" class="startbtn">START ▶</button>
+      </div>
     </div>
   </div>
   <div id="countdown"></div>

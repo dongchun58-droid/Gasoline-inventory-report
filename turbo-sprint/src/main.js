@@ -403,9 +403,17 @@ function setupVehicleSelect() {
       `</div>`;
   }).join('');
   cont.querySelectorAll('.vcard').forEach((card) => {
-    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectVehicle(card.dataset.type); });
+    card.addEventListener('pointerdown', (e) => { e.preventDefault(); selectVehicle(card.dataset.type); showStep(2); });
   });
 }
+
+// 시작 화면 단계 전환 (1: 차량 / 2: 맵+시작)
+function showStep(n) {
+  document.getElementById('step1')?.classList.toggle('on', n === 1);
+  document.getElementById('step2')?.classList.toggle('on', n === 2);
+  document.getElementById('btnBack')?.classList.toggle('on', n === 2);
+}
+document.getElementById('btnBack')?.addEventListener('pointerdown', (e) => { e.preventDefault(); showStep(1); });
 function selectVehicle(type) {
   if (!VEHICLES[type] || type === player.type) return;
   const old = player.setType(type);
