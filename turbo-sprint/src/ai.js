@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 const _fwd = new THREE.Vector3();
 const _toT = new THREE.Vector3();
+const _gr = {};
 
 export class AIController {
   constructor(kart, track, laneOffset) {
@@ -38,7 +39,12 @@ export class AIController {
     const crossY = _fwd.x * _toT.z - _fwd.z * _toT.x;
     const dot = THREE.MathUtils.clamp(_fwd.dot(_toT), -1, 1);
     const ang = Math.atan2(crossY, dot);
-    this.input.steer = THREE.MathUtils.clamp(ang * 2.4, -1, 1);
+    // 크로스트랙 보정: 일정 곡률(나선 등반)에서 바깥으로 밀려 이탈하지 않도록
+    // 현재 도로중심 대비 측면오차를 목표 레인으로 되돌리는 항 추가
+    const gr = track.ground(k.pos, k.idx, _gr);
+    const crossErr = gr.lateral - lane;            // +면 우측(바깥)으로 치우침
+    const correct = THREE.MathUtils.clamp(crossErr * 0.06, -0.8, 0.8);
+    this.input.steer = THREE.MathUtils.clamp(ang * 2.4 - correct, -1, 1);
 
     // 곡률 기반 목표 속도 (앞쪽 접선 변화가 크면 감속)
     const a = track.sampleTan[k.idx];

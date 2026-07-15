@@ -42,6 +42,7 @@ export class Track {
     const cps = opts.controlPoints || CONTROL_POINTS;
     const scale = opts.scale || DEFAULT_SCALE;
     this._road = opts.road || DEFAULT_ROAD;
+    this._baseHalf = opts.roadHalf || HALF_W;           // 맵별 도로 반폭(기본 10)
     this._variableWidth = opts.variableWidth !== false; // 기본 true(가변폭+분리대)
     this.bridges = opts.bridges || [];                  // [[t0,t1,반폭], ...] 좁은 다리(용암 추락)
     this.gaps = opts.gaps || [];                        // [[t0,t1], ...] 도로 단절(용암 강) — 점프대로만 통과
@@ -64,7 +65,7 @@ export class Track {
     this.sampleBridge = []; // 좁은 다리(추락 가능) 여부
     this.sampleGap = [];    // 도로 단절(용암 강) 여부 — 지면이면 추락
     this.sampleSea = [];    // 한쪽 바다 side(0/±1) — 그 쪽으로 이탈 시 추락
-    this.maxHalf = HALF_W;
+    this.maxHalf = this._baseHalf;
     let acc = 0;
     let prev = null;
     for (let i = 0; i <= SAMPLES; i++) {
@@ -78,7 +79,7 @@ export class Track {
       if (prev) acc += pos.distanceTo(prev);
       const tt = t % 1;
       const widen = this._variableWidth ? widenAt(tt) : 0;
-      let half = HALF_W + (WIDE_HALF - HALF_W) * widen;
+      let half = this._baseHalf + (WIDE_HALF - HALF_W) * widen;
       // 좁은 다리 구간: 반폭을 좁히고 플래그
       let bridge = false;
       for (const b of this.bridges) {
@@ -341,7 +342,7 @@ export class Track {
     return Math.sqrt(best);
   }
 
-  get halfWidth() { return HALF_W; }
+  get halfWidth() { return this._baseHalf; }
   // 스타트 지점(그리드) 정보
   startInfo() {
     return {

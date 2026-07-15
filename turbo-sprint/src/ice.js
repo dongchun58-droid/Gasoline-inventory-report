@@ -7,12 +7,12 @@ const _p2 = new THREE.Vector3();
 
 export const SEA_Y = -3.2;         // 바다 수면 높이(도로보다 낮음)
 
-// 반투명 얼음 재질
-function iceMat(color = 0xbfe4ff, opacity = 0.72, rough = 0.15) {
+// 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
+function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
   return new THREE.MeshPhysicalMaterial({
-    color, roughness: rough, metalness: 0.0, transmission: 0.35,
-    transparent: true, opacity, clearcoat: 0.8, clearcoatRoughness: 0.2,
-    ior: 1.31, thickness: 2.0,
+    color, roughness: rough, metalness: 0.0, transmission: 0.1,
+    transparent: true, opacity, clearcoat: 0.7, clearcoatRoughness: 0.25,
+    ior: 1.31, thickness: 1.0,
   });
 }
 function snowMat(color = 0xf2f9ff) {
@@ -162,18 +162,18 @@ export class IceScenery {
     const N = t.samplePos.length;
     const bedMat = new THREE.MeshStandardMaterial({ color: 0x9fc8ee, roughness: 0.5, metalness: 0.0,
       transparent: true, opacity: 0.92 });
-    const pillarMat = iceMat(0xbfe4ff, 0.85, 0.2);
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0xaed4f5, roughness: 0.5, metalness: 0.05 });
     const step = 8;
     for (let i = 0; i < N - step; i += step) {
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
       const hw = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth);
       const nxt = t.samplePos[Math.min(N - 1, i + step)];
       const segLen = p.distanceTo(nxt) + 1.5;
-      // 두꺼운 얼음 슬래브(도로 바로 아래)
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 2, 3.2, segLen), bedMat);
+      // 얇은 얼음 노반(도로 바로 아래) — 나선이 벽처럼 막히지 않게 얇게
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 1, 1.2, segLen), bedMat);
       _m.makeBasis(lat, up, tan);
       slab.quaternion.setFromRotationMatrix(_m);
-      slab.position.copy(p).addScaledVector(up, -1.7);
+      slab.position.copy(p).addScaledVector(up, -0.7);
       this.group.add(slab);
       // 오르막(공중 구간): 지면까지 지지 기둥
       if (p.y > 5) {
@@ -188,17 +188,21 @@ export class IceScenery {
   // ---- 거대 얼음성(중앙) ----
   _buildCastle() {
     const t = this.track;
-    const cx = t.center.x, cz = t.center.z;
+    // 성은 나선(등반 링)의 축(월드 원점)에 배치 — 제어점이 원점 중심이므로 (0,0)
+    // (트랙 bounds 중심은 하강/복귀로 때문에 치우쳐 도로 앞을 막으므로 사용하지 않음)
+    const cx = 0, cz = 0;
+    this._castleCenter = { x: cx, z: cz };
     const castle = new THREE.Group();
     castle.position.set(cx, 0, cz);
-    const wall = iceMat(0xa9d8ff, 0.8, 0.18);
-    const wallDk = iceMat(0x8fc4f0, 0.85, 0.2);
-    const spireMat = iceMat(0xd6f0ff, 0.7, 0.12);
+    // 성벽은 시야를 가리지 않도록 불투명 얼음(투과 없음)
+    const wall = new THREE.MeshStandardMaterial({ color: 0xbfe0ff, roughness: 0.32, metalness: 0.1 });
+    const wallDk = new THREE.MeshStandardMaterial({ color: 0x9ecdf5, roughness: 0.4, metalness: 0.1 });
+    const spireMat = new THREE.MeshStandardMaterial({ color: 0xdaf0ff, roughness: 0.25, metalness: 0.15 });
     const trim = snowMat(0xffffff);
 
     // 기단(넓은 계단식 얼음 언덕)
     for (let i = 0; i < 4; i++) {
-      const r = 210 - i * 34;
+      const r = 150 - i * 26;
       const base = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 18, 18, 8), i % 2 ? wallDk : wall);
       base.position.y = 9 + i * 16; castle.add(base);
       // 계단 눈 트림
@@ -221,7 +225,7 @@ export class IceScenery {
     // 둘레 타워 6개 (육각 배치)
     for (let a = 0; a < 6; a++) {
       const ang = (a / 6) * Math.PI * 2;
-      const R = 150;
+      const R = 108;
       const tx = Math.cos(ang) * R, tz = Math.sin(ang) * R;
       const h = 70 + (a % 2) * 26;
       const tw = new THREE.Mesh(new THREE.CylinderGeometry(20, 26, h, 8), a % 2 ? wall : wallDk);
@@ -237,7 +241,7 @@ export class IceScenery {
     // 성벽 사이 커튼월(육각)
     for (let a = 0; a < 6; a++) {
       const ang0 = (a / 6) * Math.PI * 2, ang1 = ((a + 1) / 6) * Math.PI * 2;
-      const R = 150;
+      const R = 108;
       const x0 = Math.cos(ang0) * R, z0 = Math.sin(ang0) * R;
       const x1 = Math.cos(ang1) * R, z1 = Math.sin(ang1) * R;
       const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
@@ -247,6 +251,8 @@ export class IceScenery {
       wallSeg.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
       castle.add(wallSeg);
     }
+    // 나선(반경≈255) 중앙의 큰 얼음성
+    castle.scale.setScalar(0.85);
     this.group.add(castle);
     this._castle = castle;
   }

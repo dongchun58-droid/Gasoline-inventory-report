@@ -179,7 +179,7 @@ composer.addPass(speedFx);
 composer.addPass(new OutputPass());
 
 // ---------- 카트 라인업 ----------
-const LAPS = 3;
+let LAPS = 3;   // 맵별 설정 가능(얼음: 나선 등반이 길어 1바퀴)
 const LINEUP = [
   { color: 0x2e6bff, name: 'YOU',     lane: 0,  gLat: -3.5, gBack: 5,  ai: false, type: 'kart',   character: 'cool' },
   { color: 0xff3b3b, name: 'CRIMSON', lane: -3, gLat: 3.5,  gBack: 5,  ai: true,  type: 'sports', character: 'hulk' },
@@ -253,6 +253,7 @@ function disposeGroup(root) {
 function buildWorld(key) {
   const map = MAPS[key] || MAPS.meadow;
   currentMapKey = map.key;
+  LAPS = map.laps || 3;
   // 이전 월드 해제
   if (track) {
     scene.remove(track.group, itemSystem.group, obstacles.group, features.group, scenery.group, sky);
