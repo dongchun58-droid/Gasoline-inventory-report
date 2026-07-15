@@ -39,22 +39,26 @@ function buildKartModel(color, gradientMap, type = 'kart') {
   // 사실적 PBR(도장 금속 느낌) — 차량은 셀셰이딩 대신 표준 재질
   const toon = (c, emissive = 0x000000, emIntensity = 0) =>
     new THREE.MeshStandardMaterial({ color: c, metalness: 0.55, roughness: 0.35, emissive, emissiveIntensity: emIntensity });
+  // 자동차 도장: 클리어코트(광택 상도) — 하늘/노을이 은은하게 비침 (Step 2)
+  const carPaint = (c) => new THREE.MeshPhysicalMaterial({
+    color: c, metalness: 0.45, roughness: 0.35, clearcoat: 1.0, clearcoatRoughness: 0.15,
+  });
   const chromeMat = () => new THREE.MeshStandardMaterial({ color: 0xd2d8de, metalness: 0.95, roughness: 0.22 });
   const glassMat = () => new THREE.MeshStandardMaterial({ color: 0x0a1420, metalness: 0.4, roughness: 0.1 });
   const dark = 0x14141c;
   let wheelSpec, driverY = 0.5, driverScale = 1, driverZ = -0.05;
 
   if (type === 'bike') {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2.0), toon(color)); body.position.y = 0.55; g.add(body);
-    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), toon(color)); tank.scale.set(1, 0.75, 1.3); tank.position.set(0, 0.82, 0.35); g.add(tank);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 2.0), carPaint(color)); body.position.y = 0.55; g.add(body);
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), carPaint(color)); tank.scale.set(1, 0.75, 1.3); tank.position.set(0, 0.82, 0.35); g.add(tank);
     const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.8), toon(0x222230)); seat.position.set(0, 0.82, -0.45); g.add(seat);
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.85, 8), toon(0x333340)); bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.98, 0.92); g.add(bar);
     const hl = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), toon(0xffffff, 0xfff2a0, 1.2)); hl.position.set(0, 0.72, 1.05); g.add(hl);
     wheelSpec = [[0, 0.42, 1.05, true, 0.42], [0, 0.44, -1.05, false, 0.44]];
     driverY = 0.62;
   } else if (type === 'sports') {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 2.9), toon(color)); body.position.y = 0.4; g.add(body);
-    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.0), toon(color)); nose.position.set(0, 0.32, 1.55); g.add(nose);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 2.9), carPaint(color)); body.position.y = 0.4; g.add(body);
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.25, 1.0), carPaint(color)); nose.position.set(0, 0.32, 1.55); g.add(nose);
     const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.42, 1.2), toon(0x101018)); cabin.position.set(0, 0.74, -0.15); g.add(cabin);
     const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.08, 0.4), toon(dark)); wing.position.set(0, 0.78, -1.55); g.add(wing);
     for (const sx of [-0.75, 0.75]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.6, -1.55); g.add(post); }
@@ -62,7 +66,7 @@ function buildKartModel(color, gradientMap, type = 'kart') {
     driverY = 0.5; driverScale = 0.9;
   } else if (type === 'truck') {
     // 미국식 픽업트럭 (오픈 적재함 · 테일게이트 · 세로 테일라이트 · 범퍼)
-    const bodyCol = toon(0xdd7a1f); // 앰버/오렌지 (사진 참고)
+    const bodyCol = carPaint(0xdd7a1f); // 앰버/오렌지 도장 (클리어코트)
     const clad = toon(dark);
     const redLite = toon(0x330000, 0xff2323, 1.6);
     const whiteLite = toon(0x222018, 0xfff2c8, 1.3);
@@ -97,8 +101,8 @@ function buildKartModel(color, gradientMap, type = 'kart') {
     for (const [x, , z] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.14, 6, 12, Math.PI), clad); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.62, z); g.add(arch); }
     driverY = 0.86; driverScale = 0.78; driverZ = 0.7;
   } else {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), toon(color)); body.position.y = 0.45; g.add(body);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), toon(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), carPaint(color)); body.position.y = 0.45; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), carPaint(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
     const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.5), toon(dark)); wing.position.set(0, 0.95, -1.1); g.add(wing);
     for (const sx of [-0.6, 0.6]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.72, -1.1); g.add(post); }
     for (const sx of [-0.35, 0.35]) { const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.4, 8), toon(0x555566)); pipe.rotation.x = Math.PI / 2; pipe.position.set(sx, 0.5, -1.25); g.add(pipe); }
@@ -190,8 +194,8 @@ function buildKartModel(color, gradientMap, type = 'kart') {
   g.userData.driver = driver;
   g.userData.head = head;
 
-  // 휠 (종류별 스펙) — 조향/서스펜션/회전 반영
-  const wheelMat = toon(0x111119);
+  // 휠 (종류별 스펙) — 조향/서스펜션/회전 반영. 고무: 무광(roughness 0.95)
+  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111119, roughness: 0.95, metalness: 0.0 });
   const wheels = [];
   for (const [x, y, z, steer, r] of wheelSpec) {
     const w = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.47, 8, 14), wheelMat);

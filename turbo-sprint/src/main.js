@@ -185,6 +185,20 @@ function applyHdri(map) {
   });
 }
 
+// 텍스처 이방성 필터 최대치 적용 — 도로가 먼 거리에서도 뭉개지지 않음 (Step 2)
+const _maxAniso = renderer.capabilities.getMaxAnisotropy();
+function boostAnisotropy(root) {
+  root.traverse((o) => {
+    const m = o.material; if (!m) return;
+    for (const mm of (Array.isArray(m) ? m : [m])) {
+      for (const key of ['map', 'normalMap', 'roughnessMap']) {
+        const t = mm[key];
+        if (t && t.anisotropy < _maxAniso) { t.anisotropy = _maxAniso; t.needsUpdate = true; }
+      }
+    }
+  });
+}
+
 // 지오메트리/머티리얼만 해제 (텍스처는 공유될 수 있어 해제하지 않음 — 맵 전환은 드묾)
 function disposeGroup(root) {
   root.traverse((o) => {
@@ -230,6 +244,7 @@ function buildWorld(key) {
   obstacles = new Obstacles(track, gradientMap, map.obstacle); scene.add(obstacles.group);
   features = new Features(track, gradientMap, map.pad); scene.add(features.group);
   enableShadows(scene); // 새 메시에 그림자 적용
+  boostAnisotropy(track.group); boostAnisotropy(scenery.group); // 도로/지면 선명도(레이싱 필수)
   // 카트/AI/HUD 재타겟팅 (이미 생성된 경우)
   if (karts.length) {
     for (const k of karts) k.track = track;

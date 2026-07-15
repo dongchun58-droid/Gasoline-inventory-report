@@ -1,6 +1,7 @@
 // castle.js — 마왕 성 맵 배경 (용암·석벽·쇠사슬·마왕 석상·횃불, 오리지널)
 // 마리오카트 '쿠파 성' 계열의 분위기에서 영감을 받되 완전 오리지널 에셋으로 구성.
 import * as THREE from 'three';
+import { normalFromCanvas } from './pbrtex.js';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -72,7 +73,8 @@ export class CastleScenery {
     this._t = 0;
 
     this._stoneTex = stoneTexture();
-    this.stoneMat = new THREE.MeshStandardMaterial({ map: this._stoneTex, color: 0x8a8494, roughness: 0.95, metalness: 0.05, emissive: 0x1a0d0a, emissiveIntensity: 0.35 });
+    this._stoneNormal = normalFromCanvas(this._stoneTex.image, 1.5); // 벽돌 요철 (Step 2)
+    this.stoneMat = new THREE.MeshStandardMaterial({ map: this._stoneTex, normalMap: this._stoneNormal, color: 0x8a8494, roughness: 0.95, metalness: 0.05, emissive: 0x1a0d0a, emissiveIntensity: 0.35 });
     this.darkStone = new THREE.MeshStandardMaterial({ color: 0x2a2630, roughness: 0.95, metalness: 0.05, emissive: 0x140806, emissiveIntensity: 0.3 });
     this.metalMat = new THREE.MeshStandardMaterial({ color: 0x44444c, roughness: 0.5, metalness: 0.85 });
     this.boneMat = new THREE.MeshStandardMaterial({ color: 0xe7e1d0, roughness: 0.72, metalness: 0.0, emissive: 0x241c14, emissiveIntensity: 0.28 });
@@ -104,6 +106,7 @@ export class CastleScenery {
     tex.repeat.set(size / 24, size / 24);
     this._lavaMat = new THREE.MeshStandardMaterial({
       map: tex, emissiveMap: tex, emissive: 0xff5a12, emissiveIntensity: 1.5,
+      normalMap: normalFromCanvas(tex.image, 1.6), // 굳은 껍질 요철 (Step 2)
       color: 0x1a0804, roughness: 0.55, metalness: 0.0,
     });
     this._lavaTex = tex;
@@ -147,7 +150,7 @@ export class CastleScenery {
     geo.computeVertexNormals();
     const tex = this._stoneTex.clone(); tex.needsUpdate = true; tex.repeat.set(1, 1);
     // 노반 바닥: 은은한 자체발광으로 어두운 내부에서도 주행면이 보이게
-    const mat = new THREE.MeshStandardMaterial({ map: tex, color: 0x565060, roughness: 0.98, metalness: 0.03, emissive: 0x241514, emissiveIntensity: 0.5 });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, normalMap: this._stoneNormal, color: 0x565060, roughness: 0.98, metalness: 0.03, emissive: 0x241514, emissiveIntensity: 0.5 });
     const rock = new THREE.Mesh(geo, mat);
     rock.receiveShadow = true;
     this.group.add(rock);
@@ -433,6 +436,7 @@ export class CastleScenery {
     this._riverTex = tex;
     this._riverMat = new THREE.MeshStandardMaterial({
       map: tex, emissiveMap: tex, emissive: 0xff6a1e, emissiveIntensity: 2.3,
+      normalMap: normalFromCanvas(tex.image, 1.6),
       color: 0x2a0c04, roughness: 0.4, metalness: 0.0,
     });
     for (const [t0, t1] of track.gaps) {

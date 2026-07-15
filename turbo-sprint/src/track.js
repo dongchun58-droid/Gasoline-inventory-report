@@ -1,6 +1,7 @@
 // track.js — 스플라인, 도로 메시, 연석, 접지용 샘플 프레임
 // Phase 1: 도로를 달릴 수 있고, 접지 높이/이탈 판정을 제공한다.
 import * as THREE from 'three';
+import { makeRoadPBR } from './pbrtex.js';
 
 // §4 제어점 — 지면 주행을 위해 평탄화(y≈0). XZ 레이아웃은 유지. (맵 미지정 시 기본)
 const CONTROL_POINTS = [
@@ -185,8 +186,16 @@ export class Track {
     geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.setIndex(indices);
 
-    const tex = this._makeRoadTexture();
-    const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap });
+    // Phase 7 Step 2: 아스팔트 PBR (절차적 디퓨즈+노멀+러프니스)
+    const pbr = makeRoadPBR(this._road, ROAD_WIDTH, CURB_W);
+    const mat = new THREE.MeshStandardMaterial({
+      map: pbr.map,
+      normalMap: pbr.normalMap,
+      normalScale: new THREE.Vector2(0.8, 0.8),
+      roughnessMap: pbr.roughnessMap,
+      roughness: 1.0,
+      metalness: 0.0,
+    });
     this.roadMesh = new THREE.Mesh(geo, mat);
     this.roadMesh.renderOrder = 0;
     this.group.add(this.roadMesh);

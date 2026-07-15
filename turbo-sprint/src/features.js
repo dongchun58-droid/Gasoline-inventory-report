@@ -80,7 +80,7 @@ export class Features {
     this.group.add(pad);
     // 실제 램프(경사판): 이전보다 2배 길고 높게
     const lat = t.sampleLat[i0], up = t.sampleUp[i0], tan = t.sampleTan[i0];
-    const lipMat = new THREE.MeshToonMaterial({ color: this.pad.jumpHex, gradientMap: this.gm, emissive: this.pad.jumpHex, emissiveIntensity: 0.55 });
+    const lipMat = new THREE.MeshStandardMaterial({ color: this.pad.jumpHex, roughness: 0.5, metalness: 0.2, emissive: this.pad.jumpHex, emissiveIntensity: 0.55 });
     const rampLen = 7.5, tilt = 0.42;
     const lip = new THREE.Mesh(new THREE.BoxGeometry(width * 1.05, 0.5, rampLen), lipMat);
     _m.makeBasis(lat, up, tan);

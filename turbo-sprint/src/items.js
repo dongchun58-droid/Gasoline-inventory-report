@@ -22,7 +22,7 @@ function qmark(gm) {
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText('?', 64, 72);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.MeshToonMaterial({ map: tex, gradientMap: gm, emissive: 0xffd23f, emissiveIntensity: 0.6 });
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, metalness: 0.1, emissive: 0xffd23f, emissiveIntensity: 0.55 });
 }
 
 export class ItemSystem {
@@ -58,9 +58,9 @@ export class ItemSystem {
 
     // 바나나/등껍질 프리팹 재질·지오메트리
     this._bananaGeo = new THREE.TorusGeometry(0.55, 0.2, 8, 12, Math.PI * 1.2);
-    this._bananaMat = new THREE.MeshToonMaterial({ color: 0xffe23f, gradientMap: gm });
+    this._bananaMat = new THREE.MeshStandardMaterial({ color: 0xffe23f, roughness: 0.6, metalness: 0 });
     this._shellGeo = new THREE.SphereGeometry(0.55, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-    this._shellMat = new THREE.MeshToonMaterial({ color: 0x35c94a, gradientMap: gm, emissive: 0x35c94a, emissiveIntensity: 0.2 });
+    this._shellMat = new THREE.MeshStandardMaterial({ color: 0x35c94a, roughness: 0.45, metalness: 0.1, emissive: 0x35c94a, emissiveIntensity: 0.2 });
   }
 
   _grant(kart, rank) {
