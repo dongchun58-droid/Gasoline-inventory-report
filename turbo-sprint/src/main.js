@@ -6,6 +6,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { N8AOPass } from 'n8ao';
 import { Input } from './input.js';
 import { Track } from './track.js';
 import { Kart, PHYS, VEHICLES, VEHICLE_ORDER } from './kart.js';
@@ -126,14 +128,52 @@ scene.add(hemi);
 const ambient = new THREE.AmbientLight(0xffffff, 0.18);
 scene.add(ambient);
 
-// ---------- 포스트프로세싱: 블룸 (네온/용암/별 발광) (§9) ----------
+// ---------- 포스트프로세싱: SSAO + 블룸 + 속도감/비네트 (§9 · Phase 7 Step 3) ----------
 const dbSize = renderer.getDrawingBufferSize(new THREE.Vector2());
 const rt = new THREE.WebGLRenderTarget(dbSize.x, dbSize.y, { type: THREE.HalfFloatType, samples: 4 });
 const composer = new EffectComposer(renderer, rt);
-composer.addPass(new RenderPass(scene, camera));
+// SSAO (N8AO) — 접지감. N8AOPass는 씬을 자체 렌더하므로 RenderPass를 "대체"한다.
+let n8ao = null;
+try {
+  n8ao = new N8AOPass(scene, camera, window.innerWidth, window.innerHeight);
+  n8ao.configuration.aoRadius = 2.0;
+  n8ao.configuration.intensity = 3.0;
+  n8ao.configuration.halfRes = true;            // iPad 성능 확보
+  n8ao.configuration.gammaCorrection = false;   // 감마는 OutputPass가 담당(이중 보정 방지)
+  composer.addPass(n8ao);
+} catch (e) { console.warn('[n8ao] disabled:', e); }
+if (!n8ao) composer.addPass(new RenderPass(scene, camera));
 let BLOOM_BASE = 0.5;
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), BLOOM_BASE, 0.5, 0.75);
 composer.addPass(bloom);
+// 부스트 래디얼 블러(속도감) + 비네트 — 단일 풀스크린 패스
+const SpeedFxShader = {
+  uniforms: { tDiffuse: { value: null }, uBoost: { value: 0 }, uVignette: { value: 0.22 } },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse; uniform float uBoost; uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec2 center = vec2(0.5, 0.45);
+      vec2 dir = center - vUv;
+      vec4 col = texture2D(tDiffuse, vUv);
+      if (uBoost > 0.002) {          // 부스트 중에만 8샘플 방사형 블러
+        vec4 acc = col;
+        for (int i = 1; i < 8; i++) {
+          float t = float(i) / 8.0;
+          acc += texture2D(tDiffuse, vUv + dir * t * uBoost);
+        }
+        col = acc / 8.0;
+      }
+      float d = distance(vUv, vec2(0.5));
+      col.rgb *= 1.0 - uVignette * smoothstep(0.55, 0.95, d);
+      gl_FragColor = col;
+    }`,
+};
+const speedFx = new ShaderPass(SpeedFxShader);
+composer.addPass(speedFx);
 composer.addPass(new OutputPass());
 
 // ---------- 카트 라인업 ----------
@@ -632,6 +672,9 @@ function frame(nowMs) {
   } else if (bloom.strength !== BLOOM_BASE) {
     bloom.strength = BLOOM_BASE;
   }
+  // 부스트 래디얼 블러 (0 ↔ 0.26 러프)
+  const boostTarget = (raceState === 'racing' && player.boosting) ? 0.26 : 0;
+  speedFx.uniforms.uBoost.value += (boostTarget - speedFx.uniforms.uBoost.value) * Math.min(1, dt * 6);
   input.endFrame();
   composer.render();
   requestAnimationFrame(frame);
@@ -646,17 +689,23 @@ function applyResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   composer.setSize(window.innerWidth, window.innerHeight);
   bloom.setSize(window.innerWidth, window.innerHeight);
+  if (n8ao) n8ao.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', applyResize);
 
-let _qChecks = 0, _lowSet = false;
+// 2단계 적응형 품질: ①pixelRatio 2.0→1.5 ②그 래도 낮으면 SSAO 끔 (스펙: fps<55면 AO 제거)
+let _qChecks = 0, _lowSet = false, _aoOff = false;
 function maybeDowngrade(fps) {
-  if (_lowSet) return;
   _qChecks++;
-  if (_qChecks > 6 && fps < 50) { // ~3s 워밍업 후에도 낮으면
-    _lowSet = true;
-    PIX_CAP = 1.5; // 스펙: 2.0 시도 → 미달 시 1.5
+  if (_qChecks <= 6 || fps >= 50) return; // ~3s 워밍업/정상
+  if (!_lowSet) {
+    _lowSet = true; _qChecks = 0;
+    PIX_CAP = 1.5;
     applyResize();
+  } else if (!_aoOff && n8ao) {
+    _aoOff = true;
+    n8ao.enabled = false;
+    composer.insertPass(new RenderPass(scene, camera), 0); // AO가 렌더도 담당했으므로 대체 렌더 삽입
   }
 }
 
