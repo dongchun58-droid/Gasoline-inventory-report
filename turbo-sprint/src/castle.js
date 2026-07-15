@@ -537,7 +537,9 @@ export class CastleScenery {
     // 배치: 정면(입, 로컬 +Z)을 진입 카트(-tan)로 향하게 — 우수좌표 기저(반사 아님)
     const basis = new THREE.Matrix4().makeBasis(s.lat, s.up, s.tan.clone().negate());
     skull.quaternion.setFromRotationMatrix(basis);
-    skull.position.copy(s.pos).addScaledVector(s.up, -0.3);
+    // 해골을 위로 올려 배치 — 닫힌 턱이 공중 게이트처럼 걸려 있다가
+    // 카트 접근 시 아래로 크게 열리며 "성문이 열리는" 연출
+    skull.position.copy(s.pos).addScaledVector(s.up, 3.4);
     this.group.add(skull);
     this._skullPos = s.pos.clone();               // 카트 근접 판정용
 
@@ -794,29 +796,54 @@ export class CastleScenery {
     });
   }
 
-  // ---- 상승하는 불티(ember) 파티클 ----
+  // ---- 상승하는 불티(ember) — 원형 소프트 스프라이트, 크기 2계층 + 알파 깜빡임 (Step 5) ----
+  _emberSprite() {
+    const cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 64;
+    const g = cv.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grd.addColorStop(0, 'rgba(255,220,160,1)');
+    grd.addColorStop(0.4, 'rgba(255,150,60,0.85)');
+    grd.addColorStop(1, 'rgba(255,80,20,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
   _buildEmbers() {
     const track = this.track;
     const CX = track.center.x, CZ = track.center.z, RAD = track.radius;
-    const COUNT = 360;
-    const pos = new Float32Array(COUNT * 3);
-    this._emberBase = new Float32Array(COUNT); // y 시작
-    this._emberSpd = new Float32Array(COUNT);
-    for (let i = 0; i < COUNT; i++) {
-      const a = (Math.sin(i * 12.9) * 43758.5) % 1, rr = (Math.sin(i * 78.2) * 43758.5) % 1;
-      const rad = (0.3 + Math.abs(rr) * 0.9) * RAD;
-      const ang = Math.abs(a) * Math.PI * 2;
-      pos[i * 3] = CX + Math.cos(ang) * rad;
-      pos[i * 3 + 1] = LAVA_Y + Math.abs((Math.sin(i * 3.1) * 999) % 1) * 40;
-      pos[i * 3 + 2] = CZ + Math.sin(ang) * rad;
-      this._emberSpd[i] = 4 + Math.abs((Math.sin(i * 5.7) * 999) % 1) * 8;
+    const tex = this._emberSprite();
+    this._emberSys = [];
+    // 작은 불티(많이) + 큰 불티(드물게) — 크기 랜덤 효과
+    const layers = [
+      { count: 260, size: 1.8, seed: 0 },
+      { count: 90, size: 3.6, seed: 40 },
+    ];
+    for (const [li, L] of layers.entries()) {
+      const pos = new Float32Array(L.count * 3);
+      const spd = new Float32Array(L.count);
+      for (let i = 0; i < L.count; i++) {
+        const k = i + L.seed;
+        const a = (Math.sin(k * 12.9) * 43758.5) % 1, rr = (Math.sin(k * 78.2) * 43758.5) % 1;
+        const rad = (0.3 + Math.abs(rr) * 0.9) * RAD;
+        const ang = Math.abs(a) * Math.PI * 2;
+        pos[i * 3] = CX + Math.cos(ang) * rad;
+        pos[i * 3 + 1] = LAVA_Y + Math.abs((Math.sin(k * 3.1) * 999) % 1) * 40;
+        pos[i * 3 + 2] = CZ + Math.sin(ang) * rad;
+        spd[i] = 4 + Math.abs((Math.sin(k * 5.7) * 999) % 1) * 8;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mat = new THREE.PointsMaterial({
+        map: tex, size: L.size, transparent: true, opacity: 0.9,
+        toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const points = new THREE.Points(geo, mat);
+      points.userData.noShadow = true;
+      this.group.add(points);
+      this._emberSys.push({ points, spd, mat, phase: li * 2.1 });
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: 0xff8a2a, size: 1.4, transparent: true, opacity: 0.9, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending });
-    this._embers = new THREE.Points(geo, mat);
-    this._embers.userData.noShadow = true;
-    this.group.add(this._embers);
   }
 
   // ---- 먼 화산/암봉 실루엣 ----
@@ -857,6 +884,22 @@ export class CastleScenery {
       } else if (i % 3 === 0) {
         const cap = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.3, hgt * 0.16, 5), glow);
         cap.position.set(mx, hgt - hgt * 0.08 - 6, mz); cap.userData.noShadow = true; this.group.add(cap);
+      }
+    }
+    // 원경 실루엣 2겹 (Step 5) — 멀수록 안개(노을) 톤으로 수렴 → 공기원근
+    const layers = [
+      { r: R + 130, n: 14, col: 0x241009, h: 95 },
+      { r: R + 260, n: 12, col: 0x30150c, h: 75 },
+    ];
+    for (const [li, L] of layers.entries()) {
+      const lmat = new THREE.MeshBasicMaterial({ color: L.col }); // 라이팅 무시(실루엣)
+      for (let i = 0; i < L.n; i++) {
+        const a = ((i + li * 0.5) / L.n) * Math.PI * 2;
+        const mx = CX + Math.cos(a) * L.r, mz = CZ + Math.sin(a) * L.r;
+        const hgt = L.h + (i % 3) * 22, rad = 90 + (i % 4) * 26;
+        const m = new THREE.Mesh(new THREE.ConeGeometry(rad, hgt, 4), lmat);
+        m.position.set(mx, hgt / 2 - 6, mz); m.userData.noShadow = true;
+        this.group.add(m);
       }
     }
   }
@@ -1009,24 +1052,27 @@ export class CastleScenery {
       f.scale.set(0.8 + fl * 0.5, 0.7 + fl * 0.7, 0.8 + fl * 0.5);
       f.material.opacity = 0.8 + 0.2 * fl;
     }
-    // 해골 입: 카트가 가까이 오면 크게 벌어짐
+    // 해골 입: 카트가 다가오면 성문처럼 무겁게 크게 열림
     if (this._skullJaw && this._skullPos) {
       let near = false;
-      if (karts) for (const kt of karts) { if (kt.pos.distanceToSquared(this._skullPos) < 1000) { near = true; break; } } // ≈32m
-      const target = near ? 0.6 : 0.0;
-      this._skullOpen += (target - this._skullOpen) * Math.min(1, dt * 7);
+      if (karts) for (const kt of karts) { if (kt.pos.distanceToSquared(this._skullPos) < 1600) { near = true; break; } } // ≈40m
+      const target = near ? 0.95 : 0.0;
+      this._skullOpen += (target - this._skullOpen) * Math.min(1, dt * 4);
       this._skullJaw.rotation.x = this._skullOpen;
     }
     // 마왕 눈/문장 발광 맥동
     for (const m of this._eyes) m.emissiveIntensity = 1.8 + 1.2 * Math.abs(Math.sin(t * 2.2));
-    // 불티 상승
-    if (this._embers) {
-      const arr = this._embers.geometry.attributes.position.array;
-      for (let i = 0; i < this._emberSpd.length; i++) {
-        arr[i * 3 + 1] += this._emberSpd[i] * dt;
-        if (arr[i * 3 + 1] > 44) arr[i * 3 + 1] = LAVA_Y; // 위로 사라지면 재활용
+    // 불티 상승 + 알파 깜빡임 (2계층)
+    if (this._emberSys) {
+      for (const sys of this._emberSys) {
+        const arr = sys.points.geometry.attributes.position.array;
+        for (let i = 0; i < sys.spd.length; i++) {
+          arr[i * 3 + 1] += sys.spd[i] * dt;
+          if (arr[i * 3 + 1] > 44) arr[i * 3 + 1] = LAVA_Y; // 위로 사라지면 재활용
+        }
+        sys.points.geometry.attributes.position.needsUpdate = true;
+        sys.mat.opacity = 0.7 + 0.25 * Math.sin(t * 4.2 + sys.phase);
       }
-      this._embers.geometry.attributes.position.needsUpdate = true;
     }
   }
 }

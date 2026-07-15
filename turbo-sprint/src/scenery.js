@@ -204,6 +204,17 @@ export class Scenery {
       const sn = new THREE.Mesh(new THREE.ConeGeometry(rad * 0.4, hgt * 0.34, 6), snowMat);
       sn.position.set(mx, hgt - hgt * 0.34 / 2 - 4, mz); this.group.add(sn);
     }
+    // 원경 실루엣 겹 (Step 5) — 안개 톤에 수렴하는 옅은 산맥 → 깊이감
+    const farMat = new THREE.MeshBasicMaterial({ color: 0xa9cfe4 });
+    for (let i = 0; i < 14; i++) {
+      const a = ((i + 0.5) / 14) * Math.PI * 2;
+      const fr = RAD + 330;
+      const mx = CX + Math.cos(a) * fr, mz = CZ + Math.sin(a) * fr;
+      const hgt = 70 + (i % 3) * 26, rad = 95 + (i % 4) * 30;
+      const m = new THREE.Mesh(new THREE.ConeGeometry(rad, hgt, 4), farMat);
+      m.position.set(mx, hgt / 2 - 4, mz); m.userData.noShadow = true;
+      this.group.add(m);
+    }
 
     this._buildTrees();
   }
@@ -311,7 +322,7 @@ export class Scenery {
     const flowerGeo = new THREE.SphereGeometry(0.5, 8, 6);
     const flowerCount = 0;
     const clusters = [];
-    for (let i = 60; i < N - 1; i += 130) clusters.push(i);
+    for (let i = 60; i < N - 1; i += 80) clusters.push(i); // 밀도 ↑ (Step 5)
     const totalFlowers = clusters.length * 2 * 14;
     const flowers = new THREE.InstancedMesh(flowerGeo, new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 }), totalFlowers);
     flowers.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(totalFlowers * 3), 3);
@@ -344,8 +355,8 @@ export class Scenery {
     const tireGeo = new THREE.TorusGeometry(0.9, 0.45, 8, 12);
     const tireMat = toon(0x1a1a20, gm);
     const tireSpots = [];
-    // 곡률 큰 지점 몇 곳
-    for (let i = 40; i < N - 1; i += 70) tireSpots.push(i);
+    // 곡률 큰 지점 몇 곳 (밀도 ↑ Step 5)
+    for (let i = 40; i < N - 1; i += 48) tireSpots.push(i);
     const tires = new THREE.InstancedMesh(tireGeo, tireMat, tireSpots.length * 2 * 3);
     let ti = 0;
     for (const si of tireSpots) {
