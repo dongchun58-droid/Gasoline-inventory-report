@@ -6,6 +6,8 @@ const _up = new THREE.Vector3(0, 1, 0);
 const _p2 = new THREE.Vector3();
 
 export const SEA_Y = -3.2;         // 바다 수면 높이(도로보다 낮음)
+// 얼음 산(원뿔) 파라미터 — maps.js iceHelix와 공유. scale은 트랙에서 x,z에만 적용됨.
+export const ICE_MTN = { Rb: 130, Rt: 66, topY: 92, ptsPerTurn: 12, upTurns: 3, downTurns: 1 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
@@ -28,8 +30,7 @@ export class IceScenery {
 
     this._buildGround();
     this._buildSea();
-    this._buildRoadBed();
-    this._buildCastle();
+    this._buildMountain();
     this._buildStartGate();
     this._buildIceCave();
     this._buildPines();
@@ -157,104 +158,53 @@ export class IceScenery {
   }
 
   // ---- 도로 아래 얼음 노반(두꺼운 슬래브) + 오르막 지지 기둥 ----
-  _buildRoadBed() {
+  // ---- 얼음 산(원뿔): 나선 도로가 표면에 새겨진 솔리드 산 (안쪽=벽, 바깥=낭떠러지) ----
+  _buildMountain() {
     const t = this.track;
-    const N = t.samplePos.length;
-    const bedMat = new THREE.MeshStandardMaterial({ color: 0x9fc8ee, roughness: 0.5, metalness: 0.0,
-      transparent: true, opacity: 0.92 });
-    const pillarMat = new THREE.MeshStandardMaterial({ color: 0xaed4f5, roughness: 0.5, metalness: 0.05 });
-    const step = 8;
-    for (let i = 0; i < N - step; i += step) {
-      const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
-      const hw = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth);
-      const nxt = t.samplePos[Math.min(N - 1, i + step)];
-      const segLen = p.distanceTo(nxt) + 1.5;
-      // 얇은 얼음 노반(도로 바로 아래) — 나선이 벽처럼 막히지 않게 얇게
-      const slab = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 1, 1.2, segLen), bedMat);
-      _m.makeBasis(lat, up, tan);
-      slab.quaternion.setFromRotationMatrix(_m);
-      slab.position.copy(p).addScaledVector(up, -0.7);
-      this.group.add(slab);
-      // 오르막(공중 구간): 지면까지 지지 기둥
-      if (p.y > 5) {
-        const h = p.y + 1;
-        const pil = new THREE.Mesh(new THREE.CylinderGeometry(hw * 0.7, hw * 0.95, h, 6), pillarMat);
-        pil.position.set(p.x, (p.y - 0.35) / 2 - 0.35, p.z);
-        this.group.add(pil);
-      }
-    }
-  }
+    const M = ICE_MTN;
+    // 트랙 scale 역산 (제어점 반경 Rb가 월드 samplePos[0].x = Rb*scale)
+    const scale = Math.abs(t.samplePos[0].x) / M.Rb || 2.6;
+    const botR = M.Rb * scale, topR = M.Rt * scale, topY = M.topY;
+    const iceBlue = new THREE.MeshStandardMaterial({ color: 0xbcdcf8, roughness: 0.5, metalness: 0.06 });
+    const iceDk = new THREE.MeshStandardMaterial({ color: 0x9cc6ee, roughness: 0.55, metalness: 0.06 });
+    const snow = snowMat(0xeef7ff);
+    const spireMat = new THREE.MeshStandardMaterial({ color: 0xd6efff, roughness: 0.3, metalness: 0.12 });
+    const grp = new THREE.Group();
+    grp.position.set(0, 0, 0);              // 나선 축 = 원점
+    this._castleCenter = { x: 0, z: 0 };
 
-  // ---- 거대 얼음성(중앙) ----
-  _buildCastle() {
-    const t = this.track;
-    // 성은 나선(등반 링)의 축(월드 원점)에 배치 — 제어점이 원점 중심이므로 (0,0)
-    // (트랙 bounds 중심은 하강/복귀로 때문에 치우쳐 도로 앞을 막으므로 사용하지 않음)
-    const cx = 0, cz = 0;
-    this._castleCenter = { x: cx, z: cz };
-    const castle = new THREE.Group();
-    castle.position.set(cx, 0, cz);
-    // 성벽은 시야를 가리지 않도록 불투명 얼음(투과 없음)
-    const wall = new THREE.MeshStandardMaterial({ color: 0xbfe0ff, roughness: 0.32, metalness: 0.1 });
-    const wallDk = new THREE.MeshStandardMaterial({ color: 0x9ecdf5, roughness: 0.4, metalness: 0.1 });
-    const spireMat = new THREE.MeshStandardMaterial({ color: 0xdaf0ff, roughness: 0.25, metalness: 0.15 });
-    const trim = snowMat(0xffffff);
-
-    // 기단(넓은 계단식 얼음 언덕)
-    for (let i = 0; i < 4; i++) {
-      const r = 150 - i * 26;
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(r, r + 18, 18, 8), i % 2 ? wallDk : wall);
-      base.position.y = 9 + i * 16; castle.add(base);
-      // 계단 눈 트림
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(r + 1, r + 1, 2.5, 8), trim);
-      cap.position.y = 18 + i * 16; castle.add(cap);
+    // 산 본체(원뿔) — 도로면보다 살짝 낮춰 z-fighting 방지, 도로는 표면에 얹힘
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(topR, botR, topY, 56, 1), iceBlue);
+    cone.position.y = topY / 2 - 1.5; grp.add(cone);
+    // 안쪽 벽 느낌의 겹 원뿔(살짝 안쪽·진한 얼음)
+    const cone2 = new THREE.Mesh(new THREE.CylinderGeometry(topR - 14, botR - 14, topY + 2, 40, 1), iceDk);
+    cone2.position.y = topY / 2; grp.add(cone2);
+    // 눈 덮인 능선 링(각 등반 턴 높이) — 산 결
+    for (let k = 1; k <= M.upTurns; k++) {
+      const fy = k / (M.upTurns + 0.4);
+      const rr = (M.Rb - (M.Rb - M.Rt) * fy) * scale;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(rr - 2, 2.4, 6, 40), snow);
+      ring.rotation.x = Math.PI / 2; ring.position.y = fy * topY - 2; grp.add(ring);
     }
-    // 중앙 성채(큰 육각 타워)
-    const keep = new THREE.Mesh(new THREE.CylinderGeometry(74, 86, 96, 6), wall);
-    keep.position.y = 96; castle.add(keep);
-    const keepBand = new THREE.Mesh(new THREE.CylinderGeometry(75, 75, 4, 6), trim);
-    keepBand.position.y = 132; castle.add(keepBand);
-    // 성채 지붕(뾰족)
-    const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(80, 70, 6), spireMat);
-    keepRoof.position.y = 175; castle.add(keepRoof);
-    // 꼭대기 별
+    // 정상 눈모자 + 얼음성 첨탑 + 별
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(topR + 3, 22, 28), snow);
+    cap.position.y = topY + 8; grp.add(cap);
+    const keep = new THREE.Mesh(new THREE.CylinderGeometry(topR * 0.62, topR * 0.72, 34, 6), spireMat);
+    keep.position.y = topY + 24; grp.add(keep);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(topR * 0.62, 60, 6), iceBlue);
+    spire.position.y = topY + 68; grp.add(spire);
+    for (let a = 0; a < 6; a++) {
+      const ang = a / 6 * Math.PI * 2;
+      const tw = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 44, 6), spireMat);
+      tw.position.set(Math.cos(ang) * topR * 0.7, topY + 20, Math.sin(ang) * topR * 0.7); grp.add(tw);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(9, 20, 6), iceBlue);
+      rf.position.set(Math.cos(ang) * topR * 0.7, topY + 50, Math.sin(ang) * topR * 0.7); grp.add(rf);
+    }
     this._star = this._makeStar(0xfff2a0);
-    this._star.position.set(0, 218, 0); this._star.scale.setScalar(6);
-    castle.add(this._star);
+    this._star.scale.setScalar(7); this._star.position.set(0, topY + 108, 0); grp.add(this._star);
 
-    // 둘레 타워 6개 (육각 배치)
-    for (let a = 0; a < 6; a++) {
-      const ang = (a / 6) * Math.PI * 2;
-      const R = 108;
-      const tx = Math.cos(ang) * R, tz = Math.sin(ang) * R;
-      const h = 70 + (a % 2) * 26;
-      const tw = new THREE.Mesh(new THREE.CylinderGeometry(20, 26, h, 8), a % 2 ? wall : wallDk);
-      tw.position.set(tx, h / 2, tz); castle.add(tw);
-      const band = new THREE.Mesh(new THREE.CylinderGeometry(21, 21, 3, 8), trim);
-      band.position.set(tx, h, tz); castle.add(band);
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(26, 40, 8), spireMat);
-      roof.position.set(tx, h + 20, tz); castle.add(roof);
-      // 고드름 스파이크
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(3, 16, 6), spireMat);
-      tip.position.set(tx, h + 48, tz); castle.add(tip);
-    }
-    // 성벽 사이 커튼월(육각)
-    for (let a = 0; a < 6; a++) {
-      const ang0 = (a / 6) * Math.PI * 2, ang1 = ((a + 1) / 6) * Math.PI * 2;
-      const R = 108;
-      const x0 = Math.cos(ang0) * R, z0 = Math.sin(ang0) * R;
-      const x1 = Math.cos(ang1) * R, z1 = Math.sin(ang1) * R;
-      const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
-      const len = Math.hypot(x1 - x0, z1 - z0);
-      const wallSeg = new THREE.Mesh(new THREE.BoxGeometry(len, 46, 12), wall);
-      wallSeg.position.set(mx, 40, mz);
-      wallSeg.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
-      castle.add(wallSeg);
-    }
-    // 나선(반경≈255) 중앙의 큰 얼음성
-    castle.scale.setScalar(0.85);
-    this.group.add(castle);
-    this._castle = castle;
+    this.group.add(grp);
+    this._castle = grp;
   }
 
   _makeStar(color) {

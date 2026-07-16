@@ -1,32 +1,32 @@
 // maps.js — 맵(테마) 정의: 트랙 레이아웃 + 배경 클래스 + 조명/하늘/도로 색
 import { Scenery } from './scenery.js';
 import { CastleScenery } from './castle.js';
-import { IceScenery } from './ice.js';
+import { IceScenery, ICE_MTN } from './ice.js';
 
 export const MAP_ORDER = ['meadow', 'castle', 'ice'];
 
-// 얼음성 나선 트랙: 성을 3바퀴 돌며 계속 위로 올라가고(climb),
-// 정상에서 점프대로 뛰어내려(jump-down) 착지 후 성 아래로 돌아와 닫힘.
-// x,z만 scale 적용 / y(높이)는 그대로.
+// 얼음 산(원뿔) 나선 트랙: 산 표면을 3바퀴 돌며 계속 올라가고(반경이 줄며 위로),
+// 정상에서 점프대로 뛰어내려 1바퀴 빠르게 나선 하강해 출발선으로 닫힘.
+// (산을 차로 뱅뱅 돌아 오르는 모양 — 반경이 높이에 따라 줄어드는 원뿔 나선)
+// x,z만 scale 적용 / y(높이)는 그대로. ICE_MTN 파라미터는 ice.js 산 메시와 공유.
 function iceHelix() {
-  const R = 98, turns = 3, ptsPerTurn = 10, topY = 92;
-  const climbN = turns * ptsPerTurn;
+  const { Rb, Rt, topY, ptsPerTurn, upTurns, downTurns } = ICE_MTN;
+  const upN = upTurns * ptsPerTurn, downN = downTurns * ptsPerTurn;
   const pts = [];
-  // 나선 등반: 반경 R로 3바퀴, y 0→topY (정상=출발 위 (R,topY,0))
-  for (let i = 0; i <= climbN; i++) {
+  // 상승 나선(원뿔): 반경 Rb→Rt, y 0→topY
+  for (let i = 0; i <= upN; i++) {
     const a = (i / ptsPerTurn) * Math.PI * 2;
-    const y = (i / climbN) * topY;
-    pts.push([Math.round(R * Math.cos(a)), Math.round(y), Math.round(R * Math.sin(a))]);
+    const frac = i / upN;
+    const r = Rb - (Rb - Rt) * frac;
+    pts.push([Math.round(r * Math.cos(a)), Math.round(frac * topY), Math.round(r * Math.sin(a))]);
   }
-  // 정상에서 점프대로 뛰어내림(+z 비행) → 성 아래 착지 스트립 → 먼 쪽 반바퀴 돌아 출발선 복귀
-  // (R=100 기준 좌표를 R 비율로 스케일)
-  const f = R / 100;
-  const ret = [
-    [100, 0, 48], [94, 0, 92], [68, 0, 120],   // 착지 스트립(+z, 비행방향 평행)
-    [16, 0, 128], [-44, 0, 112], [-92, 0, 66], [-118, 0, 10],
-    [-104, 0, -46], [-62, 0, -78], [-4, 0, -84], [52, 0, -60], [88, 0, -26],
-  ];
-  for (const [x, y, z] of ret) pts.push([Math.round(x * f), y, Math.round(z * f)]);
+  // 하강 나선(더 가파르게 1바퀴): 반경 Rt→Rb, y topY→0, 같은 방향으로 감아 출발선으로 닫힘
+  for (let j = 1; j < downN; j++) {
+    const a = ((upN + j) / ptsPerTurn) * Math.PI * 2;
+    const frac = j / downN;
+    const r = Rt + (Rb - Rt) * frac;
+    pts.push([Math.round(r * Math.cos(a)), Math.round(topY * (1 - frac)), Math.round(r * Math.sin(a))]);
+  }
   return pts;
 }
 
@@ -134,15 +134,15 @@ export const MAPS = {
     // 성을 3바퀴 돌며 계속 올라가고(0~top), 정상에서 점프대로 뛰어내려 착지 후 성 아래로 복귀
     laps: 1,                         // 한 바퀴가 이미 나선 3턴 + 하강이라 1랩
     controlPoints: iceHelix(),
-    // (아래 t값들은 iceHelix 구조 기준 — 정상/gap은 등반 끝(≈0.70) 부근)
-    caveRange: [0.30, 0.40],         // 얼음동굴 구간(2번째 등반 턴)
-    gaps: [[0.726, 0.733]],          // 정상(꼭대기) 단절 — 점프로 뛰어내려야, 저속이면 추락
-    fallRespawn: 0.02,               // 못 넘으면 성 아래(등반 시작)로 복귀 재등반
-    seaEdges: [[0.80, 0.92, 1]],     // 복귀 주로 바깥쪽은 바다 → 이탈 시 추락
+    // (t값은 iceHelix 원뿔 나선 기준 — 정상=t≈0.747)
+    caveRange: [0.36, 0.46],         // 얼음동굴(2~3번째 등반 턴, 산허리 터널)
+    gaps: [[0.75, 0.757]],           // 정상 단절 — 점프대로 뛰어내려야, 저속이면 추락→성 아래 복귀
+    fallRespawn: 0.02,               // 못 넘으면 산 아래(등반 시작)로 복귀 재등반
+    seaEdges: [],                    // 원뿔 산: 바깥쪽이 곧 낭떠러지(별도 바다구간 없음)
     obstacle: 'snowball',
     pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
-      jumps: [0.716], boosts: [0.2, 0.5, 0.9] },
-    penguinSpots: [0.22, 0.9], penguinSides: [1, -1],
+      jumps: [0.742], boosts: [0.2, 0.5, 0.6] },
+    penguinSpots: [0.2, 0.55], penguinSides: [1, -1],
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],
