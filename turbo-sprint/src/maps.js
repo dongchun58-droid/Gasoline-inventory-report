@@ -5,28 +5,27 @@ import { IceScenery, ICE_MTN } from './ice.js';
 
 export const MAP_ORDER = ['meadow', 'castle', 'ice'];
 
-// 얼음 산(원뿔) 나선 트랙: 산 표면을 3바퀴 돌며 계속 올라가고(반경이 줄며 위로),
-// 정상에서 점프대로 뛰어내려 1바퀴 빠르게 나선 하강해 출발선으로 닫힘.
-// (산을 차로 뱅뱅 돌아 오르는 모양 — 반경이 높이에 따라 줄어드는 원뿔 나선)
-// x,z만 scale 적용 / y(높이)는 그대로. ICE_MTN 파라미터는 ice.js 산 메시와 공유.
-function iceHelix() {
-  const { Rb, Rt, topY, ptsPerTurn, upTurns, downTurns } = ICE_MTN;
-  const upN = upTurns * ptsPerTurn, downN = downTurns * ptsPerTurn;
+// 얼음랜드 트랙: 큰 평지 루프(땅콩 모양) + 좌상단의 작은 얼음성 '주차장식' 나선.
+// 상승=바깥 반경(Rb), 하강=안쪽 반경(Rt)로 동심 배치 → 서로 겹치지 않아(접지 안정) 오를 수 있음.
+// 정상에 점프대(내려오는 맛). 하단은 바다(추락=딜레이). x,z만 scale 적용 / y(높이)는 그대로.
+function iceTrack() {
+  const M = ICE_MTN;
+  const push = (a) => pts.push([Math.round(a[0]), Math.round(a[1]), Math.round(a[2])]);
   const pts = [];
-  // 상승 나선(원뿔): 반경 Rb→Rt, y 0→topY
+  // --- 평지 루프 앞부분: start(오른쪽) → 위 → 좌상단(나선 진입 직전) ---
+  [[118, 0, 16], [130, 0, -46], [96, 0, -96], [40, 0, -98], [6, 0, -84]].forEach((p) => push([p[0], p[1], p[2]]));
+  // --- 작은 얼음성 나선: 진입 → 1턴 바깥상승(정상=점프) → 0.5턴 안쪽하강 → 반대편 탈출 ---
+  const upN = Math.round(M.upTurns * M.ppt), downN = Math.round(M.downTurns * M.ppt);
   for (let i = 0; i <= upN; i++) {
-    const a = (i / ptsPerTurn) * Math.PI * 2;
-    const frac = i / upN;
-    const r = Rb - (Rb - Rt) * frac;
-    pts.push([Math.round(r * Math.cos(a)), Math.round(frac * topY), Math.round(r * Math.sin(a))]);
+    const a = M.aIn + (i / M.ppt) * Math.PI * 2, frac = i / upN;
+    push([M.Cx + M.Rb * Math.cos(a), frac * M.topY, M.Cz + M.Rb * Math.sin(a)]);   // 바깥 반경 상승
   }
-  // 하강 나선(더 가파르게 1바퀴): 반경 Rt→Rb, y topY→0, 같은 방향으로 감아 출발선으로 닫힘
-  for (let j = 1; j < downN; j++) {
-    const a = ((upN + j) / ptsPerTurn) * Math.PI * 2;
-    const frac = j / downN;
-    const r = Rt + (Rb - Rt) * frac;
-    pts.push([Math.round(r * Math.cos(a)), Math.round(topY * (1 - frac)), Math.round(r * Math.sin(a))]);
+  for (let j = 1; j <= downN; j++) {
+    const a = M.aIn + ((upN + j) / M.ppt) * Math.PI * 2, frac = j / downN;
+    push([M.Cx + M.Rt * Math.cos(a), M.topY * (1 - frac), M.Cz + M.Rt * Math.sin(a)]); // 안쪽 반경 하강
   }
+  // --- 평지 루프 뒷부분: 나선 탈출(좌측) → 좌하단 → 하단(바다, 펭귄) → 오른쪽 복귀 → start ---
+  [[-104, 0, -30], [-118, 0, 26], [-84, 0, 74], [-16, 0, 102], [52, 0, 94], [106, 0, 58]].forEach((p) => push([p[0], p[1], p[2]]));
   return pts;
 }
 
@@ -130,19 +129,20 @@ export const MAPS = {
     Scenery: IceScenery,
     scale: 2.6,
     variableWidth: false,  // 일정 폭
-    roadHalf: 17,          // 넓은 도로(나선 등반에서 이탈 방지)
-    // 성을 3바퀴 돌며 계속 올라가고(0~top), 정상에서 점프대로 뛰어내려 착지 후 성 아래로 복귀
-    laps: 1,                         // 한 바퀴가 이미 나선 3턴 + 하강이라 1랩
-    controlPoints: iceHelix(),
-    // (t값은 iceHelix 원뿔 나선 기준 — 정상=t≈0.747)
-    caveRange: [0.36, 0.46],         // 얼음동굴(2~3번째 등반 턴, 산허리 터널)
-    gaps: [[0.75, 0.757]],           // 정상 단절 — 점프대로 뛰어내려야, 저속이면 추락→성 아래 복귀
-    fallRespawn: 0.02,               // 못 넘으면 산 아래(등반 시작)로 복귀 재등반
-    seaEdges: [],                    // 원뿔 산: 바깥쪽이 곧 낭떠러지(별도 바다구간 없음)
+    roadHalf: 15,          // 도로 반폭
+    // 큰 평지 루프 + 좌상단 작은 얼음성 나선(빠르게 올라 점프로 내려옴) + 하단 바다
+    laps: 2,
+    controlPoints: iceTrack(),
+    // t값은 iceTrack 기하(node geo3)로 확인: 정상 t≈0.495(동심 나선). 정상에 점프대(내려오는 맛).
+    caveRange: null,
+    gaps: [],                         // 나선은 주행 가능(추락 없음) — 추락 스킴은 바다에만
+    fallRespawn: 0.30,
+    seaEdges: [[0.72, 0.95, 1]],      // 하단 루프 바깥쪽 = 바다(추락=딜레이)
     obstacle: 'snowball',
+    // 상승로에 부스트를 촘촘히 깔아 정상까지 속도 유지, 정상에 점프대
     pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
-      jumps: [0.742], boosts: [0.2, 0.5, 0.6] },
-    penguinSpots: [0.2, 0.55], penguinSides: [1, -1],
+      jumps: [0.485], boosts: [0.05, 0.30, 0.37, 0.43, 0.85] },
+    penguinSpots: [0.80, 0.90], penguinSides: [1, 1],
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],

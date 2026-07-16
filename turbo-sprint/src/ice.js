@@ -5,9 +5,10 @@ const _m = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0);
 const _p2 = new THREE.Vector3();
 
-export const SEA_Y = -3.2;         // 바다 수면 높이(도로보다 낮음)
-// 얼음 산(원뿔) 파라미터 — maps.js iceHelix와 공유. scale은 트랙에서 x,z에만 적용됨.
-export const ICE_MTN = { Rb: 130, Rt: 66, topY: 92, ptsPerTurn: 12, upTurns: 3, downTurns: 1 };
+export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
+// 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
+// scale은 트랙에서 x,z에만 적용됨. Cx,Cz=나선 중심(제어점 단위).
+export const ICE_MTN = { Cx: -58, Cz: -54, Rb: 32, Rt: 14, topY: 26, ppt: 10, upTurns: 1, downTurns: 0.5, aIn: -0.6 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
@@ -40,36 +41,41 @@ export class IceScenery {
     this._buildFallingSnow();
   }
 
-  // ---- 미끄러운 빙판(도로 위 광택 얼음 패치) ----
+  // ---- 미끄러운 빙판(도로 '중앙'에 광택 얼음 웅덩이, 여러 곳) ----
   _buildSlippery() {
     const t = this.track;
     const N = t.samplePos.length;
     const mat = new THREE.MeshPhysicalMaterial({ color: 0xd6f2ff, roughness: 0.05, metalness: 0.0,
       transmission: 0.3, transparent: true, opacity: 0.55, clearcoat: 1.0, depthWrite: false });
     this._icePatches = [];
-    const spots = [0.05, 0.235, 0.80, 0.90, 0.965, 0.42];
+    // 평지 구간 위주로 도로 중앙에 배치(나선 상승/gap 구간은 피함)
+    const spots = [0.05, 0.11, 0.63, 0.70, 0.78, 0.86, 0.93, 0.98];
+    let s = 0;
     for (const tt of spots) {
       const i = Math.floor(tt * N) % N;
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
-      const off = (((i * 17) % 100) / 100 - 0.5) * (t.halfWidth * 0.9);
-      const r = 5 + ((i * 7) % 4);
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(r, 22), mat);
+      // 중앙 근처(살짝만 흔들어 자연스럽게)
+      const off = ((s % 3) - 1) * (t.halfWidth * 0.28);
+      const r = 6 + (s % 3) * 1.5;
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(r, 24), mat);
       _m.makeBasis(lat, up, tan);
       patch.quaternion.setFromRotationMatrix(_m);
       patch.rotateX(-Math.PI / 2);
       patch.position.copy(p).addScaledVector(lat, off).addScaledVector(up, 0.06);
       this.group.add(patch);
       this._icePatches.push({ pos: patch.position.clone(), r2: (r + 1.5) * (r + 1.5) });
+      s++;
     }
   }
 
-  // ---- 하늘에서 떨어지는 눈덩이 (2곳) ----
+  // ---- 하늘에서 떨어지는 얼음덩이 (여러 곳) ----
   _buildFallingSnow() {
     const t = this.track;
     const N = t.samplePos.length;
     const snow = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.85 });
     this._snowballs = [];
-    const spots = [0.47, 0.86];
+    // 코스 곳곳(상승로·평지·하단 바다변) 여러 지점에서 낙하
+    const spots = [0.03, 0.09, 0.16, 0.34, 0.40, 0.60, 0.68, 0.76, 0.83, 0.90, 0.96];
     for (let s = 0; s < spots.length; s++) {
       const i = Math.floor(spots[s] * N) % N;
       const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), snow);
@@ -78,7 +84,8 @@ export class IceScenery {
       const ring = new THREE.Mesh(new THREE.RingGeometry(2.2, 3.0, 20),
         new THREE.MeshBasicMaterial({ color: 0x2f8fd6, transparent: true, opacity: 0.6, toneMapped: false, side: THREE.DoubleSide, depthWrite: false }));
       this.group.add(ring);
-      this._snowballs.push({ i0: i, ball, ring, phase: s * 1.4, P: 3.2 });
+      // 위상·주기를 어긋나게 해서 여기저기서 번갈아 떨어지도록
+      this._snowballs.push({ i0: i, ball, ring, phase: (s * 0.37) % 1, P: 2.6 + (s % 4) * 0.35 });
     }
   }
 
@@ -126,82 +133,126 @@ export class IceScenery {
     }
   }
 
-  // ---- 눈밭 지면 ----
+  // ---- 눈밭 지면(육지) ----
   _buildGround() {
     const t = this.track;
     const size = 2 * (t.radius + 520);
     const geo = new THREE.PlaneGeometry(size, size, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const g = new THREE.Mesh(geo, snowMat(0xeaf4ff));
-    g.position.set(t.center.x, -0.35, t.center.z);
+    g.position.set(t.center.x, -0.6, t.center.z);
     g.receiveShadow = true;
-    g.userData.noShadow = false;
     this.group.add(g);
   }
 
-  // ---- 바다(한쪽) : 큰 물 평면. 도로 밖으로 나가면 이 아래로 추락 ----
+  // ---- 바다: 루프 하단 도로 바로 바깥에 넓게. 그 위로 이탈하면 추락(딜레이) ----
   _buildSea() {
     const t = this.track;
-    const size = 2 * (t.radius + 520);
+    // 하단 도로 중앙(바다 구간) + 바깥 방향
+    let rx = t.center.x, rz = t.center.z + t.radius * 0.6, ox = 0, oz = 1;
+    const se = t.seaEdges && t.seaEdges[0];
+    if (se) {
+      const N = t.samplePos.length;
+      const im = Math.floor(((se[0] + se[1]) / 2) * N) % N;
+      const p = t.samplePos[im], lat = t.sampleLat[im];
+      rx = p.x; rz = p.z;
+      ox = lat.x * se[2]; oz = lat.z * se[2];
+      const on = Math.hypot(ox, oz) || 1; ox /= on; oz /= on;
+    }
+    const seaHalf = t.radius * 1.05, size = seaHalf * 2;
+    const inner = t.halfWidth + 34;              // 도로 바깥에 눈밭(해변) 버퍼를 두고 그 너머가 바다
+    // 바다 표면: 눈밭(-0.6)보다 살짝 낮게, 도로(0)보다 낮게 → 물가 느낌. 불투명 진파랑.
     const geo = new THREE.PlaneGeometry(size, size, 1, 1);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshPhysicalMaterial({
-      color: 0x1f6ea8, roughness: 0.12, metalness: 0.0, transmission: 0.2,
-      transparent: true, opacity: 0.9, clearcoat: 1.0,
+      color: 0x123f66, roughness: 0.1, metalness: 0.1,      // 진한 남색 → 도로(하늘파랑)와 대비
+      transparent: true, opacity: 0.99, clearcoat: 1.0, clearcoatRoughness: 0.1,
     });
     const sea = new THREE.Mesh(geo, mat);
-    // 바다는 지면보다 낮게, 트랙 중심에서 바깥쪽으로 크게 깔되 살짝 오프셋
-    sea.position.set(t.center.x, SEA_Y, t.center.z);
+    // 눈밭(-0.6) 위(=보이게), 도로(0) 아래 → 물가. 안쪽 가장자리를 도로 바깥 연석에 맞춤.
+    sea.position.set(rx + ox * (inner + seaHalf), -0.45, rz + oz * (inner + seaHalf));
     sea.userData.noShadow = true;
     this._sea = sea; this._seaMat = mat;
     this.group.add(sea);
+    // 물가 포말 띠(밝은 하늘색, 도로 바깥선을 따라)
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xd6f2ff, transparent: true, opacity: 0.7, toneMapped: false, depthWrite: false });
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(size, 12), foamMat);
+    foam.rotateX(-Math.PI / 2);
+    foam.position.set(rx + ox * (inner - 2), -0.32, rz + oz * (inner - 2));
+    foam.quaternion.setFromRotationMatrix(_m.makeBasis(new THREE.Vector3(oz, 0, -ox), _up, new THREE.Vector3(ox, 0, oz)));
+    this.group.add(foam);
+    // 떠다니는 유빙(하양) 몇 개
+    const floeMat = snowMat(0xf2fbff);
+    for (let i = 0; i < 7; i++) {
+      const d = 40 + i * 55, sidew = ((i * 53) % 100 - 50) * 2.2;
+      const px = rx + ox * (inner + d) + oz * sidew;
+      const pz = rz + oz * (inner + d) - ox * sidew;
+      const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 7 + (i % 3) * 3, 2, 6), floeMat);
+      floe.position.set(px, -0.35, pz);
+      floe.userData.noShadow = true;
+      this.group.add(floe);
+    }
   }
 
-  // ---- 도로 아래 얼음 노반(두꺼운 슬래브) + 오르막 지지 기둥 ----
-  // ---- 얼음 산(원뿔): 나선 도로가 표면에 새겨진 솔리드 산 (안쪽=벽, 바깥=낭떠러지) ----
+  // ---- 작은 얼음성(중앙 탑) + 나선 램프 받침: 도로가 탑 둘레를 '주차장식'으로 감아 오름 ----
   _buildMountain() {
-    const t = this.track;
     const M = ICE_MTN;
-    // 트랙 scale 역산 (제어점 반경 Rb가 월드 samplePos[0].x = Rb*scale)
-    const scale = Math.abs(t.samplePos[0].x) / M.Rb || 2.6;
-    const botR = M.Rb * scale, topR = M.Rt * scale, topY = M.topY;
+    const scale = 2.6;                       // 얼음 맵 scale (maps.js와 동일)
+    const cx = M.Cx * scale, cz = M.Cz * scale;
+    const topY = M.topY;
+    // 중앙 탑 반경: 안쪽 하강로(Rt) 보다 작게 → 도로를 가리지 않음
+    const keepR = Math.min(M.Rt * scale * 0.62, 22);
     const iceBlue = new THREE.MeshStandardMaterial({ color: 0xbcdcf8, roughness: 0.5, metalness: 0.06 });
     const iceDk = new THREE.MeshStandardMaterial({ color: 0x9cc6ee, roughness: 0.55, metalness: 0.06 });
     const snow = snowMat(0xeef7ff);
     const spireMat = new THREE.MeshStandardMaterial({ color: 0xd6efff, roughness: 0.3, metalness: 0.12 });
     const grp = new THREE.Group();
-    grp.position.set(0, 0, 0);              // 나선 축 = 원점
-    this._castleCenter = { x: 0, z: 0 };
+    grp.position.set(cx, 0, cz);             // 나선 중심(좌상단)
+    this._castleCenter = { x: cx, z: cz };
 
-    // 산 본체(원뿔) — 도로면보다 살짝 낮춰 z-fighting 방지, 도로는 표면에 얹힘
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(topR, botR, topY, 56, 1), iceBlue);
-    cone.position.y = topY / 2 - 1.5; grp.add(cone);
-    // 안쪽 벽 느낌의 겹 원뿔(살짝 안쪽·진한 얼음)
-    const cone2 = new THREE.Mesh(new THREE.CylinderGeometry(topR - 14, botR - 14, topY + 2, 40, 1), iceDk);
-    cone2.position.y = topY / 2; grp.add(cone2);
-    // 눈 덮인 능선 링(각 등반 턴 높이) — 산 결
-    for (let k = 1; k <= M.upTurns; k++) {
-      const fy = k / (M.upTurns + 0.4);
-      const rr = (M.Rb - (M.Rb - M.Rt) * fy) * scale;
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(rr - 2, 2.4, 6, 40), snow);
-      ring.rotation.x = Math.PI / 2; ring.position.y = fy * topY - 2; grp.add(ring);
+    // --- 나선 램프 받침: 공중에 뜬 상승/하강 도로 아래로 반투명 얼음 기둥 ---
+    const t = this.track;
+    const iceCol = new THREE.MeshPhysicalMaterial({ color: 0xbfe4ff, roughness: 0.2, metalness: 0.0,
+      transmission: 0.35, transparent: true, opacity: 0.5, clearcoat: 0.8 });
+    const N = t.samplePos.length;
+    for (let i = 0; i < N; i += 7) {
+      const p = t.samplePos[i];
+      if (p.y < 2.5) continue;              // 평지 구간은 받침 불필요
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.4, p.y + 1, 6), iceCol);
+      col.position.set(p.x, (p.y + 1) / 2 - 0.6, p.z);
+      col.userData.noShadow = true;
+      this.group.add(col);
     }
-    // 정상 눈모자 + 얼음성 첨탑 + 별
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(topR + 3, 22, 28), snow);
-    cap.position.y = topY + 8; grp.add(cap);
-    const keep = new THREE.Mesh(new THREE.CylinderGeometry(topR * 0.62, topR * 0.72, 34, 6), spireMat);
-    keep.position.y = topY + 24; grp.add(keep);
-    const spire = new THREE.Mesh(new THREE.ConeGeometry(topR * 0.62, 60, 6), iceBlue);
-    spire.position.y = topY + 68; grp.add(spire);
-    for (let a = 0; a < 6; a++) {
-      const ang = a / 6 * Math.PI * 2;
-      const tw = new THREE.Mesh(new THREE.CylinderGeometry(6, 8, 44, 6), spireMat);
-      tw.position.set(Math.cos(ang) * topR * 0.7, topY + 20, Math.sin(ang) * topR * 0.7); grp.add(tw);
-      const rf = new THREE.Mesh(new THREE.ConeGeometry(9, 20, 6), iceBlue);
-      rf.position.set(Math.cos(ang) * topR * 0.7, topY + 50, Math.sin(ang) * topR * 0.7); grp.add(rf);
+    // 얼음 기단(성 아래 낮고 넓은 빙판 언덕) — 도로(반경 Rt*scale≈36 이상)를 묻지 않게 낮게
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(keepR + 8, keepR + 20, 6, 32), iceDk);
+    mound.position.y = 1.0; grp.add(mound);
+
+    // --- 중앙 얼음성 탑(키프 + 성가퀴 + 첨탑 + 코너 터렛 + 별) ---
+    const keep = new THREE.Mesh(new THREE.CylinderGeometry(keepR * 0.86, keepR, topY + 12, 12), iceBlue);
+    keep.position.y = (topY + 12) / 2 + 3; grp.add(keep);
+    // 성가퀴(총안) 링
+    for (let a = 0; a < 12; a++) {
+      const ang = a / 12 * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), snow);
+      b.position.set(Math.cos(ang) * keepR, topY + 16, Math.sin(ang) * keepR);
+      b.rotation.y = -ang; grp.add(b);
+    }
+    // 상단 원뿔 지붕 + 첨탑
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(keepR + 2, 16, 12), spireMat);
+    cap.position.y = topY + 24; grp.add(cap);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(keepR * 0.5, 34, 8), iceBlue);
+    spire.position.y = topY + 48; grp.add(spire);
+    // 코너 터렛 4개(중앙 탑 둘레, keepR 안쪽)
+    for (let a = 0; a < 4; a++) {
+      const ang = a / 4 * Math.PI * 2 + Math.PI / 4;
+      const rr = keepR * 0.82;
+      const tw = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.2, topY + 6, 8), spireMat);
+      tw.position.set(Math.cos(ang) * rr, (topY + 6) / 2 + 3, Math.sin(ang) * rr); grp.add(tw);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(5.2, 12, 8), iceBlue);
+      rf.position.set(Math.cos(ang) * rr, topY + 12, Math.sin(ang) * rr); grp.add(rf);
     }
     this._star = this._makeStar(0xfff2a0);
-    this._star.scale.setScalar(7); this._star.position.set(0, topY + 108, 0); grp.add(this._star);
+    this._star.scale.setScalar(5); this._star.position.set(0, topY + 70, 0); grp.add(this._star);
 
     this.group.add(grp);
     this._castle = grp;
@@ -284,6 +335,7 @@ export class IceScenery {
   // ---- 얼음동굴(트랙 일부 구간을 덮는 반투명 터널) ----
   _buildIceCave() {
     const t = this.track;
+    if (t.caveRange === null) return;   // 이 맵은 동굴 없음
     const N = t.samplePos.length;
     const cave = t.caveRange || [0.16, 0.32];
     const mat = iceMat(0x9fd0f5, 0.6, 0.15);
