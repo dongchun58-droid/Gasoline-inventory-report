@@ -324,6 +324,7 @@ export class Track {
     out.bridge = this.sampleBridge[i];
     out.gap = this.sampleGap[i];
     out.sea = this.sampleSea[i];
+    out.elevated = sp.y > 3.5;         // 공중(성 등반) 도로 — 옆으로 이탈 시 추락 처리
     out.onRoad = Math.abs(lateral) <= hw + 0.5;
     return out;
   }

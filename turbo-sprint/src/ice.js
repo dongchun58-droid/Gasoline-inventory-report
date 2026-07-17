@@ -8,7 +8,7 @@ const _p2 = new THREE.Vector3();
 export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
 // 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
 // scale은 트랙에서 x,z에만 적용됨. Cx,Cz=나선 중심(제어점 단위).
-export const ICE_MTN = { Cx: -58, Cz: -54, Rb: 32, Rt: 14, topY: 26, ppt: 10, upTurns: 1, downTurns: 0.5, aIn: -0.6 };
+export const ICE_MTN = { Cx: -58, Cz: -54, Rb: 32, Rt: 13, topY: 24, ppt: 10, upTurns: 1, downTurns: 0.5, aIn: -0.6 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {

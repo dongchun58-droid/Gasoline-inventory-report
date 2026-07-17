@@ -849,8 +849,12 @@ export class Kart {
         }
       }
       const over = Math.abs(g.lateral) - g.half;
-      // 좁은 다리 이탈 → 용암 추락(페널티)
-      if (g.bridge && over > 0.2) {
+      // 공중 도로(성 등반) 옆으로 확실히 이탈 → 낭떠러지 추락 → 성 아래(재등반 지점)로 복귀
+      if (g.elevated && over > 2.5) {
+        this._startLavaFall(true);
+        this.onGrass = false;
+      } else if (g.bridge && over > 0.2) {
+        // 좁은 다리 이탈 → 용암 추락(페널티)
         this._startLavaFall();
         this.onGrass = false;
       } else if (g.sea && over > 1.5 && Math.sign(g.lateral) === Math.sign(g.sea)) {
