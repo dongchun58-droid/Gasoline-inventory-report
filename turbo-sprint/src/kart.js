@@ -929,9 +929,9 @@ export class Kart {
         // 좁은 다리 이탈 → 용암 추락(페널티)
         this._startLavaFall();
         this.onGrass = false;
-      } else if (g.sea && over > 9 && Math.sign(g.lateral) === Math.sign(g.sea)) {
+      } else if (g.sea && over > 9 && (g.sea === 2 || Math.sign(g.lateral) === Math.sign(g.sea))) {
         // 바다 쪽 도로 이탈 → 바다 추락(딜레이 후 마지막 안전지점 복귀).
-        // 여유(해변 폭)를 둬서 급커브에서 살짝 밀려도 곧장 빠지진 않게 — 크게 이탈해야 추락.
+        // sea===2: 둑길(양쪽 다 바다) — 어느 쪽으로 이탈해도 추락. 여유(해변)로 급커브 살짝 밀림은 허용.
         this._startLavaFall();
         this.onGrass = false;
       } else {

@@ -47,10 +47,13 @@ export class Features {
       }
       this._addJumpPad(ji, perSample);
     }
-    // 성 정상 스크립트 도약(강제 이동) 설정: 점프대를 밟으면 정해진 착지점으로 크게 날아감
+    // 성 정상 스크립트 도약(강제 이동): 점프대를 '끝까지 올라' 밟아야 정해진 착지점으로 크게 날아감
     this.leap = null;
     if (pad.leap) {
-      this.leap = { toIdx: Math.floor(pad.leap.to * N) % N, height: pad.leap.height || 30, dur: pad.leap.dur || 1.35 };
+      const li = Math.floor(pad.leap.to * N) % N;
+      // 정상 높이 기준 — 이 높이 근처(끝까지 등반)에서만 도약 발동(순간이동 방지)
+      let maxY = 0; for (let i = 0; i < N; i++) maxY = Math.max(maxY, track.samplePos[i].y);
+      this.leap = { toIdx: li, height: pad.leap.height || 30, dur: pad.leap.dur || 1.35, minY: maxY * 0.8 };
     }
   }
 
@@ -133,13 +136,14 @@ export class Features {
       // 점프 램프
       if (!k.airborne && k.leapTimer <= 0 && k.speed > 6) {
         for (const p of this.jumpPads) {
-          const inRange = this._within(k.idx, p.i0, p.half + (this.leap ? 7 : 0), N);
           if (this.leap) {
-            // 성 정상: 무조건 도약 — 가장자리로 밀려도 잡히도록 폭 넉넉히(추락 전에 발동)
-            if (inRange && Math.abs(lateral) < p.width + 12) {
+            // 성 정상: 램프를 '끝까지 올라'(높이 게이트) 정상 근처에 오면 도약 — 도달 전 순간이동 방지.
+            // 높이 게이트가 조기 발동을 막으므로 창·폭은 넉넉히(가장자리로 밀려도 확실히 발동).
+            const inRange = this._within(k.idx, p.i0, p.half + 6, N);
+            if (inRange && k.pos.y > this.leap.minY && Math.abs(lateral) < p.width + 16) {
               k.castleLeap(this.leap.toIdx, this.leap.height, this.leap.dur);
             }
-          } else if (inRange && Math.abs(lateral) < p.width) {
+          } else if (this._within(k.idx, p.i0, p.half, N) && Math.abs(lateral) < p.width) {
             k.jump(19, 1.0); // 더 높고 길게 (느린 차도 용암 강을 넘도록) + 착지 부스트
             if (k.speed < 24) k.speed = 24; // 램프 런치: 최소 도약 속도 보장
           }

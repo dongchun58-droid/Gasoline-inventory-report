@@ -5,6 +5,9 @@ import { normalFromCanvas } from './pbrtex.js';
 const _m = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0);
 const _p2 = new THREE.Vector3();
+const _kd = new THREE.Vector3();
+const _kd2 = new THREE.Vector3();
+const _tp = new THREE.Vector3();
 
 // 바다 표면 텍스처(진파랑 + 잔물결·포말) — 용암처럼 스크롤해서 파도 느낌(평면은 안정적으로 고정)
 function waterTexture() {
@@ -39,7 +42,7 @@ function waterTexture() {
 export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
 // 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
 // scale은 트랙에서 x,z에만 적용됨. Cx,Cz=나선 중심(제어점 단위).
-export const ICE_MTN = { Cx: -4, Cz: -82, Rb: 34, Rt: 13, topY: 52, ppt: 13, upTurns: 2.25, downTurns: 0.5, aIn: -0.7 };
+export const ICE_MTN = { Cx: -4, Cz: -82, Rb: 34, Rt: 13, topY: 52, ppt: 13, upTurns: 2.25, downTurns: 0.5, aIn: 1.5708 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
@@ -95,6 +98,9 @@ export class IceScenery {
     this._buildAuroraGlow();
     this._buildSlippery();
     this._buildFallingSnow();
+    this._buildWarningSign();
+    this._buildClimbPenguins();
+    this._buildTornadoes();
   }
 
   // ---- 미끄러운 얼음 구간: 도로 '전체 폭 x 길게' 얼어붙은 큰 구간(무조건 지나가며 미끄러짐) ----
@@ -106,14 +112,13 @@ export class IceScenery {
       clearcoat: 1.0, clearcoatRoughness: 0.03, transparent: true, opacity: 0.92, depthWrite: false });
     const rimMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
     this._icePatches = [];
-    // 평지·굴곡 구간(상승로 0.16~0.50·점프 gap은 피함) — 도로 전 폭을 덮는 크고 긴 얼음 구간.
-    // 뒤쪽(0.60~0.98)은 굽이가 많아 미끄러짐이 직관적으로 느껴짐.
-    const spots = [0.04, 0.09, 0.13, 0.61, 0.65, 0.69, 0.73, 0.965];
-    for (const tt of spots) {
+    // 앞 평지(0.05~0.15) + 성 등반 각 층(0.28/0.40) + 착지 직후 평지(0.60).
+    // 바다 둑길(0.645~)은 미끄러지면 바다 추락이라 제외. 등반 얼음은 짧게(회복 여지).
+    const spots = [[0.05, 11], [0.10, 11], [0.15, 11], [0.28, 7], [0.40, 7], [0.60, 11]];
+    for (const [tt, halfLen] of spots) {
       const i = Math.floor(tt * N) % N;
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
       const hw = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth);
-      const halfLen = 11;                      // 도로 진행방향 길이(반) — 길게 늘여 오래 미끄러짐
       _m.makeBasis(lat, tan, up);              // X=lat, Y=tan → 평면이 도로에 눕고 법선=up
       const q = new THREE.Quaternion().setFromRotationMatrix(_m);
       // 본체(도로 전 폭 x 길이 타원)
@@ -140,9 +145,8 @@ export class IceScenery {
     const N = t.samplePos.length;
     const snow = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.85 });
     this._snowballs = [];
-    // 코스 곳곳(상승로·평지·하단 바다변) 여러 지점에서 낙하
-    // 0.80~0.95 급커브(바다변)는 스핀아웃 시 바다 추락 위험 → 눈덩이 배치 제외
-    const spots = [0.03, 0.09, 0.16, 0.34, 0.40, 0.60, 0.66, 0.72, 0.78, 0.965];
+    // 앞 평지 + 성 등반 각 층 + 착지 직후. 바다 둑길(0.645~, 양쪽 바다)은 스핀아웃 시 추락이라 제외.
+    const spots = [0.03, 0.09, 0.15, 0.26, 0.35, 0.44, 0.60];
     for (let s = 0; s < spots.length; s++) {
       const i = Math.floor(spots[s] * N) % N;
       const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), snow);
@@ -153,6 +157,117 @@ export class IceScenery {
       this.group.add(ring);
       // 위상·주기를 어긋나게 해서 여기저기서 번갈아 떨어지도록
       this._snowballs.push({ i0: i, ball, ring, phase: (s * 0.37) % 1, P: 2.6 + (s % 4) * 0.35 });
+    }
+  }
+
+  // ---- 급커브 경고 표지판: 성 등반 진입 직전(완만해졌지만 굽이가 있음을 크게 안내) ----
+  _buildWarningSign() {
+    const t = this.track;
+    const N = t.samplePos.length;
+    // 경고판 면 텍스처(노랑 마름모 + 검은 테두리 + 굽은 화살표 + !)
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 256;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, 256, 256);
+    g.translate(128, 128); g.rotate(Math.PI / 4);          // 마름모(45°)
+    g.fillStyle = '#ffcf1a'; g.fillRect(-150, -150, 300, 300);
+    g.rotate(-Math.PI / 4);
+    // 굽은 화살표(S 커브)
+    g.strokeStyle = '#111'; g.lineWidth = 20; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(-6, 72);
+    g.bezierCurveTo(-60, 30, 60, -20, -6, -66);
+    g.stroke();
+    // 화살촉
+    g.fillStyle = '#111'; g.beginPath(); g.moveTo(-6, -84); g.lineTo(-30, -50); g.lineTo(18, -50); g.closePath(); g.fill();
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const faceMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, metalness: 0.1, emissive: 0x3a2f00, emissiveIntensity: 0.25 });
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, roughness: 0.5, metalness: 0.6 });
+    // 진입 직전(t≈0.12) 도로 양쪽에 크게 세움
+    const i = Math.floor(0.12 * N) % N;
+    const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
+    const hw = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth);
+    for (const side of [-1, 1]) {
+      const grp = new THREE.Group();
+      const base = _p2.copy(p).addScaledVector(lat, side * (hw + 6));
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 16, 10), poleMat);
+      pole.position.set(0, 8, 0); grp.add(pole);
+      const board = new THREE.Mesh(new THREE.BoxGeometry(11, 11, 0.6), faceMat);
+      board.position.set(0, 17, 0); grp.add(board);
+      // 도로(안쪽)를 향하게: 법선이 -side*lat, 진행방향(tan) 기준
+      const nrm = _kd.copy(lat).multiplyScalar(-side);
+      _m.makeBasis(_kd2.copy(up).cross(nrm).normalize(), up, nrm);
+      grp.quaternion.setFromRotationMatrix(_m);
+      grp.position.copy(base);
+      this.group.add(grp);
+    }
+  }
+
+  // ---- 작은 펭귄들이 성 등반로 가장자리를 아장아장 돌아다님(장식) ----
+  _buildClimbPenguins() {
+    const t = this.track;
+    const N = t.samplePos.length;
+    this._climbPengs = [];
+    const spots = [0.21, 0.27, 0.33, 0.38, 0.44, 0.49];
+    for (let s = 0; s < spots.length; s++) {
+      const i = Math.floor(spots[s] * N) % N;
+      const model = this._makeSmallPenguin();
+      this.group.add(model);
+      const side = s % 2 ? 1 : -1;
+      this._climbPengs.push({ i0: i, side, model, phase: (s * 0.41) % 1, P: 4.5 + (s % 3) });
+    }
+  }
+
+  _makeSmallPenguin() {
+    const g = new THREE.Group();
+    const black = new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.6 });
+    const white = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.55 });
+    const orange = new THREE.MeshStandardMaterial({ color: 0xff9a2e, roughness: 0.5 });
+    const eyeB = new THREE.MeshBasicMaterial({ color: 0x101018 });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 12), black);
+    body.scale.set(0.85, 1.15, 0.8); body.position.y = 1.0; g.add(body);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.66, 12, 10), white);
+    belly.scale.set(0.8, 1.05, 0.6); belly.position.set(0, 0.95, 0.42); g.add(belly);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 14, 12), black);
+    head.position.set(0, 1.9, 0.05); g.add(head);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 8), orange);
+    beak.rotation.x = Math.PI / 2; beak.position.set(0, 1.85, 0.62); g.add(beak);
+    for (const sx of [-1, 1]) {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), eyeB);
+      e.position.set(sx * 0.24, 2.02, 0.5); g.add(e);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.8, 0.42), black);
+      wing.position.set(sx * 0.72, 1.0, 0); wing.rotation.z = sx * 0.25; g.add(wing);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 0.5), orange);
+      foot.position.set(sx * 0.24, 0.2, 0.16); g.add(foot);
+    }
+    g.userData.legPivot = g;
+    return g;
+  }
+
+  // ---- 얼음 토네이도: 회오리 깔때기가 도로를 가로질러 돌아다니며 닿으면 스핀아웃 ----
+  _buildTornadoes() {
+    const t = this.track;
+    const N = t.samplePos.length;
+    this._tornadoes = [];
+    // 앞 평지 직선(0.05~0.15)에 배치 — 등반로/바다 둑길은 추락 위험이라 제외
+    const spots = [0.05, 0.10, 0.15];
+    for (let s = 0; s < spots.length; s++) {
+      const i = Math.floor(spots[s] * N) % N;
+      const grp = new THREE.Group();
+      // 깔때기: 아래는 좁고 위는 넓은 회전 원뿔 링 스택(반투명 얼음/눈보라)
+      const funnelMat = new THREE.MeshStandardMaterial({ color: 0xdff2ff, roughness: 0.5, transparent: true, opacity: 0.5, emissive: 0xbfe4ff, emissiveIntensity: 0.25, depthWrite: false });
+      const layers = [];
+      for (let k = 0; k < 7; k++) {
+        const r = 1.2 + k * 1.15;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.5 + k * 0.12, 8, 18), funnelMat);
+        ring.rotation.x = Math.PI / 2; ring.position.y = 1.5 + k * 3.0; grp.add(ring); layers.push(ring);
+      }
+      // 중심 소용돌이(불투명 코어)
+      const core = new THREE.Mesh(new THREE.ConeGeometry(3.0, 22, 14, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xeaf7ff, roughness: 0.4, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
+      core.position.y = 11; core.rotation.x = Math.PI; grp.add(core);
+      grp.userData.layers = layers;
+      grp.userData.noShadow = true;
+      this.group.add(grp);
+      this._tornadoes.push({ i0: i, grp, phase: (s * 0.5) % 1, P: 5.0 + s, spin: 0 });
     }
   }
 
@@ -596,9 +711,60 @@ export class IceScenery {
     }
   }
 
+  // 작은 펭귄 아장아장(등반로 가장자리를 따라 좌우로 순찰 + 뒤뚱)
+  _updateClimbPengs(dt) {
+    if (!this._climbPengs) return;
+    const t = this.track;
+    for (const d of this._climbPengs) {
+      const p = t.samplePos[d.i0], lat = t.sampleLat[d.i0], up = t.sampleUp[d.i0], tan = t.sampleTan[d.i0];
+      const hw = (t.sampleHalf ? t.sampleHalf[d.i0] : t.halfWidth);
+      const cyc = ((this._t / d.P) + d.phase) % 1;
+      const sweep = Math.sin(cyc * Math.PI * 2);              // -1..1 좌우 왕복
+      const latOff = d.side * (hw + 2.5) + sweep * 2.5;       // 도로 가장자리 근처
+      _tp.copy(p).addScaledVector(lat, latOff).addScaledVector(up, 0.05);
+      _tp.addScaledVector(up, Math.abs(Math.sin(this._t * 6 + d.phase * 6)) * 0.25);  // 뒤뚱뒤뚱
+      d.model.position.copy(_tp);
+      // 진행방향(sweep 부호)으로 몸을 돌림
+      const dir = _kd.copy(tan).multiplyScalar(sweep >= 0 ? 1 : -1).addScaledVector(lat, d.side * 0.2).normalize();
+      _kd2.copy(up).cross(dir).normalize();
+      _m.makeBasis(_kd2, up, dir);
+      d.model.quaternion.setFromRotationMatrix(_m);
+      d.model.rotation.z += Math.sin(this._t * 8 + d.phase) * 0.05;
+    }
+  }
+
+  // 얼음 토네이도: 도로를 가로질러 왕복 + 회전, 닿으면 스핀아웃
+  _updateTornadoes(dt, karts) {
+    if (!this._tornadoes) return;
+    const t = this.track;
+    for (const d of this._tornadoes) {
+      const p = t.samplePos[d.i0], lat = t.sampleLat[d.i0], up = t.sampleUp[d.i0];
+      const hw = (t.sampleHalf ? t.sampleHalf[d.i0] : t.halfWidth);
+      const cyc = ((this._t / d.P) + d.phase) % 1;
+      const latOff = Math.sin(cyc * Math.PI * 2) * (hw * 0.85);   // 도로 좌우로 배회
+      _tp.copy(p).addScaledVector(lat, latOff).addScaledVector(up, 0.05);
+      d.grp.position.copy(_tp);
+      d.spin += dt * 6;
+      d.grp.rotation.y = d.spin;
+      const ls = d.grp.userData.layers;
+      for (let k = 0; k < ls.length; k++) ls[k].rotation.z = d.spin * (1 + k * 0.2);
+      d.grp.scale.setScalar(0.9 + 0.12 * Math.sin(this._t * 4 + d.phase));
+      // 충돌: 깔때기 하단 반경 안이면 스핀아웃 + 미끄러짐
+      if (karts) {
+        for (const k of karts) {
+          if (k.airborne || k.invincTimer > 0 || k.bulletTimer > 0) continue;
+          const dx = k.pos.x - _tp.x, dz = k.pos.z - _tp.z;
+          if (dx * dx + dz * dz < 16) { k.spinOut(1.0); k.setIce(0.5); }
+        }
+      }
+    }
+  }
+
   update(dt, karts) {
     this._t += dt;
     this._updateHazards(dt, karts);
+    this._updateClimbPengs(dt);
+    this._updateTornadoes(dt, karts);
     this._updateWhale(dt);
     this._animateSea(dt);
     // 전구/별 반짝임
