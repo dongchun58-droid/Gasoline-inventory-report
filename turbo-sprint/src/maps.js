@@ -146,6 +146,8 @@ export const MAPS = {
       jumps: [0.43], boosts: [0.05, 0.22, 0.30, 0.40, 0.90],
       leap: { to: 0.53, height: 34, dur: 1.4 } },
     penguinSpots: [0.74, 0.88], penguinSides: [1, 1],
+    // 아이템 박스는 평지 구간에만(성 등반 0.18~0.43·점프 낭떠러지 0.43~0.53 피함)
+    itemRows: [0.07, 0.14, 0.60, 0.72, 0.90],
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],

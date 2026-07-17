@@ -26,7 +26,7 @@ function qmark(gm) {
 }
 
 export class ItemSystem {
-  constructor(track, gm) {
+  constructor(track, gm, rows) {
     this.track = track;
     this.gm = gm;
     this.group = new THREE.Group();
@@ -38,10 +38,12 @@ export class ItemSystem {
     const mat = qmark(gm);
     const geo = new THREE.BoxGeometry(2.2, 2.2, 2.2);
     const N = track.samplePos.length;
-    const rows = [0.14, 0.32, 0.5, 0.68, 0.86];
-    for (const r of rows) {
+    // 맵별 배치(itemRows)가 있으면 사용 — 얼음맵은 성 등반·점프 구간(공중/단절)을 피함
+    const boxRows = (rows && rows.length) ? rows : [0.14, 0.32, 0.5, 0.68, 0.86];
+    for (const r of boxRows) {
       const i = Math.floor(r * N) % N;
-      const p = track.samplePos[i], lat = track.sampleLat[i];
+      if (track.sampleGap && track.sampleGap[i]) continue;   // 단절(낭떠러지) 구간엔 배치 안 함
+      const p = track.samplePos[i], lat = track.sampleLat[i], up = track.sampleUp[i];
       const hw = track.sampleHalf ? track.sampleHalf[i] : track.halfWidth;
       // 중앙 분리대가 있는 구간: 센터 대신 양쪽 차선에 2개씩 (분리대 위엔 못 먹으므로)
       const median = track.sampleMedian && track.sampleMedian[i];
@@ -50,7 +52,8 @@ export class ItemSystem {
         : [-hw * 0.55, 0, hw * 0.55];
       for (const off of offs) {
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(p.x + lat.x * off, p.y + 1.8, p.z + lat.z * off);
+        // 도로면(up 방향)에서 살짝 띄움 — 경사/공중 도로에서도 도로 위에 정확히 뜨게
+        mesh.position.copy(p).addScaledVector(lat, off).addScaledVector(up, 1.3);
         this.group.add(mesh);
         this.boxes.push({ mesh, home: mesh.position.clone(), active: true, respawn: 0 });
       }
@@ -116,9 +119,8 @@ export class ItemSystem {
     // ? 박스
     for (const b of this.boxes) {
       if (b.active) {
-        b.mesh.rotation.y += dt * 1.6;
-        b.mesh.rotation.x += dt * 0.9;
-        b.mesh.position.y = b.home.y + Math.sin(this._t * 2 + b.home.x) * 0.2;
+        b.mesh.rotation.y += dt * 1.6;                 // 세로축 회전만(똑바로 서서 회전) — 기울어짐 방지
+        b.mesh.position.y = b.home.y + Math.sin(this._t * 2 + b.home.x) * 0.18; // 은은한 상하 바운스
         for (const k of karts) {
           if (k.heldItem || k.spinTimer > 0) continue;
           if (k.pos.distanceToSquared(b.mesh.position) < 7) {

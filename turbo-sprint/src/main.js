@@ -285,7 +285,7 @@ function buildWorld(key) {
   // 트랙 + 배경 + 아이템 + 장애물 + 기능
   track = new Track(gradientMap, map); scene.add(track.group);
   scenery = new map.Scenery(track, gradientMap); scene.add(scenery.group);
-  itemSystem = new ItemSystem(track, gradientMap); scene.add(itemSystem.group);
+  itemSystem = new ItemSystem(track, gradientMap, map.itemRows); scene.add(itemSystem.group);
   obstacles = new Obstacles(track, gradientMap, map.obstacle); scene.add(obstacles.group);
   features = new Features(track, gradientMap, map.pad); scene.add(features.group);
   if (map.dragonSpots) { dragons = new Dragons(track, map.dragonSpots, map.dragonSides); scene.add(dragons.group); }
