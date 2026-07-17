@@ -77,25 +77,39 @@ export class IceScenery {
   _buildSlippery() {
     const t = this.track;
     const N = t.samplePos.length;
-    const mat = new THREE.MeshPhysicalMaterial({ color: 0xd6f2ff, roughness: 0.05, metalness: 0.0,
-      transmission: 0.3, transparent: true, opacity: 0.55, clearcoat: 1.0, depthWrite: false });
+    // 유리처럼 번들거리는 밝은 빙판(환경 반사) + 흰 테두리 → 도로 위에서 확 눈에 띔
+    const iceMat = new THREE.MeshPhysicalMaterial({ color: 0xbfeeff, roughness: 0.02, metalness: 0.0,
+      transmission: 0.15, transparent: true, opacity: 0.82, clearcoat: 1.0, clearcoatRoughness: 0.02 });
+    const rimMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
+    const shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, toneMapped: false, depthWrite: false });
     this._icePatches = [];
-    // 평지 구간 위주로 도로 중앙에 배치(나선 상승/gap 구간은 피함)
-    const spots = [0.05, 0.11, 0.63, 0.70, 0.78, 0.86, 0.93, 0.98];
+    // 평지 구간 도로 '중앙'에 배치(상승로 0.18~0.43, 점프/gap 구간은 피함)
+    const spots = [0.04, 0.10, 0.15, 0.58, 0.66, 0.73, 0.81, 0.90, 0.96];
     let s = 0;
     for (const tt of spots) {
       const i = Math.floor(tt * N) % N;
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
-      // 중앙 근처(살짝만 흔들어 자연스럽게)
-      const off = ((s % 3) - 1) * (t.halfWidth * 0.28);
-      const r = 6 + (s % 3) * 1.5;
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(r, 24), mat);
+      const off = ((s % 3) - 1) * (t.halfWidth * 0.34);   // 중앙 ~ 약간 좌/우
+      const r = 8 + (s % 3) * 1.6;                          // 크게(도로 폭의 상당 부분)
       _m.makeBasis(lat, up, tan);
-      patch.quaternion.setFromRotationMatrix(_m);
-      patch.rotateX(-Math.PI / 2);
-      patch.position.copy(p).addScaledVector(lat, off).addScaledVector(up, 0.06);
+      const q = new THREE.Quaternion().setFromRotationMatrix(_m);
+      const base = _p2.copy(p).addScaledVector(lat, off);
+      // 빙판 본체
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(r, 28), iceMat);
+      patch.quaternion.copy(q); patch.rotateX(-Math.PI / 2);
+      patch.position.copy(base).addScaledVector(up, 0.05);
       this.group.add(patch);
-      this._icePatches.push({ pos: patch.position.clone(), r2: (r + 1.5) * (r + 1.5) });
+      // 흰 테두리 링(경계 확실히)
+      const rim = new THREE.Mesh(new THREE.RingGeometry(r - 0.9, r + 0.4, 30), rimMat);
+      rim.quaternion.copy(q); rim.rotateX(-Math.PI / 2);
+      rim.position.copy(base).addScaledVector(up, 0.07);
+      this.group.add(rim);
+      // 가운데 하이라이트(광택)
+      const shine = new THREE.Mesh(new THREE.CircleGeometry(r * 0.42, 20), shineMat);
+      shine.quaternion.copy(q); shine.rotateX(-Math.PI / 2);
+      shine.position.copy(base).addScaledVector(up, 0.08).addScaledVector(lat, -r * 0.25).addScaledVector(tan, r * 0.25);
+      this.group.add(shine);
+      this._icePatches.push({ pos: base.clone(), r2: (r + 1) * (r + 1) });
       s++;
     }
   }
@@ -128,7 +142,7 @@ export class IceScenery {
       for (const k of karts) {
         for (const ip of this._icePatches) {
           const dx = k.pos.x - ip.pos.x, dz = k.pos.z - ip.pos.z;
-          if (dx * dx + dz * dz < ip.r2) { k.setIce(0.25); break; }
+          if (dx * dx + dz * dz < ip.r2) { k.setIce(1.1); break; }   // 확실히 느끼도록 길게 미끄러짐
         }
       }
     }

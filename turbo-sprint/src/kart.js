@@ -843,7 +843,15 @@ export class Kart {
     _fwd.copy(this.forward);
     _fwd.y = 0;
     if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
-    this.pos.addScaledVector(_fwd, this.speed * dt);
+    // 미끄러운 빙판: 실제 이동방향(관성)이 헤딩을 천천히 따라감 → 확 미끄러짐(꺾어도 밀림)
+    if (!this._moveDir) this._moveDir = _fwd.clone();
+    if (this.iceTimer > 0) {
+      if (this._moveDir.lengthSq() < 1e-6) this._moveDir.copy(_fwd);
+      this._moveDir.lerp(_fwd, 0.035).normalize();     // 낮은 접지 → 이동방향 전환이 느림
+    } else {
+      this._moveDir.copy(_fwd);                          // 평소엔 헤딩과 동일(주행 영향 없음)
+    }
+    this.pos.addScaledVector(this._moveDir, this.speed * dt);
     // 충돌 넉백(감쇠)
     if (this.shove.lengthSq() > 1e-4) {
       this.pos.addScaledVector(this.shove, dt);
