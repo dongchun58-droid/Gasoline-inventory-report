@@ -26,7 +26,7 @@ const _ground = {};
 
 // 차량 종류별 스탯 (speed=최고속·strength=충돌강도/내구·turn=회전력)
 export const VEHICLES = {
-  kart:   { name: 'KART',   speed: 1.00, strength: 1.00, turn: 1.00 }, // 올라운더(기준)
+  kart:   { name: 'FUTURE EV', speed: 1.00, strength: 1.00, turn: 1.00 }, // 올라운더(기준) — 매끈한 전기 컨셉카
   bike:   { name: 'BIKE',   speed: 1.10, strength: 0.42, turn: 1.55 }, // 최고 민첩·최약 내구(유리대포)
   sports: { name: 'SPORTS', speed: 1.32, strength: 0.70, turn: 0.52 }, // 최고속·조향 매우 둔함
   truck:  { name: 'TRUCK',  speed: 0.86, strength: 3.30, turn: 0.84 }, // 가장 느림·내구 압도적(탱크)
@@ -291,12 +291,41 @@ export function buildKartModel(color, gradientMap, type = 'kart', character = 'c
     for (const [x, , z] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.14, 6, 12, Math.PI), clad); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.62, z); g.add(arch); }
     driverY = 1.0; driverScale = 0.82; driverZ = 0.7;
   } else {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 2.2), carPaint(color)); body.position.y = 0.45; g.add(body);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.9, 6), carPaint(color)); nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0.42, 1.4); g.add(nose);
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.5), toon(dark)); wing.position.set(0, 0.95, -1.1); g.add(wing);
-    for (const sx of [-0.6, 0.6]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), toon(dark)); post.position.set(sx, 0.72, -1.1); g.add(post); }
-    for (const sx of [-0.35, 0.35]) { const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.4, 8), toon(0x555566)); pipe.rotation.x = Math.PI / 2; pipe.position.set(sx, 0.5, -1.25); g.add(pipe); }
-    wheelSpec = [[-0.82, 0.34, 1.0, true, 0.34], [0.82, 0.34, 1.0, true, 0.34], [-0.82, 0.34, -0.95, false, 0.34], [0.82, 0.34, -0.95, false, 0.34]];
+    // FUTURE EV — 매끈한 전기 컨셉카 (오리지널 실루엣, 특정 브랜드 로고 없음)
+    const paint = carPaint(color);                       // 팀 색 바디
+    const sill = toon(0x101018);                          // 어두운 하부/트림
+    const whiteTrim = carPaint(0xeef2f6);                 // 흰 로워 스커트
+    // 시그니처: 크고 검은 글래스 캐노피 — 반투명이라 드라이버가 은은히 비침(틴티드 글래스)
+    const canopyMat = new THREE.MeshPhysicalMaterial({
+      color: 0x080b12, metalness: 0.35, roughness: 0.05,
+      clearcoat: 1.0, clearcoatRoughness: 0.04, transparent: true, opacity: 0.52,
+    });
+    const ledW = toon(0x0e1018, 0xe6f6ff, 1.7);           // 흰 LED
+    const ledR = toon(0x220006, 0xff2a44, 1.7);           // 붉은 LED
+    // 하부 플랫폼(스케이트보드 EV) — 낮고 넓게
+    const platform = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), sill);
+    platform.scale.set(0.84, 0.24, 1.4); platform.position.y = 0.34; g.add(platform);
+    // 흰 로워 스커트(사진의 흰 하부)
+    const skirt = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 14), whiteTrim);
+    skirt.scale.set(0.9, 0.22, 1.46); skirt.position.set(0, 0.42, -0.02); g.add(skirt);
+    // 매끈한 물방울 바디(팀색) — 앞이 낮고 뒤로 흐름
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), paint);
+    shell.scale.set(0.9, 0.44, 1.5); shell.position.set(0, 0.56, -0.02); g.add(shell);
+    // 로우 노즈(앞으로 둥글게)
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 16), paint);
+    nose.scale.set(0.8, 0.32, 0.72); nose.position.set(0, 0.47, 1.06); g.add(nose);
+    // 큰 검은 글래스 캐노피(앞유리~루프 일체형 버블)
+    const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), canopyMat);
+    canopy.scale.set(0.75, 0.58, 1.24); canopy.position.set(0, 0.82, 0.08); g.add(canopy);
+    // 프론트/리어 얇은 LED 스트립
+    const fLed = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.045, 0.05), ledW); fLed.position.set(0, 0.55, 1.6); g.add(fLed);
+    const rLed = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.05, 0.05), ledR); rLed.position.set(0, 0.62, -1.42); g.add(rLed);
+    // 얇은 캐논형 사이드 미러
+    for (const sx of [-1, 1]) { const mir = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.06, 0.14), sill); mir.position.set(sx * 0.86, 0.76, 0.5); g.add(mir); }
+    wheelSpec = [[-0.87, 0.4, 1.03, true, 0.4, 0.34], [0.87, 0.4, 1.03, true, 0.4, 0.34], [-0.87, 0.4, -1.05, false, 0.4, 0.34], [0.87, 0.4, -1.05, false, 0.4, 0.34]];
+    // 매끈한 휠아치(바디색)
+    for (const [x, , z] of wheelSpec) { const arch = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.1, 6, 16, Math.PI), paint); arch.rotation.y = Math.PI / 2; arch.position.set(x, 0.44, z); g.add(arch); }
+    driverY = 0.5; driverScale = 0.54; driverZ = 0.08;
   }
 
   // --- 드라이버(선택 캐릭터) ---
