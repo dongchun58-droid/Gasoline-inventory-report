@@ -921,8 +921,9 @@ export class Kart {
         }
       }
       const over = Math.abs(g.lateral) - g.half;
-      // 공중 도로(성 등반) 옆으로 확실히 이탈 → 낭떠러지 추락 → 성 아래(재등반 지점)로 복귀
-      if (g.elevated && over > 2.5) {
+      // 공중 도로(성 등반) 옆으로 확실히 이탈 → 낭떠러지 추락 → 성 아래(재등반 지점)로 복귀.
+      // 여유를 둬서(over>5) 코너에서 살짝 밀려도 곧장 추락하진 않게(난이도 완화).
+      if (g.elevated && over > 5) {
         this._startLavaFall(true);
         this.onGrass = false;
       } else if (g.bridge && over > 0.2) {

@@ -80,6 +80,27 @@ function iceFloorTexture() {
   return tex;
 }
 
+// 눈보라 소용돌이 텍스처(부드러운 세로 결) — 회전시키면 자연스러운 회오리 눈발
+function snowSwirlTexture() {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, 128, 128);
+  for (let i = 0; i < 46; i++) {
+    const x = Math.abs(Math.sin(i * 12.9) * 43758.5) % 1 * 128;
+    const w = 2 + Math.abs(Math.sin(i * 3.3)) * 7;
+    const a = 0.08 + Math.abs(Math.sin(i * 7.1)) * 0.32;
+    const grad = g.createLinearGradient(x - w, 0, x + w, 0);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.5, `rgba(238,248,255,${a})`);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(x - w, 0, 2 * w, 128);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(3, 1);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 export class IceScenery {
   constructor(track, gradientMap) {
     this.track = track;
@@ -112,9 +133,8 @@ export class IceScenery {
       clearcoat: 1.0, clearcoatRoughness: 0.03, transparent: true, opacity: 0.92, depthWrite: false });
     const rimMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
     this._icePatches = [];
-    // 앞 평지(0.05~0.15) + 성 등반 각 층(0.28/0.40) + 착지 직후 평지(0.60).
-    // 바다 둑길(0.645~)은 미끄러지면 바다 추락이라 제외. 등반 얼음은 짧게(회복 여지).
-    const spots = [[0.05, 11], [0.10, 11], [0.15, 11], [0.28, 7], [0.40, 7], [0.60, 11]];
+    // 앞 평지 직선에만 배치 — 성 등반로는 '일정 곡선'이라 얼음 위에선 코너가 안 먹어 추락하므로 제외.
+    const spots = [[0.04, 11], [0.09, 11], [0.14, 11]];
     for (const [tt, halfLen] of spots) {
       const i = Math.floor(tt * N) % N;
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
@@ -242,30 +262,41 @@ export class IceScenery {
     return g;
   }
 
-  // ---- 얼음 토네이도: 회오리 깔때기가 도로를 가로질러 돌아다니며 닿으면 스핀아웃 ----
+  // ---- 얼음 토네이도: 자연스러운 눈보라 회오리 깔때기(부드러운 원뿔막 + 소용돌이 눈발). 닿으면 스핀아웃 ----
   _buildTornadoes() {
     const t = this.track;
     const N = t.samplePos.length;
     this._tornadoes = [];
-    // 앞 평지 직선(0.05~0.15)에 배치 — 등반로/바다 둑길은 추락 위험이라 제외
-    const spots = [0.05, 0.10, 0.15];
+    const spots = [0.05, 0.10, 0.15];               // 앞 평지 직선(추락 위험 없는 곳)
     for (let s = 0; s < spots.length; s++) {
       const i = Math.floor(spots[s] * N) % N;
       const grp = new THREE.Group();
-      // 깔때기: 아래는 좁고 위는 넓은 회전 원뿔 링 스택(반투명 얼음/눈보라)
-      const funnelMat = new THREE.MeshStandardMaterial({ color: 0xdff2ff, roughness: 0.5, transparent: true, opacity: 0.5, emissive: 0xbfe4ff, emissiveIntensity: 0.25, depthWrite: false });
-      const layers = [];
-      for (let k = 0; k < 7; k++) {
-        const r = 1.2 + k * 1.15;
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.5 + k * 0.12, 8, 18), funnelMat);
-        ring.rotation.x = Math.PI / 2; ring.position.y = 1.5 + k * 3.0; grp.add(ring); layers.push(ring);
+      const H = 26;
+      // 매끈한 깔때기 옆면(아래 좁고 위로 벌어짐) — LatheGeometry 프로파일
+      const profile = [];
+      for (let k = 0; k <= 12; k++) { const f = k / 12; profile.push(new THREE.Vector2(1.4 + Math.pow(f, 1.5) * 8.5, f * H)); }
+      const shells = [];
+      // 겹겹의 반투명 막(다른 속도로 회전 → 흐릿한 소용돌이/블러 느낌)
+      for (let L = 0; L < 3; L++) {
+        const tex = snowSwirlTexture(); tex.repeat.set(3 - L, 1);
+        const mat = new THREE.MeshStandardMaterial({
+          map: tex, color: 0xeaf7ff, transparent: true, opacity: 0.34 - L * 0.07,
+          roughness: 0.7, side: THREE.DoubleSide, depthWrite: false,
+          emissive: 0xbfe4ff, emissiveIntensity: 0.12,
+        });
+        const shell = new THREE.Mesh(new THREE.LatheGeometry(profile, 28), mat);
+        shell.scale.setScalar(1 - L * 0.16); shell.userData.noShadow = true;
+        grp.add(shell); shells.push({ shell, tex, dir: L % 2 ? -1 : 1, sp: 1 + L * 0.6 });
       }
-      // 중심 소용돌이(불투명 코어)
-      const core = new THREE.Mesh(new THREE.ConeGeometry(3.0, 22, 14, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0xeaf7ff, roughness: 0.4, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false }));
-      core.position.y = 11; core.rotation.x = Math.PI; grp.add(core);
-      grp.userData.layers = layers;
-      grp.userData.noShadow = true;
+      // 빨려 올라가는 눈발(작은 점들) — 나선으로 상승
+      const motes = [];
+      const moteMat = new THREE.MeshBasicMaterial({ color: 0xf4fbff, transparent: true, opacity: 0.85, toneMapped: false });
+      for (let m = 0; m < 22; m++) {
+        const mote = new THREE.Mesh(new THREE.SphereGeometry(0.35 + (m % 3) * 0.12, 6, 5), moteMat);
+        mote.userData.noShadow = true;
+        grp.add(mote); motes.push({ mote, a: (m / 22) * Math.PI * 2, yoff: (m / 22), rr: 0.5 + (m % 5) * 0.15 });
+      }
+      grp.userData = { shells, motes, H, noShadow: true };
       this.group.add(grp);
       this._tornadoes.push({ i0: i, grp, phase: (s * 0.5) % 1, P: 5.0 + s, spin: 0 });
     }
@@ -326,50 +357,69 @@ export class IceScenery {
     this.group.add(g);
   }
 
-  // ---- 바다: 하단 물결(굴곡) 해안선을 따라 넓게. 스케치처럼 딥(만)은 물에 잠기고 혹은 육지 ----
+  // ---- 바다: 해안선(도로 '바깥쪽=바다쪽' 가장자리)을 따라 바깥으로만 넓게 채움.
+  // 안쪽(육지·나무)은 물이 안 덮이도록 리본(해안선→먼 원호) 형태로 생성 → 안쪽은 흰 눈밭 유지. ----
   _buildSea() {
     const t = this.track;
     const N = t.samplePos.length;
-    const se = (t.seaEdges && t.seaEdges[0]) || [0.58, 0.97, 1];
+    const se = (t.seaEdges && t.seaEdges[0]) || [0.66, 0.985, 1];
+    const side = se[2] || 1;                       // +1 쪽(바깥)이 바다
     const i0 = Math.floor(se[0] * N), i1 = Math.floor(se[1] * N);
-    // 하단(바다 구간) 도로 샘플의 범위 계산
-    let minZ = 1e9, maxZ = -1e9, minX = 1e9, maxX = -1e9;
-    for (let i = i0; i <= i1; i++) {
-      const p = t.samplePos[i % N];
-      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    const beach = t.halfWidth + 10;                // 도로 가장자리 밖 좁은 해변
+    const FAR = 1200;                               // 바깥(바다쪽)으로 뻗는 거리(수평선까지)
+    // 해안선(안쪽 경계) + 바다쪽 방향 — 각 세그먼트를 바깥으로 뻗은 쿼드로 연결(자기교차 걱정 없음)
+    const inner = [], dir = [];
+    for (let i = i0; i <= i1; i += 2) {
+      const p = t.samplePos[i % N], lat = t.sampleLat[i % N];
+      const hw = (t.sampleHalf ? t.sampleHalf[i % N] : t.halfWidth);
+      inner.push([p.x + lat.x * side * (hw + beach), p.z + lat.z * side * (hw + beach)]);
+      dir.push([lat.x * side, lat.z * side]);        // 바다쪽 바깥 방향
     }
-    const beach = t.halfWidth + 16;              // 혹(가장 안쪽) 바깥의 좁은 해변
-    const innerZ = minZ + beach;                 // 해안선(안쪽 가장자리) — 이보다 +z 는 바다
-    // 수평선까지 넓게(그 너머로 흰 눈밭·나무가 안 보이도록)
-    const width = (maxX - minX) + 1200, depth = 2200;
-    const cx = (minX + maxX) / 2;
-    // 용암과 동일한 방식: '평평한' 판 + 스크롤 텍스처(정점을 움직이지 않으므로 도로 위로 안 튐)
+    // 쿼드 스트립 지오메트리 직접 구성 (y=0 평면, 나중에 -0.5로 내림)
+    const posArr = [], uvArr = [];
+    const U = 0.02;
+    for (let k = 0; k < inner.length - 1; k++) {
+      const a = inner[k], b = inner[k + 1], da = dir[k], db = dir[k + 1];
+      const aF = [a[0] + da[0] * FAR, a[1] + da[1] * FAR];
+      const bF = [b[0] + db[0] * FAR, b[1] + db[1] * FAR];
+      // 두 삼각형: a,b,bF / a,bF,aF (월드 x,z; y=0)
+      const tri = [a, b, bF, a, bF, aF];
+      for (const q of tri) { posArr.push(q[0], 0, q[1]); uvArr.push(q[0] * U, q[1] * U); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(posArr, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvArr, 2));
+    geo.computeVertexNormals();
     const tex = waterTexture();
-    tex.repeat.set(width / 60, depth / 60);
     const mat = new THREE.MeshStandardMaterial({
-      map: tex, color: 0x0e4d92, roughness: 0.28, metalness: 0.25,
+      map: tex, color: 0x0e4d92, roughness: 0.28, metalness: 0.25, side: THREE.DoubleSide,
       normalMap: normalFromCanvas(tex.image, 0.8),
     });
     this._seaTex = tex;
-    const geo = new THREE.PlaneGeometry(width, depth, 1, 1); geo.rotateX(-Math.PI / 2);
     const sea = new THREE.Mesh(geo, mat);
-    sea.position.set(cx, -0.5, innerZ + depth / 2);        // 눈밭(-0.6) 위, 도로(0) 아래로 고정(안정)
+    sea.position.y = -0.5;                            // 눈밭(-0.6) 위, 도로(0) 아래
     sea.userData.noShadow = true;
     this._sea = sea; this._seaMat = mat;
     this.group.add(sea);
-    this._seaCenter = { x: cx, z: innerZ + 120, innerZ };   // 고래·유빙 배치용
-    // 물가 포말 띠(도로 바깥 해안선)
-    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.75, toneMapped: false, depthWrite: false });
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 12), foamMat); foam.rotateX(-Math.PI / 2);
-    foam.position.set(cx, -0.42, innerZ);
-    this.group.add(foam);
-    // 떠다니는 유빙(하양)
+    // 바다쪽 대표 지점(고래·유빙 배치)
+    const midp = t.samplePos[Math.floor((i0 + i1) / 2) % N], midl = t.sampleLat[Math.floor((i0 + i1) / 2) % N];
+    this._seaCenter = { x: midp.x + midl.x * side * 90, z: midp.z + midl.z * side * 90 };
+    // 물가 포말: 해안선을 따라 밝은 얇은 띠
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.7, toneMapped: false, depthWrite: false });
+    for (let k = 0; k < inner.length - 1; k++) {
+      const a = inner[k], b = inner[k + 1];
+      const mx = (a[0] + b[0]) / 2, mz = (a[1] + b[1]) / 2;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]) + 1;
+      const foam = new THREE.Mesh(new THREE.PlaneGeometry(len, 6), foamMat); foam.rotateX(-Math.PI / 2);
+      foam.position.set(mx, -0.42, mz); foam.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+      this.group.add(foam);
+    }
+    // 떠다니는 유빙(하양) — 해안선 바깥쪽에
     const floeMat = snowMat(0xf2fbff);
-    for (let i = 0; i < 8; i++) {
-      const px = minX + ((i * 137) % Math.max(1, (maxX - minX)));
-      const pz = innerZ + 40 + ((i * 71) % 240);
-      const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 8 + (i % 3) * 3, 2, 6), floeMat);
+    for (let k = 0; k < inner.length; k += 3) {
+      const c = inner[k], dd = dir[k]; const off = 30 + (k % 4) * 25;
+      const px = c[0] + dd[0] * off, pz = c[1] + dd[1] * off;
+      const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (k % 3) * 3, 8 + (k % 3) * 3, 2, 6), floeMat);
       floe.position.set(px, -0.45, pz); floe.userData.noShadow = true;
       this.group.add(floe);
     }
@@ -733,7 +783,7 @@ export class IceScenery {
     }
   }
 
-  // 얼음 토네이도: 도로를 가로질러 왕복 + 회전, 닿으면 스핀아웃
+  // 얼음 토네이도: 도로를 가로질러 왕복 + 부드러운 회전(막마다 다른 속도) + 눈발 상승, 닿으면 스핀아웃
   _updateTornadoes(dt, karts) {
     if (!this._tornadoes) return;
     const t = this.track;
@@ -744,11 +794,22 @@ export class IceScenery {
       const latOff = Math.sin(cyc * Math.PI * 2) * (hw * 0.85);   // 도로 좌우로 배회
       _tp.copy(p).addScaledVector(lat, latOff).addScaledVector(up, 0.05);
       d.grp.position.copy(_tp);
-      d.spin += dt * 6;
-      d.grp.rotation.y = d.spin;
-      const ls = d.grp.userData.layers;
-      for (let k = 0; k < ls.length; k++) ls[k].rotation.z = d.spin * (1 + k * 0.2);
-      d.grp.scale.setScalar(0.9 + 0.12 * Math.sin(this._t * 4 + d.phase));
+      d.spin += dt;
+      const ud = d.grp.userData;
+      // 겹막: 각기 다른 방향·속도로 돌고 텍스처도 흘려 흐릿한 소용돌이(블러)
+      for (const s of ud.shells) {
+        s.shell.rotation.y = d.spin * s.sp * s.dir;
+        s.tex.offset.x = (s.tex.offset.x + dt * 0.5 * s.sp) % 1;
+      }
+      // 눈발: 나선으로 빙글빙글 상승(위로 갈수록 넓게)
+      for (const mo of ud.motes) {
+        const yy = ((this._t * 0.5 + mo.yoff) % 1);
+        const rad = (1.4 + Math.pow(yy, 1.5) * 8.5) * mo.rr;
+        const ang = mo.a + this._t * 3 + yy * 6;
+        mo.mote.position.set(Math.cos(ang) * rad, yy * ud.H, Math.sin(ang) * rad);
+        mo.mote.material.opacity = 0.15 + 0.7 * (1 - yy);
+      }
+      d.grp.scale.setScalar(0.95 + 0.08 * Math.sin(this._t * 3 + d.phase));
       // 충돌: 깔때기 하단 반경 안이면 스핀아웃 + 미끄러짐
       if (karts) {
         for (const k of karts) {
