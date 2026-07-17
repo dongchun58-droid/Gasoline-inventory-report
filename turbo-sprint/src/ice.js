@@ -39,7 +39,7 @@ function waterTexture() {
 export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
 // 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
 // scale은 트랙에서 x,z에만 적용됨. Cx,Cz=나선 중심(제어점 단위).
-export const ICE_MTN = { Cx: -4, Cz: -82, Rb: 36, Rt: 14, topY: 28, ppt: 12, upTurns: 1.5, downTurns: 0.5, aIn: -0.7 };
+export const ICE_MTN = { Cx: -4, Cz: -82, Rb: 34, Rt: 13, topY: 52, ppt: 13, upTurns: 2.25, downTurns: 0.5, aIn: -0.7 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
@@ -106,13 +106,14 @@ export class IceScenery {
       clearcoat: 1.0, clearcoatRoughness: 0.03, transparent: true, opacity: 0.92, depthWrite: false });
     const rimMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.85, toneMapped: false, side: THREE.DoubleSide, depthWrite: false });
     this._icePatches = [];
-    // 평지 구간(상승로 0.18~0.43·점프 gap은 피함) — 도로 전 폭을 덮는 큰 얼음 구간
-    const spots = [0.06, 0.12, 0.60, 0.70, 0.80, 0.92];
+    // 평지·굴곡 구간(상승로 0.16~0.50·점프 gap은 피함) — 도로 전 폭을 덮는 크고 긴 얼음 구간.
+    // 뒤쪽(0.60~0.98)은 굽이가 많아 미끄러짐이 직관적으로 느껴짐.
+    const spots = [0.04, 0.09, 0.13, 0.61, 0.65, 0.69, 0.73, 0.965];
     for (const tt of spots) {
       const i = Math.floor(tt * N) % N;
       const p = t.samplePos[i], lat = t.sampleLat[i], up = t.sampleUp[i], tan = t.sampleTan[i];
       const hw = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth);
-      const halfLen = 8;                       // 도로 진행방향 길이(반)
+      const halfLen = 11;                      // 도로 진행방향 길이(반) — 길게 늘여 오래 미끄러짐
       _m.makeBasis(lat, tan, up);              // X=lat, Y=tan → 평면이 도로에 눕고 법선=up
       const q = new THREE.Quaternion().setFromRotationMatrix(_m);
       // 본체(도로 전 폭 x 길이 타원)
@@ -140,14 +141,15 @@ export class IceScenery {
     const snow = new THREE.MeshStandardMaterial({ color: 0xf4fbff, roughness: 0.85 });
     this._snowballs = [];
     // 코스 곳곳(상승로·평지·하단 바다변) 여러 지점에서 낙하
-    const spots = [0.03, 0.09, 0.16, 0.34, 0.40, 0.60, 0.68, 0.76, 0.83, 0.90, 0.96];
+    // 0.80~0.95 급커브(바다변)는 스핀아웃 시 바다 추락 위험 → 눈덩이 배치 제외
+    const spots = [0.03, 0.09, 0.16, 0.34, 0.40, 0.60, 0.66, 0.72, 0.78, 0.965];
     for (let s = 0; s < spots.length; s++) {
       const i = Math.floor(spots[s] * N) % N;
       const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 1), snow);
       this.group.add(ball);
-      // 경고 링(착지 지점)
-      const ring = new THREE.Mesh(new THREE.RingGeometry(2.2, 3.0, 20),
-        new THREE.MeshBasicMaterial({ color: 0x2f8fd6, transparent: true, opacity: 0.6, toneMapped: false, side: THREE.DoubleSide, depthWrite: false }));
+      // 낙하 지점 표시(Inferno 처럼): 도로 위 '동그란 색 표시'만 — 채워진 원 디스크
+      const ring = new THREE.Mesh(new THREE.CircleGeometry(3.0, 24),
+        new THREE.MeshBasicMaterial({ color: 0x7fb8e6, transparent: true, opacity: 0.4, toneMapped: false, side: THREE.DoubleSide, depthWrite: false }));
       this.group.add(ring);
       // 위상·주기를 어긋나게 해서 여기저기서 번갈아 떨어지도록
       this._snowballs.push({ i0: i, ball, ring, phase: (s * 0.37) % 1, P: 2.6 + (s % 4) * 0.35 });
@@ -162,7 +164,7 @@ export class IceScenery {
         for (const ip of this._icePatches) {
           const dx = k.pos.x - ip.cx, dz = k.pos.z - ip.cz;
           const along = dx * ip.tx + dz * ip.tz, latr = dx * ip.lx + dz * ip.lz;
-          if (Math.abs(along) < ip.halfLen && Math.abs(latr) < ip.hw) { k.setIce(1.2); break; }
+          if (Math.abs(along) < ip.halfLen && Math.abs(latr) < ip.hw) { k.setIce(1.6); break; }
         }
       }
     }
@@ -180,12 +182,10 @@ export class IceScenery {
         sb.ball.position.copy(groundP).addScaledVector(up, y);
         sb.ball.rotation.x += dt * 4; sb.ball.rotation.z += dt * 3;
         sb.ball.visible = cyc < 0.86;
-        // 경고 링
-        sb.ring.position.copy(groundP).addScaledVector(up, 0.1);
-        sb.ring.quaternion.copy(sb.ball.quaternion).identity();
-        _m.makeBasis(lat, up, t.sampleTan[i]); sb.ring.quaternion.setFromRotationMatrix(_m); sb.ring.rotateX(-Math.PI / 2);
-        sb.ring.material.opacity = 0.3 + 0.5 * fall;
-        sb.ring.scale.setScalar(1 + (1 - fall) * 0.5);
+        // 낙하 지점 색표시(채워진 원): 도로에 눕혀 두고, 착지 임박할수록 진하게
+        sb.ring.position.copy(groundP).addScaledVector(up, 0.08);
+        _m.makeBasis(lat, t.sampleTan[i], up); sb.ring.quaternion.setFromRotationMatrix(_m);
+        sb.ring.material.opacity = 0.25 + 0.45 * fall;
         sb.ring.visible = cyc < 0.9;
         // 착지 순간 충돌
         if (cyc > 0.78 && cyc < 0.9 && karts) {
@@ -370,8 +370,9 @@ export class IceScenery {
     const scale = 2.6;                       // 얼음 맵 scale (maps.js와 동일)
     const cx = M.Cx * scale, cz = M.Cz * scale;
     const topY = M.topY;
-    // 중앙 탑 반경: 안쪽 하강로(Rt) 보다 작게 → 도로를 가리지 않음
-    const keepR = Math.min(M.Rt * scale * 0.62, 22);
+    const roadHalf = this.track.halfWidth || 15;
+    // 중앙 탑 반경: 나선 도로 '안쪽 가장자리'에 바짝 → 도로가 성을 감아 오르게(가깝게 붙임)
+    const keepR = Math.max(24, M.Rb * scale - roadHalf - 4);
     const iceBlue = new THREE.MeshStandardMaterial({ color: 0xbcdcf8, roughness: 0.5, metalness: 0.06 });
     const iceDk = new THREE.MeshStandardMaterial({ color: 0x9cc6ee, roughness: 0.55, metalness: 0.06 });
     const snow = snowMat(0xeef7ff);
@@ -393,36 +394,37 @@ export class IceScenery {
       col.userData.noShadow = true;
       this.group.add(col);
     }
-    // 얼음 기단(성 아래 낮고 넓은 빙판 언덕) — 도로(반경 Rt*scale≈36 이상)를 묻지 않게 낮게
-    const mound = new THREE.Mesh(new THREE.CylinderGeometry(keepR + 8, keepR + 20, 6, 32), iceDk);
-    mound.position.y = 1.0; grp.add(mound);
+    // 얼음 기단(성 아래 낮은 언덕) — 탑 반경 안쪽에 낮게(도로 안 묻히게)
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(keepR + 2, keepR + 9, 7, 40), iceDk);
+    mound.position.y = 1.5; grp.add(mound);
 
-    // --- 중앙 얼음성 탑(키프 + 성가퀴 + 첨탑 + 코너 터렛 + 별) ---
-    const keep = new THREE.Mesh(new THREE.CylinderGeometry(keepR * 0.86, keepR, topY + 12, 12), iceBlue);
-    keep.position.y = (topY + 12) / 2 + 3; grp.add(keep);
-    // 성가퀴(총안) 링
-    for (let a = 0; a < 12; a++) {
-      const ang = a / 12 * Math.PI * 2;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), snow);
-      b.position.set(Math.cos(ang) * keepR, topY + 16, Math.sin(ang) * keepR);
-      b.rotation.y = -ang; grp.add(b);
+    // --- 중앙 큰 얼음성 탑(키프 + 층링 + 성가퀴 + 지붕 + 첨탑 + 별) ---
+    const keep = new THREE.Mesh(new THREE.CylinderGeometry(keepR * 0.92, keepR, topY + 14, 28), iceBlue);
+    keep.position.y = (topY + 14) / 2 + 3; grp.add(keep);
+    // 층 링(각 회전 높이마다 얼음 띠)
+    for (let k = 1; k <= 4; k++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(keepR * (0.93 + 0.02 * k), 1.8, 6, 44), iceDk);
+      ring.rotation.x = Math.PI / 2; ring.position.y = 5 + k * (topY / 4.4); grp.add(ring);
     }
-    // 상단 원뿔 지붕 + 첨탑
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(keepR + 2, 16, 12), spireMat);
-    cap.position.y = topY + 24; grp.add(cap);
-    const spire = new THREE.Mesh(new THREE.ConeGeometry(keepR * 0.5, 34, 8), iceBlue);
-    spire.position.y = topY + 48; grp.add(spire);
-    // 코너 터렛 4개(중앙 탑 둘레, keepR 안쪽)
-    for (let a = 0; a < 4; a++) {
-      const ang = a / 4 * Math.PI * 2 + Math.PI / 4;
-      const rr = keepR * 0.82;
-      const tw = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.2, topY + 6, 8), spireMat);
-      tw.position.set(Math.cos(ang) * rr, (topY + 6) / 2 + 3, Math.sin(ang) * rr); grp.add(tw);
-      const rf = new THREE.Mesh(new THREE.ConeGeometry(5.2, 12, 8), iceBlue);
-      rf.position.set(Math.cos(ang) * rr, topY + 12, Math.sin(ang) * rr); grp.add(rf);
+    // 성가퀴(총안) 링
+    for (let a = 0; a < 18; a++) {
+      const ang = a / 18 * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(6, 8, 6), snow);
+      b.position.set(Math.cos(ang) * keepR, topY + 20, Math.sin(ang) * keepR); b.rotation.y = -ang; grp.add(b);
+    }
+    // 원뿔 지붕 + 높은 첨탑
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(keepR + 3, 30, 28), spireMat);
+    cap.position.y = topY + 34; grp.add(cap);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(keepR * 0.4, 58, 10), iceBlue);
+    spire.position.y = topY + 78; grp.add(spire);
+    // 소형 첨탑 링(지붕 둘레)
+    for (let a = 0; a < 8; a++) {
+      const ang = a / 8 * Math.PI * 2, rr = keepR * 0.78;
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(5, 20, 8), iceBlue);
+      sp.position.set(Math.cos(ang) * rr, topY + 30, Math.sin(ang) * rr); grp.add(sp);
     }
     this._star = this._makeStar(0xfff2a0);
-    this._star.scale.setScalar(5); this._star.position.set(0, topY + 70, 0); grp.add(this._star);
+    this._star.scale.setScalar(7); this._star.position.set(0, topY + 112, 0); grp.add(this._star);
 
     this.group.add(grp);
     this._castle = grp;

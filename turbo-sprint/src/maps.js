@@ -137,14 +137,14 @@ export const MAPS = {
     controlPoints: iceTrack(),
     // t값은 빌드 후 icediag로 확정. 정상 t≈0.52, 그 직후 낭떠러지(gap), 이후 착지 활주로.
     caveRange: null,
-    gaps: [[0.448, 0.49]],            // 정상 직후 하강 구간 = 낭떠러지(무조건 점프) — 못 밟으면 추락
-    fallRespawn: 0.18,                // 추락 시 성 아래(재등반 시작)로
+    gaps: [[0.508, 0.55]],            // 정상 직후 하강 구간 = 낭떠러지(무조건 점프) — 못 밟으면 추락
+    fallRespawn: 0.16,                // 추락 시 성 아래(재등반 시작)로
     seaEdges: [[0.60, 0.98, 1]],      // 하단 물결 바깥쪽 = 바다(추락=딜레이)
     obstacle: 'snowball',
-    // 정상 점프대(무조건 도약): 밟으면 스크립트로 크게 날아 루프에 안전 착지
+    // 정상 점프대(무조건 도약): 밟으면 스크립트로 '크게' 날아 루프에 자연스럽게 착지(2.25바퀴 상승)
     pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
-      jumps: [0.43], boosts: [0.05, 0.22, 0.30, 0.40, 0.90],
-      leap: { to: 0.53, height: 34, dur: 1.4 } },
+      jumps: [0.49], boosts: [0.04, 0.20, 0.28, 0.36, 0.44, 0.90],
+      leap: { to: 0.58, height: 44, dur: 1.75 } },
     penguinSpots: [0.74, 0.88], penguinSides: [1, 1],
     // 아이템 박스는 평지 구간에만(성 등반 0.18~0.43·점프 낭떠러지 0.43~0.53 피함)
     itemRows: [0.07, 0.14, 0.60, 0.72, 0.90],

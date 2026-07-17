@@ -856,7 +856,7 @@ export class Kart {
     // 통상 조향 (드리프트 아닐 때)
     if (!this.drifting && steer !== 0) {
       const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
-      const iceGrip = this.iceTimer > 0 ? 0.38 : 1;   // 빙판에선 조향력 저하(미끄러짐)
+      const iceGrip = this.iceTimer > 0 ? 0.32 : 1;   // 빙판에선 조향력 크게 저하(확 미끄러짐)
       const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * this.stats.turn * iceGrip;
       const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
       const dir = this.speed >= 0 ? 1 : -1;
@@ -876,7 +876,7 @@ export class Kart {
     if (!this._moveDir) this._moveDir = _fwd.clone();
     if (this.iceTimer > 0) {
       if (this._moveDir.lengthSq() < 1e-6) this._moveDir.copy(_fwd);
-      this._moveDir.lerp(_fwd, 0.028).normalize();     // 낮은 접지 → 이동방향 전환이 느림(확 미끄러짐)
+      this._moveDir.lerp(_fwd, 0.018).normalize();     // 낮은 접지 → 이동방향 전환이 매우 느림(확 미끄러짐/밀림)
     } else {
       this._moveDir.copy(_fwd);                          // 평소엔 헤딩과 동일(주행 영향 없음)
     }
@@ -929,8 +929,9 @@ export class Kart {
         // 좁은 다리 이탈 → 용암 추락(페널티)
         this._startLavaFall();
         this.onGrass = false;
-      } else if (g.sea && over > 1.5 && Math.sign(g.lateral) === Math.sign(g.sea)) {
-        // 바다 쪽 도로 이탈 → 바다 추락(딜레이 후 마지막 안전지점 복귀)
+      } else if (g.sea && over > 9 && Math.sign(g.lateral) === Math.sign(g.sea)) {
+        // 바다 쪽 도로 이탈 → 바다 추락(딜레이 후 마지막 안전지점 복귀).
+        // 여유(해변 폭)를 둬서 급커브에서 살짝 밀려도 곧장 빠지진 않게 — 크게 이탈해야 추락.
         this._startLavaFall();
         this.onGrass = false;
       } else {
