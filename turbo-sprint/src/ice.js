@@ -161,23 +161,26 @@ export class IceScenery {
     }
     const beach = t.halfWidth + 16;              // 혹(가장 안쪽) 바깥의 좁은 해변
     const innerZ = minZ + beach;                 // 해안선(안쪽 가장자리) — 이보다 +z 는 바다
-    const width = (maxX - minX) + 760, depth = 1300;
+    // 수평선까지 넓게(그 너머로 흰 눈밭·나무가 안 보이도록)
+    const width = (maxX - minX) + 1200, depth = 2200;
     const cx = (minX + maxX) / 2;
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: 0x123f66, roughness: 0.1, metalness: 0.1,      // 진한 남색 → 도로(하늘파랑)와 대비
-      transparent: true, opacity: 0.99, clearcoat: 1.0, clearcoatRoughness: 0.1,
-    });
-    const geo = new THREE.PlaneGeometry(width, depth, 1, 1); geo.rotateX(-Math.PI / 2);
+    // 진한 바다색 + 물결(정점 애니메이션)
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0e4d92, roughness: 0.3, metalness: 0.2 });
+    const geo = new THREE.PlaneGeometry(width, depth, 52, 34); geo.rotateX(-Math.PI / 2);
     const sea = new THREE.Mesh(geo, mat);
-    sea.position.set(cx, -0.45, innerZ + depth / 2);        // 눈밭(-0.6) 위, 도로(0) 아래
+    sea.position.set(cx, -1.0, innerZ + depth / 2);        // 눈밭(-0.6) 아래로 낮춰 파도 마루가 튀게
     sea.userData.noShadow = true;
-    this._sea = sea; this._seaMat = mat;
+    this._sea = sea; this._seaMat = mat; this._seaGeo = geo;
+    // 물결 애니메이션용 기준 x,z 저장
+    const pos = geo.attributes.position;
+    this._seaBase = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) { this._seaBase[i * 2] = pos.getX(i); this._seaBase[i * 2 + 1] = pos.getZ(i); }
     this.group.add(sea);
     this._seaCenter = { x: cx, z: innerZ + 120, innerZ };   // 고래·유빙 배치용
-    // 물가 포말 띠
-    const foamMat = new THREE.MeshBasicMaterial({ color: 0xd6f2ff, transparent: true, opacity: 0.7, toneMapped: false, depthWrite: false });
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 12), foamMat); foam.rotateX(-Math.PI / 2);
-    foam.position.set(cx, -0.32, innerZ);
+    // 물가 포말 띠(파도가 부서지는 하얀 물가)
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.8, toneMapped: false, depthWrite: false });
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 14), foamMat); foam.rotateX(-Math.PI / 2);
+    foam.position.set(cx, -0.28, innerZ);
     this.group.add(foam);
     // 떠다니는 유빙(하양)
     const floeMat = snowMat(0xf2fbff);
@@ -190,7 +193,22 @@ export class IceScenery {
     }
   }
 
-  // ---- 북극 고래(벨루가, 오리지널 카툰): 바다에서 주기적으로 점프(브리칭) ----
+  // 바다 물결(정점 높이 애니메이션)
+  _animateSea() {
+    const geo = this._seaGeo; if (!geo) return;
+    const pos = geo.attributes.position, t = this._t, b = this._seaBase;
+    for (let i = 0; i < pos.count; i++) {
+      const x = b[i * 2], z = b[i * 2 + 1];
+      const h = Math.sin(x * 0.030 + t * 1.6) * 1.1
+              + Math.sin(z * 0.042 - t * 1.25) * 0.9
+              + Math.sin((x + z) * 0.058 + t * 0.9) * 0.5;
+      pos.setY(i, h);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+  }
+
+  // ---- 북극고래(그린란드고래/보우헤드, 오리지널 카툰): 어두운 몸 + 흰 아래턱 반점. 바다에서 브리칭 ----
   _buildWhale() {
     const t = this.track;
     // 하단 도로(바다 구간) 중앙에서 바깥(바다)으로 밀어 배치 → 도로에서 잘 보임
@@ -202,34 +220,46 @@ export class IceScenery {
     const on = Math.hypot(ox, oz) || 1; ox /= on; oz /= on;
     const wx = rp.x + ox * 62, wz = rp.z + oz * 62;
     const grp = new THREE.Group();
-    const skin = new THREE.MeshStandardMaterial({ color: 0xeaf4fb, roughness: 0.45, metalness: 0.05 });
-    const belly = new THREE.MeshStandardMaterial({ color: 0xf8fdff, roughness: 0.5 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x1a2230 });
-    // 몸통(길쭉한 타원) — +Z가 머리 방향
+    const skin = new THREE.MeshStandardMaterial({ color: 0x2c313a, roughness: 0.5, metalness: 0.05 });   // 짙은 회흑색
+    const skinDk = new THREE.MeshStandardMaterial({ color: 0x1e232b, roughness: 0.55 });
+    const chin = new THREE.MeshStandardMaterial({ color: 0xf0f4f8, roughness: 0.5 });                    // 흰 아래턱
+    const spotM = new THREE.MeshStandardMaterial({ color: 0x2b2f37, roughness: 0.6 });
+    const eyeB = new THREE.MeshBasicMaterial({ color: 0x0c0f14 });
+    // 몸통(길쭉한 타원) — +Z가 머리 방향, 어두운 색
     const body = new THREE.Mesh(new THREE.SphereGeometry(6, 20, 16), skin);
     body.scale.set(1, 1.05, 2.1); grp.add(body);
-    const bel = new THREE.Mesh(new THREE.SphereGeometry(5.4, 18, 14), belly);
-    bel.scale.set(0.9, 0.7, 1.9); bel.position.set(0, -1.4, 0.5); grp.add(bel);
-    // 머리(벨루가 이마 melon) — 앞쪽 둥글게
-    const head = new THREE.Mesh(new THREE.SphereGeometry(4.6, 18, 14), skin);
-    head.position.set(0, 1.0, 9.5); grp.add(head);
-    // 눈 + 미소
-    for (const sx of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), dark);
-      eye.position.set(sx * 2.6, 1.4, 11.8); grp.add(eye);
+    // 큰 머리(보우헤드는 머리가 몸의 1/3, 활처럼 굽은 위턱)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(5.2, 18, 14), skin);
+    head.scale.set(0.95, 1.15, 1.2); head.position.set(0, 1.6, 9.2); grp.add(head);   // 위로 솟은 이마/위턱
+    // 아래턱(흰색, 앞으로 삐죽) + 반점
+    const jaw = new THREE.Mesh(new THREE.SphereGeometry(3.6, 16, 12), chin);
+    jaw.scale.set(0.82, 0.5, 1.5); jaw.position.set(0, -1.8, 11.6); grp.add(jaw);
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 6 - 0.5) * 2.4;
+      const sp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 5), spotM);
+      sp.position.set(Math.sin(a) * 2.4, -2.4 + Math.cos(a) * 0.2, 13.2 - Math.abs(a) * 0.6); grp.add(sp);
     }
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.3, 8, 14, Math.PI), dark);
-    mouth.position.set(0, -0.6, 12.2); mouth.rotation.x = Math.PI / 2; mouth.rotation.z = Math.PI; grp.add(mouth);
-    // 꼬리(수평 플루크)
+    // 활 모양 입선(어두운 위턱이 흰 아래턱을 덮는 경계)
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.35, 8, 16, Math.PI), skinDk);
+    mouth.position.set(0, -0.4, 11.4); mouth.rotation.x = Math.PI / 2 + 0.25; grp.add(mouth);
+    // 눈(작고 어두움, 머리 옆)
     for (const sx of [-1, 1]) {
-      const fl = new THREE.Mesh(new THREE.ConeGeometry(3.4, 8, 4), skin);
-      fl.rotation.z = Math.PI / 2; fl.rotation.y = sx * 0.5;
-      fl.scale.set(0.4, 1, 1); fl.position.set(sx * 4.5, 0.4, -12); grp.add(fl);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), eyeB);
+      eye.position.set(sx * 4.2, 0.4, 8.0); grp.add(eye);
     }
-    // 가슴지느러미
+    // 분수공 자리 살짝 융기
+    const blow = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), skinDk);
+    blow.scale.set(1.4, 0.5, 1); blow.position.set(0, 5.2, 6.5); grp.add(blow);
+    // 꼬리(수평 플루크, 넓게) — 보우헤드는 등지느러미 없음
     for (const sx of [-1, 1]) {
-      const pf = new THREE.Mesh(new THREE.ConeGeometry(2, 6, 4), skin);
-      pf.rotation.z = sx * 1.2; pf.scale.set(0.4, 1, 1); pf.position.set(sx * 5.5, -1.5, 3); grp.add(pf);
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(4.2, 9, 4), skin);
+      fl.rotation.z = Math.PI / 2; fl.rotation.y = sx * 0.55;
+      fl.scale.set(0.35, 1, 1); fl.position.set(sx * 5.5, 0.2, -12.5); grp.add(fl);
+    }
+    // 가슴지느러미(패들형)
+    for (const sx of [-1, 1]) {
+      const pf = new THREE.Mesh(new THREE.ConeGeometry(2.4, 6.5, 5), skin);
+      pf.rotation.z = sx * 1.2; pf.scale.set(0.4, 1, 1); pf.position.set(sx * 5.8, -1.8, 3); grp.add(pf);
     }
     grp.scale.setScalar(1.7);
     grp.position.set(wx, -30, wz);
@@ -452,9 +482,14 @@ export class IceScenery {
     const leaf = new THREE.MeshStandardMaterial({ color: 0x2f7d4f, roughness: 0.8 });
     const snow = snowMat(0xffffff);
     const N = t.samplePos.length;
+    const se = t.seaEdges && t.seaEdges[0];         // 바다 구간/방향 — 바다쪽엔 나무 안 심음(물 위 X)
     for (let i = 0; i < N; i += 22) {
+      const tt = i / N;
+      const inSea = se && tt >= se[0] && tt <= se[1];
       for (const side of [-1, 1]) {
         if (((i * 7 + (side > 0 ? 3 : 0)) % 5) > 2) continue;
+        if (inSea && side === se[2]) continue;      // 바다쪽 나무 스킵
+
         const p = t.samplePos[i], lat = t.sampleLat[i];
         const off = (t.sampleHalf ? t.sampleHalf[i] : t.halfWidth) + 12 + ((i * 13) % 40);
         const wx = p.x + lat.x * off * side, wz = p.z + lat.z * off * side;
@@ -504,6 +539,7 @@ export class IceScenery {
     this._t += dt;
     this._updateHazards(dt, karts);
     this._updateWhale(dt);
+    this._animateSea();
     // 전구/별 반짝임
     const tw = 0.6 + 0.4 * Math.abs(Math.sin(this._t * 3));
     for (let i = 0; i < this._twinkle.length; i++) {
@@ -512,6 +548,5 @@ export class IceScenery {
       else { m.color && m.color.offsetHSL(0, 0, 0); }
     }
     if (this._star) this._star.rotation.z += dt * 0.4;
-    if (this._seaMat) this._seaMat.opacity = 0.86 + 0.06 * Math.sin(this._t * 1.2);
   }
 }
