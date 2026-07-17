@@ -12,8 +12,8 @@ function iceTrack() {
   const M = ICE_MTN;
   const push = (a) => pts.push([Math.round(a[0]), Math.round(a[1]), Math.round(a[2])]);
   const pts = [];
-  // --- 평지 루프 앞부분: start(오른쪽) → 위 → 좌상단(나선 진입 직전) ---
-  [[118, 0, 16], [130, 0, -46], [96, 0, -96], [40, 0, -98], [6, 0, -84]].forEach((p) => push([p[0], p[1], p[2]]));
+  // --- 평지 루프 앞부분: start(오른쪽) → 위로 크게 → 상단중앙 나선 진입 ---
+  [[122, 0, -6], [134, 0, -56], [104, 0, -96], [52, 0, -98]].forEach((p) => push([p[0], p[1], p[2]]));
   // --- 작은 얼음성 나선: 진입 → 1턴 바깥상승(정상=점프대) → 0.5턴 안쪽하강(짧게) → 탈출 ---
   // 정상 점프대를 밟으면 꼭대기에서 도약해 하강로를 건너뛰고 루프로 착지(못 밟아도 하강로로 안전 주행).
   const upN = Math.round(M.upTurns * M.ppt), downN = Math.round(M.downTurns * M.ppt);
@@ -25,8 +25,9 @@ function iceTrack() {
     const a = M.aIn + ((upN + j) / M.ppt) * Math.PI * 2, frac = j / downN;
     push([M.Cx + M.Rt * Math.cos(a), M.topY * (1 - frac), M.Cz + M.Rt * Math.sin(a)]); // 안쪽 반경 하강
   }
-  // --- 평지 루프 뒷부분: 나선 탈출(좌측) → 좌하단 → 하단(바다, 펭귄) → 오른쪽 복귀 → start ---
-  [[-104, 0, -30], [-118, 0, 26], [-84, 0, 74], [-16, 0, 102], [52, 0, 94], [106, 0, 58]].forEach((p) => push([p[0], p[1], p[2]]));
+  // --- 평지 루프 뒷부분: 나선 탈출 → 좌측 로브 → 하단 물결(바다 딥-혹-딥, 펭귄) → 우측 복귀 → start ---
+  [[-46, 0, -62], [-104, 0, -54], [-126, 0, -2], [-108, 0, 52], [-70, 0, 84],
+   [-34, 0, 116], [8, 0, 74], [48, 0, 116], [96, 0, 74]].forEach((p) => push([p[0], p[1], p[2]]));
   return pts;
 }
 
@@ -137,13 +138,13 @@ export const MAPS = {
     // t값은 빌드 후 icediag로 확정. 정상 t≈0.52, 그 직후 낭떠러지(gap), 이후 착지 활주로.
     caveRange: null,
     gaps: [],                         // 하강로는 주행 가능(추락 없음) — 정상 점프대로 건너뛰기
-    fallRespawn: 0.30,                // 상승 중 옆 이탈 시 성 아래(재등반 시작)로
-    seaEdges: [[0.72, 0.95, 1]],      // 하단 루프 바깥쪽 = 바다(추락=딜레이)
+    fallRespawn: 0.20,                // 상승 중 옆 이탈 시 성 아래(재등반 시작)로
+    seaEdges: [[0.58, 0.97, 1]],      // 하단 물결 바깥쪽 = 바다(추락=딜레이)
     obstacle: 'snowball',
     // 정상에 점프대: 밟으면 꼭대기에서 도약해 하강로를 건너뛰고 루프로 착지
     pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
-      jumps: [0.48], boosts: [0.06, 0.30, 0.38, 0.86] },
-    penguinSpots: [0.80, 0.90], penguinSides: [1, 1],
+      jumps: [0.365], boosts: [0.05, 0.24, 0.32, 0.88] },
+    penguinSpots: [0.72, 0.85], penguinSides: [1, 1],
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],

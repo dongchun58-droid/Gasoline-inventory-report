@@ -8,7 +8,7 @@ const _p2 = new THREE.Vector3();
 export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
 // 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
 // scale은 트랙에서 x,z에만 적용됨. Cx,Cz=나선 중심(제어점 단위).
-export const ICE_MTN = { Cx: -58, Cz: -54, Rb: 32, Rt: 13, topY: 24, ppt: 10, upTurns: 1, downTurns: 0.5, aIn: -0.6 };
+export const ICE_MTN = { Cx: -4, Cz: -80, Rb: 32, Rt: 13, topY: 24, ppt: 10, upTurns: 1, downTurns: 0.5, aIn: -0.7 };
 
 // 반투명 얼음 재질 (주행 시선을 가리지 않도록 비교적 불투명하게)
 function iceMat(color = 0xbfe4ff, opacity = 0.9, rough = 0.15) {
@@ -31,6 +31,7 @@ export class IceScenery {
 
     this._buildGround();
     this._buildSea();
+    this._buildWhale();
     this._buildMountain();
     this._buildStartGate();
     this._buildIceCave();
@@ -145,52 +146,132 @@ export class IceScenery {
     this.group.add(g);
   }
 
-  // ---- 바다: 루프 하단 도로 바로 바깥에 넓게. 그 위로 이탈하면 추락(딜레이) ----
+  // ---- 바다: 하단 물결(굴곡) 해안선을 따라 넓게. 스케치처럼 딥(만)은 물에 잠기고 혹은 육지 ----
   _buildSea() {
     const t = this.track;
-    // 하단 도로 중앙(바다 구간) + 바깥 방향
-    let rx = t.center.x, rz = t.center.z + t.radius * 0.6, ox = 0, oz = 1;
-    const se = t.seaEdges && t.seaEdges[0];
-    if (se) {
-      const N = t.samplePos.length;
-      const im = Math.floor(((se[0] + se[1]) / 2) * N) % N;
-      const p = t.samplePos[im], lat = t.sampleLat[im];
-      rx = p.x; rz = p.z;
-      ox = lat.x * se[2]; oz = lat.z * se[2];
-      const on = Math.hypot(ox, oz) || 1; ox /= on; oz /= on;
+    const N = t.samplePos.length;
+    const se = (t.seaEdges && t.seaEdges[0]) || [0.58, 0.97, 1];
+    const i0 = Math.floor(se[0] * N), i1 = Math.floor(se[1] * N);
+    // 하단(바다 구간) 도로 샘플의 범위 계산
+    let minZ = 1e9, maxZ = -1e9, minX = 1e9, maxX = -1e9;
+    for (let i = i0; i <= i1; i++) {
+      const p = t.samplePos[i % N];
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
     }
-    const seaHalf = t.radius * 1.05, size = seaHalf * 2;
-    const inner = t.halfWidth + 34;              // 도로 바깥에 눈밭(해변) 버퍼를 두고 그 너머가 바다
-    // 바다 표면: 눈밭(-0.6)보다 살짝 낮게, 도로(0)보다 낮게 → 물가 느낌. 불투명 진파랑.
-    const geo = new THREE.PlaneGeometry(size, size, 1, 1);
-    geo.rotateX(-Math.PI / 2);
+    const beach = t.halfWidth + 16;              // 혹(가장 안쪽) 바깥의 좁은 해변
+    const innerZ = minZ + beach;                 // 해안선(안쪽 가장자리) — 이보다 +z 는 바다
+    const width = (maxX - minX) + 760, depth = 1300;
+    const cx = (minX + maxX) / 2;
     const mat = new THREE.MeshPhysicalMaterial({
       color: 0x123f66, roughness: 0.1, metalness: 0.1,      // 진한 남색 → 도로(하늘파랑)와 대비
       transparent: true, opacity: 0.99, clearcoat: 1.0, clearcoatRoughness: 0.1,
     });
+    const geo = new THREE.PlaneGeometry(width, depth, 1, 1); geo.rotateX(-Math.PI / 2);
     const sea = new THREE.Mesh(geo, mat);
-    // 눈밭(-0.6) 위(=보이게), 도로(0) 아래 → 물가. 안쪽 가장자리를 도로 바깥 연석에 맞춤.
-    sea.position.set(rx + ox * (inner + seaHalf), -0.45, rz + oz * (inner + seaHalf));
+    sea.position.set(cx, -0.45, innerZ + depth / 2);        // 눈밭(-0.6) 위, 도로(0) 아래
     sea.userData.noShadow = true;
     this._sea = sea; this._seaMat = mat;
     this.group.add(sea);
-    // 물가 포말 띠(밝은 하늘색, 도로 바깥선을 따라)
+    this._seaCenter = { x: cx, z: innerZ + 120, innerZ };   // 고래·유빙 배치용
+    // 물가 포말 띠
     const foamMat = new THREE.MeshBasicMaterial({ color: 0xd6f2ff, transparent: true, opacity: 0.7, toneMapped: false, depthWrite: false });
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(size, 12), foamMat);
-    foam.rotateX(-Math.PI / 2);
-    foam.position.set(rx + ox * (inner - 2), -0.32, rz + oz * (inner - 2));
-    foam.quaternion.setFromRotationMatrix(_m.makeBasis(new THREE.Vector3(oz, 0, -ox), _up, new THREE.Vector3(ox, 0, oz)));
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 12), foamMat); foam.rotateX(-Math.PI / 2);
+    foam.position.set(cx, -0.32, innerZ);
     this.group.add(foam);
-    // 떠다니는 유빙(하양) 몇 개
+    // 떠다니는 유빙(하양)
     const floeMat = snowMat(0xf2fbff);
-    for (let i = 0; i < 7; i++) {
-      const d = 40 + i * 55, sidew = ((i * 53) % 100 - 50) * 2.2;
-      const px = rx + ox * (inner + d) + oz * sidew;
-      const pz = rz + oz * (inner + d) - ox * sidew;
-      const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 7 + (i % 3) * 3, 2, 6), floeMat);
-      floe.position.set(px, -0.35, pz);
-      floe.userData.noShadow = true;
+    for (let i = 0; i < 8; i++) {
+      const px = minX + ((i * 137) % Math.max(1, (maxX - minX)));
+      const pz = innerZ + 40 + ((i * 71) % 240);
+      const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 8 + (i % 3) * 3, 2, 6), floeMat);
+      floe.position.set(px, -0.35, pz); floe.userData.noShadow = true;
       this.group.add(floe);
+    }
+  }
+
+  // ---- 북극 고래(벨루가, 오리지널 카툰): 바다에서 주기적으로 점프(브리칭) ----
+  _buildWhale() {
+    const t = this.track;
+    // 하단 도로(바다 구간) 중앙에서 바깥(바다)으로 밀어 배치 → 도로에서 잘 보임
+    const se = (t.seaEdges && t.seaEdges[0]) || [0.58, 0.97, 1];
+    const N = t.samplePos.length;
+    const im = Math.floor(((se[0] + se[1]) / 2) * N) % N;
+    const rp = t.samplePos[im], lat = t.sampleLat[im];
+    let ox = lat.x * se[2], oz = lat.z * se[2];
+    const on = Math.hypot(ox, oz) || 1; ox /= on; oz /= on;
+    const wx = rp.x + ox * 62, wz = rp.z + oz * 62;
+    const grp = new THREE.Group();
+    const skin = new THREE.MeshStandardMaterial({ color: 0xeaf4fb, roughness: 0.45, metalness: 0.05 });
+    const belly = new THREE.MeshStandardMaterial({ color: 0xf8fdff, roughness: 0.5 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x1a2230 });
+    // 몸통(길쭉한 타원) — +Z가 머리 방향
+    const body = new THREE.Mesh(new THREE.SphereGeometry(6, 20, 16), skin);
+    body.scale.set(1, 1.05, 2.1); grp.add(body);
+    const bel = new THREE.Mesh(new THREE.SphereGeometry(5.4, 18, 14), belly);
+    bel.scale.set(0.9, 0.7, 1.9); bel.position.set(0, -1.4, 0.5); grp.add(bel);
+    // 머리(벨루가 이마 melon) — 앞쪽 둥글게
+    const head = new THREE.Mesh(new THREE.SphereGeometry(4.6, 18, 14), skin);
+    head.position.set(0, 1.0, 9.5); grp.add(head);
+    // 눈 + 미소
+    for (const sx of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), dark);
+      eye.position.set(sx * 2.6, 1.4, 11.8); grp.add(eye);
+    }
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.3, 8, 14, Math.PI), dark);
+    mouth.position.set(0, -0.6, 12.2); mouth.rotation.x = Math.PI / 2; mouth.rotation.z = Math.PI; grp.add(mouth);
+    // 꼬리(수평 플루크)
+    for (const sx of [-1, 1]) {
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(3.4, 8, 4), skin);
+      fl.rotation.z = Math.PI / 2; fl.rotation.y = sx * 0.5;
+      fl.scale.set(0.4, 1, 1); fl.position.set(sx * 4.5, 0.4, -12); grp.add(fl);
+    }
+    // 가슴지느러미
+    for (const sx of [-1, 1]) {
+      const pf = new THREE.Mesh(new THREE.ConeGeometry(2, 6, 4), skin);
+      pf.rotation.z = sx * 1.2; pf.scale.set(0.4, 1, 1); pf.position.set(sx * 5.5, -1.5, 3); grp.add(pf);
+    }
+    grp.scale.setScalar(1.7);
+    grp.position.set(wx, -30, wz);
+    this.group.add(grp);
+    this._whale = grp;
+    this._whaleBase = { x: wx, z: wz };
+    // 물보라(브리칭 착수 스플래시)
+    const spl = new THREE.Group();
+    const dropMat = new THREE.MeshBasicMaterial({ color: 0xd6f2ff, transparent: true, opacity: 0.9, toneMapped: false });
+    spl.__drops = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (i % 3) * 0.3, 6, 5), dropMat.clone());
+      spl.add(d); spl.__drops.push({ m: d, a: (i / 12) * Math.PI * 2, r: 3 + (i % 4) });
+    }
+    spl.visible = false; this.group.add(spl); this._whaleSplash = spl;
+  }
+
+  _updateWhale(dt) {
+    const w = this._whale; if (!w) return;
+    const base = this._whaleBase, spl = this._whaleSplash;
+    const period = 6.5;
+    const cyc = ((this._t / period) % 1);
+    // cyc 0.12~0.52 구간에 물 위로 아치를 그리며 브리칭
+    if (cyc > 0.12 && cyc < 0.52) {
+      const u = (cyc - 0.12) / 0.40;            // 0..1
+      const arc = Math.sin(u * Math.PI);        // 0→1→0
+      w.visible = true;
+      w.position.set(base.x, -13 + arc * 26, base.z + (u - 0.3) * 22); // 수면 위로 솟구쳐 앞으로
+      w.rotation.x = (0.5 - u) * 1.7;           // 머리 들고 올랐다가 머리부터 입수
+      w.rotation.y = 0.5;
+      // 착수 스플래시(입수 직전/직후)
+      if (u > 0.86 && spl) {
+        spl.visible = true; spl.position.set(base.x, -0.3, base.z + 4);
+        const p = (u - 0.86) / 0.14;
+        for (const d of spl.__drops) {
+          const rr = d.r * (1 + p * 2);
+          d.m.position.set(Math.cos(d.a) * rr, Math.max(0, 6 * (1 - p)), Math.sin(d.a) * rr);
+          d.m.material.opacity = 0.9 * (1 - p);
+        }
+      } else if (spl) spl.visible = false;
+    } else {
+      w.visible = false; if (spl) spl.visible = false;
     }
   }
 
@@ -422,6 +503,7 @@ export class IceScenery {
   update(dt, karts) {
     this._t += dt;
     this._updateHazards(dt, karts);
+    this._updateWhale(dt);
     // 전구/별 반짝임
     const tw = 0.6 + 0.4 * Math.abs(Math.sin(this._t * 3));
     for (let i = 0; i < this._twinkle.length; i++) {
