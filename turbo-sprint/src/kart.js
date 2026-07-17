@@ -856,7 +856,7 @@ export class Kart {
     // 통상 조향 (드리프트 아닐 때)
     if (!this.drifting && steer !== 0) {
       const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
-      const iceGrip = this.iceTimer > 0 ? 0.45 : 1;   // 빙판에선 조향력 저하(미끄러짐)
+      const iceGrip = this.iceTimer > 0 ? 0.38 : 1;   // 빙판에선 조향력 저하(미끄러짐)
       const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * this.stats.turn * iceGrip;
       const steerAuthority = Math.min(1, Math.abs(this.speed) / 3);
       const dir = this.speed >= 0 ? 1 : -1;
@@ -876,7 +876,7 @@ export class Kart {
     if (!this._moveDir) this._moveDir = _fwd.clone();
     if (this.iceTimer > 0) {
       if (this._moveDir.lengthSq() < 1e-6) this._moveDir.copy(_fwd);
-      this._moveDir.lerp(_fwd, 0.035).normalize();     // 낮은 접지 → 이동방향 전환이 느림
+      this._moveDir.lerp(_fwd, 0.028).normalize();     // 낮은 접지 → 이동방향 전환이 느림(확 미끄러짐)
     } else {
       this._moveDir.copy(_fwd);                          // 평소엔 헤딩과 동일(주행 영향 없음)
     }
