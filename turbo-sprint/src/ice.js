@@ -1,9 +1,40 @@
 // ice.js — 얼음 왕국 맵 배경 (거대 얼음성·크리스마스 출발문·얼음동굴·바다·눈밭, 오리지널)
 import * as THREE from 'three';
+import { normalFromCanvas } from './pbrtex.js';
 
 const _m = new THREE.Matrix4();
 const _up = new THREE.Vector3(0, 1, 0);
 const _p2 = new THREE.Vector3();
+
+// 바다 표면 텍스처(진파랑 + 잔물결·포말) — 용암처럼 스크롤해서 파도 느낌(평면은 안정적으로 고정)
+function waterTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const g = cv.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, '#0c4488'); grad.addColorStop(0.5, '#0f4f95'); grad.addColorStop(1, '#0a3d7a');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  // 잔물결(밝은/어두운 곡선)
+  for (let i = 0; i < 26; i++) {
+    const y = (i / 26) * 128 + (Math.sin(i * 3.1) * 6);
+    g.strokeStyle = i % 2 ? 'rgba(120,180,240,0.35)' : 'rgba(8,40,90,0.4)';
+    g.lineWidth = 1.5 + (i % 2);
+    g.beginPath();
+    for (let x = 0; x <= 128; x += 8) g.lineTo(x, y + Math.sin((x + i * 20) * 0.08) * 3);
+    g.stroke();
+  }
+  // 흰 포말 점점이
+  for (let i = 0; i < 40; i++) {
+    const x = (Math.abs(Math.sin(i * 12.9) * 43758.5) % 1) * 128;
+    const y = (Math.abs(Math.sin(i * 78.2) * 43758.5) % 1) * 128;
+    g.fillStyle = 'rgba(220,240,255,0.5)';
+    g.fillRect(x, y, 2 + (i % 2), 1.5);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 export const SEA_Y = -4.5;         // 바다 수면 높이(도로보다 낮음)
 // 작은 얼음성(원뿔) 파라미터 — maps.js iceTrack와 공유. 큰 평지 루프 좌상단에 위치.
@@ -164,23 +195,25 @@ export class IceScenery {
     // 수평선까지 넓게(그 너머로 흰 눈밭·나무가 안 보이도록)
     const width = (maxX - minX) + 1200, depth = 2200;
     const cx = (minX + maxX) / 2;
-    // 진한 바다색 + 물결(정점 애니메이션)
-    const mat = new THREE.MeshStandardMaterial({ color: 0x0e4d92, roughness: 0.3, metalness: 0.2 });
-    const geo = new THREE.PlaneGeometry(width, depth, 52, 34); geo.rotateX(-Math.PI / 2);
+    // 용암과 동일한 방식: '평평한' 판 + 스크롤 텍스처(정점을 움직이지 않으므로 도로 위로 안 튐)
+    const tex = waterTexture();
+    tex.repeat.set(width / 60, depth / 60);
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex, color: 0x0e4d92, roughness: 0.28, metalness: 0.25,
+      normalMap: normalFromCanvas(tex.image, 0.8),
+    });
+    this._seaTex = tex;
+    const geo = new THREE.PlaneGeometry(width, depth, 1, 1); geo.rotateX(-Math.PI / 2);
     const sea = new THREE.Mesh(geo, mat);
-    sea.position.set(cx, -1.0, innerZ + depth / 2);        // 눈밭(-0.6) 아래로 낮춰 파도 마루가 튀게
+    sea.position.set(cx, -0.5, innerZ + depth / 2);        // 눈밭(-0.6) 위, 도로(0) 아래로 고정(안정)
     sea.userData.noShadow = true;
-    this._sea = sea; this._seaMat = mat; this._seaGeo = geo;
-    // 물결 애니메이션용 기준 x,z 저장
-    const pos = geo.attributes.position;
-    this._seaBase = new Float32Array(pos.count * 2);
-    for (let i = 0; i < pos.count; i++) { this._seaBase[i * 2] = pos.getX(i); this._seaBase[i * 2 + 1] = pos.getZ(i); }
+    this._sea = sea; this._seaMat = mat;
     this.group.add(sea);
     this._seaCenter = { x: cx, z: innerZ + 120, innerZ };   // 고래·유빙 배치용
-    // 물가 포말 띠(파도가 부서지는 하얀 물가)
-    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.8, toneMapped: false, depthWrite: false });
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 14), foamMat); foam.rotateX(-Math.PI / 2);
-    foam.position.set(cx, -0.28, innerZ);
+    // 물가 포말 띠(도로 바깥 해안선)
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.75, toneMapped: false, depthWrite: false });
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(width, 12), foamMat); foam.rotateX(-Math.PI / 2);
+    foam.position.set(cx, -0.42, innerZ);
     this.group.add(foam);
     // 떠다니는 유빙(하양)
     const floeMat = snowMat(0xf2fbff);
@@ -188,24 +221,16 @@ export class IceScenery {
       const px = minX + ((i * 137) % Math.max(1, (maxX - minX)));
       const pz = innerZ + 40 + ((i * 71) % 240);
       const floe = new THREE.Mesh(new THREE.CylinderGeometry(6 + (i % 3) * 3, 8 + (i % 3) * 3, 2, 6), floeMat);
-      floe.position.set(px, -0.35, pz); floe.userData.noShadow = true;
+      floe.position.set(px, -0.45, pz); floe.userData.noShadow = true;
       this.group.add(floe);
     }
   }
 
-  // 바다 물결(정점 높이 애니메이션)
-  _animateSea() {
-    const geo = this._seaGeo; if (!geo) return;
-    const pos = geo.attributes.position, t = this._t, b = this._seaBase;
-    for (let i = 0; i < pos.count; i++) {
-      const x = b[i * 2], z = b[i * 2 + 1];
-      const h = Math.sin(x * 0.030 + t * 1.6) * 1.1
-              + Math.sin(z * 0.042 - t * 1.25) * 0.9
-              + Math.sin((x + z) * 0.058 + t * 0.9) * 0.5;
-      pos.setY(i, h);
-    }
-    pos.needsUpdate = true;
-    geo.computeVertexNormals();
+  // 바다 표면 스크롤(용암과 동일 — 텍스처만 흘려 파도 느낌, 판은 고정)
+  _animateSea(dt) {
+    if (!this._seaTex) return;
+    this._seaTex.offset.y = (this._seaTex.offset.y - dt * 0.05) % 1;
+    this._seaTex.offset.x = (this._seaTex.offset.x + dt * 0.02) % 1;
   }
 
   // ---- 북극고래(그린란드고래/보우헤드, 오리지널 카툰): 어두운 몸 + 흰 아래턱 반점. 바다에서 브리칭 ----
@@ -539,7 +564,7 @@ export class IceScenery {
     this._t += dt;
     this._updateHazards(dt, karts);
     this._updateWhale(dt);
-    this._animateSea();
+    this._animateSea(dt);
     // 전구/별 반짝임
     const tw = 0.6 + 0.4 * Math.abs(Math.sin(this._t * 3));
     for (let i = 0; i < this._twinkle.length; i++) {

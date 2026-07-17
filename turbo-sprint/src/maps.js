@@ -149,6 +149,11 @@ export const MAPS = {
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],
+    // Phase 7 Step 1: 중립 주간 HDRI를 간접광·반사(IBL)로만 사용 (배경은 얼음빛 하늘 유지)
+    // → 바다·얼음 표면에 하늘이 비쳐 실사감. 한색 유지 위해 따뜻한 노을 대신 주간 HDRI. (CC0, ASSETS.md)
+    hdri: 'assets/env/quarry_01_1k.hdr',
+    hdriBackground: false,
+    envIntensity: 0.4,
     fog: { color: 0xe4f2ff, near: 230, far: 760 },
     sun: { color: 0xeaf4ff, intensity: 2.1, dir: [0.35, 0.95, 0.25] },
     hemi: { sky: 0xdff0ff, ground: 0xbfe4ff, intensity: 1.05 },
