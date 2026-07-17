@@ -496,6 +496,7 @@ export class Kart {
     this.speed = 0;
     this.vertVel = 0;
     this.airborne = false;
+    this.leapTimer = 0;
     this.fallTimer = 0;
     this.lavaTimer = 0;
     this.stunTimer = 0;
@@ -588,6 +589,17 @@ export class Kart {
     this._landBoost = landBoost;
   }
 
+  // 성 정상 점프대: 스크립트 도약(강제 이동) — 무조건 크게 날아 안전 착지시킴
+  castleLeap(toIdx, height = 30, dur = 1.35) {
+    if (this.leapTimer > 0 || this.lavaTimer > 0 || this.stunTimer > 0 || this.bulletTimer > 0) return;
+    const tr = this.track;
+    this._leapFrom = this.pos.clone();
+    this._leapTo = tr.samplePos[toIdx].clone();
+    this._leapToIdx = toIdx;
+    this._leapDur = dur; this.leapTimer = dur; this._leapHeight = height;
+    this.airborne = true; this.drifting = false; this.driftStage = 0; this.driftCharge = 0;
+  }
+
   // 대형 불릿 변신: 자동으로 트랙을 따라 고속 돌진
   startBullet(t) {
     this.bulletTimer = t;
@@ -635,6 +647,29 @@ export class Kart {
         this.pos.copy(sp).addScaledVector(up, 0.1);
         this.forward.copy(tan);
         this.idx = i; this.airborne = false;
+      }
+      this._syncMesh();
+      return;
+    }
+
+    // --- 성 정상 도약 중: 조작 무시, 정해진 아치를 따라 크게 날아 착지 ---
+    if (this.leapTimer > 0) {
+      this.leapTimer -= dt;
+      const u = THREE.MathUtils.clamp(1 - this.leapTimer / this._leapDur, 0, 1);
+      this.pos.x = THREE.MathUtils.lerp(this._leapFrom.x, this._leapTo.x, u);
+      this.pos.z = THREE.MathUtils.lerp(this._leapFrom.z, this._leapTo.z, u);
+      const baseY = THREE.MathUtils.lerp(this._leapFrom.y, this._leapTo.y, u);
+      this.pos.y = baseY + this._leapHeight * Math.sin(u * Math.PI) + 0.1;
+      _tmp.set(this._leapTo.x - this._leapFrom.x, 0, this._leapTo.z - this._leapFrom.z);
+      if (_tmp.lengthSq() > 1e-6) this.forward.copy(_tmp).normalize();
+      this.wheelSpin += dt * 6;
+      if (this.leapTimer <= 0) {
+        this.pos.copy(this._leapTo); this.pos.y += 0.1;
+        this.idx = this._leapToIdx; this._safeIdx = this._leapToIdx;
+        this.forward.copy(this.track.sampleTan[this._leapToIdx]);
+        this.airborne = false; this.leapTimer = 0;
+        this.speed = Math.max(this.speed, 30);   // 착지 탄력
+        this.giveBoost(0.6);
       }
       this._syncMesh();
       return;

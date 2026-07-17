@@ -137,14 +137,15 @@ export const MAPS = {
     controlPoints: iceTrack(),
     // t값은 빌드 후 icediag로 확정. 정상 t≈0.52, 그 직후 낭떠러지(gap), 이후 착지 활주로.
     caveRange: null,
-    gaps: [],                         // 하강로는 주행 가능(추락 없음) — 정상 점프대로 건너뛰기
-    fallRespawn: 0.20,                // 상승 중 옆 이탈 시 성 아래(재등반 시작)로
-    seaEdges: [[0.58, 0.97, 1]],      // 하단 물결 바깥쪽 = 바다(추락=딜레이)
+    gaps: [[0.448, 0.49]],            // 정상 직후 하강 구간 = 낭떠러지(무조건 점프) — 못 밟으면 추락
+    fallRespawn: 0.18,                // 추락 시 성 아래(재등반 시작)로
+    seaEdges: [[0.60, 0.98, 1]],      // 하단 물결 바깥쪽 = 바다(추락=딜레이)
     obstacle: 'snowball',
-    // 정상에 점프대: 밟으면 꼭대기에서 도약해 하강로를 건너뛰고 루프로 착지
+    // 정상 점프대(무조건 도약): 밟으면 스크립트로 크게 날아 루프에 안전 착지
     pad: { boost: 0x8fe0ff, chevron: '#eaffff', jump: '#4ad6ff', jumpHex: 0x4ad6ff, jumpEdge: 0xffffff,
-      jumps: [0.365], boosts: [0.05, 0.24, 0.32, 0.88] },
-    penguinSpots: [0.72, 0.85], penguinSides: [1, 1],
+      jumps: [0.43], boosts: [0.05, 0.22, 0.30, 0.40, 0.90],
+      leap: { to: 0.53, height: 34, dur: 1.4 } },
+    penguinSpots: [0.74, 0.88], penguinSides: [1, 1],
     road: { asphalt: '#3f7cb4', center: '#ffffff', curbA: '#12539a', curbB: '#eaf6ff', median1: 0xbfe4ff, median2: 0x2f8fd6 },
     sky: { stops: [[0, '#2f6fc0'], [0.4, '#6fb0ee'], [0.7, '#bfe4ff'], [0.9, '#eaf7ff'], [1, '#ffffff']], sun: 0xffffff, sunPos: [180, 260, 120] },
     env: [[0, '#3f8fe0'], [0.5, '#bfe4ff'], [0.6, '#ffffff'], [0.62, '#dff0ff'], [1, '#9fd0f5']],

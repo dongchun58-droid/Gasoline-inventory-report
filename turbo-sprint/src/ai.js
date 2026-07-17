@@ -45,7 +45,9 @@ export class AIController {
     // 현재 도로중심 대비 측면오차를 목표 레인으로 되돌리는 항 추가
     const gr = track.ground(k.pos, k.idx, _gr);
     const crossErr = gr.lateral - lane;            // +면 우측(바깥)으로 치우침
-    const correct = THREE.MathUtils.clamp(crossErr * 0.06, -0.8, 0.8);
+    // 성 등반(공중 도로)에선 가장자리 이탈 위험 → 중앙 복귀를 강하게
+    const kcorr = gr.elevated ? 0.16 : 0.06;
+    const correct = THREE.MathUtils.clamp(crossErr * kcorr, -1, 1);
     this.input.steer = THREE.MathUtils.clamp(ang * 2.4 - correct, -1, 1);
 
     // 곡률 기반 목표 속도 (앞쪽 접선 변화가 크면 감속)

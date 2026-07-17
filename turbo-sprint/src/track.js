@@ -287,16 +287,16 @@ export class Track {
   // 월드 위치 p 근처의 도로 정보를 lastIdx 힌트로 빠르게 검색
   sampleNear(p, lastIdx) {
     const N = this.samplePos.length;
-    let best = lastIdx | 0;
+    const c = lastIdx | 0;        // 탐색 중심 고정(내부에서 이동시키면 창을 벗어나 엉뚱한 구간으로 튐)
+    let best = c;
     let bestD = Infinity;
     const WIN = 40;
     for (let k = -WIN; k <= WIN; k++) {
-      let i = (best + k) % N;
+      let i = (c + k) % N;
       if (i < 0) i += N;
       const d = this.samplePos[i].distanceToSquared(p);
       if (d < bestD) { bestD = d; best = i; }
     }
-    // 윈도 경계에 걸리면 한 번 더 (급이동 대비)
     return best;
   }
 

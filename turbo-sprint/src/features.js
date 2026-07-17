@@ -47,6 +47,11 @@ export class Features {
       }
       this._addJumpPad(ji, perSample);
     }
+    // 성 정상 스크립트 도약(강제 이동) 설정: 점프대를 밟으면 정해진 착지점으로 크게 날아감
+    this.leap = null;
+    if (pad.leap) {
+      this.leap = { toIdx: Math.floor(pad.leap.to * N) % N, height: pad.leap.height || 30, dur: pad.leap.dur || 1.35 };
+    }
   }
 
   _orient(mesh, i0, lift) {
@@ -126,9 +131,15 @@ export class Features {
         }
       }
       // 점프 램프
-      if (!k.airborne && k.speed > 9) {
+      if (!k.airborne && k.leapTimer <= 0 && k.speed > 6) {
         for (const p of this.jumpPads) {
-          if (Math.abs(lateral) < p.width && this._within(k.idx, p.i0, p.half, N)) {
+          const inRange = this._within(k.idx, p.i0, p.half + (this.leap ? 7 : 0), N);
+          if (this.leap) {
+            // 성 정상: 무조건 도약 — 가장자리로 밀려도 잡히도록 폭 넉넉히(추락 전에 발동)
+            if (inRange && Math.abs(lateral) < p.width + 12) {
+              k.castleLeap(this.leap.toIdx, this.leap.height, this.leap.dur);
+            }
+          } else if (inRange && Math.abs(lateral) < p.width) {
             k.jump(19, 1.0); // 더 높고 길게 (느린 차도 용암 강을 넘도록) + 착지 부스트
             if (k.speed < 24) k.speed = 24; // 램프 런치: 최소 도약 속도 보장
           }
