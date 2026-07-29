@@ -175,11 +175,11 @@ export class BossBattle {
     for (const c of this._wallCols) c.position.y = -c.userData.h;
     this._wallRise = 0;
     // 카트 배치: 보스 주위 원형으로 흩어 세움(보스를 바라보게)
-    const ring = A.r - 22;
+    const ring = A.r - 42;                   // 궤도 안쪽(≈36)에 배치 → 시작부터 벽에서 멀리
     karts.forEach((k, i) => {
       const a = (i / karts.length) * Math.PI * 2 + 0.3;
       k.pos.set(A.x + Math.cos(a) * ring, 0, A.z + Math.sin(a) * ring);
-      k.speed = 6; k.boostTimer = 0; k.stunTimer = 0; k.spinTimer = 0; k.iceTimer = 0;
+      k.speed = 10; k.boostTimer = 0; k.stunTimer = 0; k.spinTimer = 0; k.iceTimer = 0;
       k.lavaTimer = 0; k.leapTimer = 0; k.airborne = false; k.drifting = false;
       // 접선 방향으로 세워 곧바로 선회 시작(보스를 도는 자세)
       const dir = (i % 2) ? 1 : -1;
@@ -226,35 +226,49 @@ export class BossBattle {
     this._missiles.push({ mesh, from: kart });
   }
 
-  // AI 입력: 보스 둘레를 '빠르게 도는 웨이포인트'를 쫓게 함(자기 속도보다 빠르므로 자연히 원을 그림) + 회피
+  // AI 입력: 보스 둘레를 빠르게(≈속도30) 돌되 '벽 근처면 무조건 안쪽으로' 틀어 벽에 안 부딪히게 + 회피
   aiInput(kart, idx, dt) {
     if (!this.active || this.dying || kart.stunTimer > 0) return { accel: false, brake: false, steer: 0, drift: false };
     const A = this.arena;
     const dir = (idx % 2) ? 1 : -1;
-    const orbitR = 34 + (idx % 3) * 7;
-    // 보스를 도는 웨이포인트(각 카트마다 위상차) — 반경 orbitR, 각속도 0.55rad/s
-    const ang = dir * this._t * 0.55 + idx * (Math.PI * 2 / 4);
-    let tx = A.x + Math.cos(ang) * orbitR, tz = A.z + Math.sin(ang) * orbitR;
-    // 회피: 가장 가까운 눈덩이 착지점이 위험 반경 안이면 반대로 도망
-    let best = 15 * 15, dgx = 0, dgz = 0;
-    for (const s of this._snowballs) {
-      const wx = A.x + s.tx, wz = A.z + s.tz;
-      const dd = (kart.pos.x - wx) ** 2 + (kart.pos.z - wz) ** 2;
-      if (dd < best) { best = dd; dgx = kart.pos.x - wx; dgz = kart.pos.z - wz; }
-    }
+    const orbitR = 30 + (idx % 3) * 5;      // 궤도 반경 30~40 (벽 R78 안쪽 깊숙이)
+    const rx = kart.pos.x - A.x, rz = kart.pos.z - A.z, r = Math.hypot(rx, rz) || 1;
+    const INNER = A.r - 34;                 // 이 반경(≈44)을 넘어서면 벽 회피 우선(안쪽으로)
     let ddx, ddz;
-    if (dgx || dgz) { const dl = Math.hypot(dgx, dgz) || 1; ddx = dgx / dl; ddz = dgz / dl; }
-    else { ddx = tx - kart.pos.x; ddz = tz - kart.pos.z; const dl = Math.hypot(ddx, ddz) || 1; ddx /= dl; ddz /= dl; }
+    // 1순위: 벽 회피 — 바깥으로 나가면 중심을 향해 강하게 선회(벽에 닿기 전에 안으로)
+    if (r > INNER) { ddx = A.x - kart.pos.x; ddz = A.z - kart.pos.z; }
+    else {
+      // 2순위: 눈덩이 착지점이 가까우면 피함(단, 안쪽으로만 — 벽쪽으로 도망가지 않게)
+      let best = 15 * 15, dgx = 0, dgz = 0;
+      for (const s of this._snowballs) {
+        const wx = A.x + s.tx, wz = A.z + s.tz;
+        const dd = (kart.pos.x - wx) ** 2 + (kart.pos.z - wz) ** 2;
+        if (dd < best) { best = dd; dgx = kart.pos.x - wx; dgz = kart.pos.z - wz; }
+      }
+      if (dgx || dgz) {
+        // 피하는 방향 + 중심쪽 성분을 섞어 벽으로 안 가게
+        ddx = dgx - rx * 0.6; ddz = dgz - rz * 0.6;
+      } else {
+        // 3순위: 보스를 도는 웨이포인트 추격(원 궤도)
+        const ang = dir * this._t * 0.55 + idx * (Math.PI * 2 / 4);
+        ddx = (A.x + Math.cos(ang) * orbitR) - kart.pos.x;
+        ddz = (A.z + Math.sin(ang) * orbitR) - kart.pos.z;
+      }
+    }
+    const dl = Math.hypot(ddx, ddz) || 1; ddx /= dl; ddz /= dl;
     const cross = kart.forward.x * ddz - kart.forward.z * ddx;
     const dot = kart.forward.x * ddx + kart.forward.z * ddz;
     let steer = 0;
-    if (dot < 0.98) steer = cross > 0 ? -1 : 1;
+    if (dot < 0.99) steer = cross > 0 ? -1 : 1;
+    // 벽 회피 구간(r>INNER)에서 바깥을 향하면 감속 → 선회 반경이 줄어 벽에 안 닿음.
+    // 안쪽/접선으로 돌면 감속 없이 다시 ≈속도30까지 가속.
+    const facingOut = (kart.forward.x * rx + kart.forward.z * rz) > 0;
+    const brake = r > INNER && facingOut;
     // 발사(일정 간격)
     if (this._aiFireCd[idx] === undefined) this._aiFireCd[idx] = 1;
     this._aiFireCd[idx] -= dt;
     if (this._aiFireCd[idx] <= 0) { this._fire(kart); this._aiFireCd[idx] = 1.6 + (idx % 3) * 0.6; }
-    // 최고속을 웨이포인트 속도보다 낮게(선회 반경↓) → 웨이포인트를 뒤쫓으며 자연히 원을 그림
-    return { accel: true, brake: false, steer, drift: false, maxSpeed: 12 };
+    return { accel: !brake, brake, steer, drift: false, maxSpeed: 30 };
   }
 
   // 보스가 눈덩이 투척(랜덤 대상) — 맞으면 20초 정지
