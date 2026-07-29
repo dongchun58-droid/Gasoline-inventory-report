@@ -167,7 +167,7 @@ export class BossBattle {
     this.group.position.set(A.x, 0, A.z);
     this.boss.position.set(0, 0, 0);
     this.hp = this.maxHp; this.active = true; this.dying = false; this.done = false;
-    this._t = 0; this._throwTimer = 2.4; this._deathT = 0;
+    this._t = 0; this._throwTimer = 4.5; this._deathT = 0;
     this._missiles.forEach((m) => this.group.remove(m.mesh)); this._missiles.length = 0;
     this._snowballs.forEach((s) => this.group.remove(s.mesh)); this._snowballs.length = 0;
     this._aiFireCd = karts.map((_, i) => 1 + i * 0.4);
@@ -179,10 +179,11 @@ export class BossBattle {
     karts.forEach((k, i) => {
       const a = (i / karts.length) * Math.PI * 2 + 0.3;
       k.pos.set(A.x + Math.cos(a) * ring, 0, A.z + Math.sin(a) * ring);
-      k.speed = 0; k.boostTimer = 0; k.stunTimer = 0; k.spinTimer = 0; k.iceTimer = 0;
+      k.speed = 6; k.boostTimer = 0; k.stunTimer = 0; k.spinTimer = 0; k.iceTimer = 0;
       k.lavaTimer = 0; k.leapTimer = 0; k.airborne = false; k.drifting = false;
-      // 보스(중심) 바라보게
-      k.forward.set(A.x - k.pos.x, 0, A.z - k.pos.z).normalize();
+      // 접선 방향으로 세워 곧바로 선회 시작(보스를 도는 자세)
+      const dir = (i % 2) ? 1 : -1;
+      k.forward.set(dir * -Math.sin(a), 0, dir * Math.cos(a)).normalize();
       k._syncMesh();
     });
     this.group.visible = true;
@@ -201,9 +202,10 @@ export class BossBattle {
     this._hpFill.material.color.setHex(f > 0.5 ? 0x39e06a : f > 0.22 ? 0xf5c542 : 0xe0503a);
   }
 
-  // 미사일 발사(플레이어) — 쿨다운
+  // 미사일 발사(플레이어) — 쿨다운. 눈덩이에 맞아 정지(스턴) 중이면 발사 불가.
   playerFire(kart) {
     if (!this.active || this.dying) return;
+    if (kart.stunTimer > 0) return;
     if (this._playerCd > 0) return;
     this._playerCd = 0.42;
     this._fire(kart);
@@ -224,26 +226,35 @@ export class BossBattle {
     this._missiles.push({ mesh, from: kart });
   }
 
-  // AI 입력: 보스 주위를 돌며(궤도) 이따금 발사
+  // AI 입력: 보스 둘레를 '빠르게 도는 웨이포인트'를 쫓게 함(자기 속도보다 빠르므로 자연히 원을 그림) + 회피
   aiInput(kart, idx, dt) {
-    if (!this.active || this.dying) return { accel: false, brake: false, steer: 0, drift: false };
+    if (!this.active || this.dying || kart.stunTimer > 0) return { accel: false, brake: false, steer: 0, drift: false };
     const A = this.arena;
-    // 궤도 목표점(보스 중심에서 반경 ~40, 시간에 따라 회전)
-    const orbitR = 42;
-    const ang = this._t * 0.5 + idx * (Math.PI * 2 / 4);
-    const tx = A.x + Math.cos(ang) * orbitR, tz = A.z + Math.sin(ang) * orbitR;
-    // 목표 방향과 현재 헤딩 각차 → 조향
-    _v.set(tx - kart.pos.x, 0, tz - kart.pos.z);
-    const dist = _v.length(); _v.normalize();
-    const cross = kart.forward.x * _v.z - kart.forward.z * _v.x;
-    const dot = kart.forward.x * _v.x + kart.forward.z * _v.z;
+    const dir = (idx % 2) ? 1 : -1;
+    const orbitR = 34 + (idx % 3) * 7;
+    // 보스를 도는 웨이포인트(각 카트마다 위상차) — 반경 orbitR, 각속도 0.55rad/s
+    const ang = dir * this._t * 0.55 + idx * (Math.PI * 2 / 4);
+    let tx = A.x + Math.cos(ang) * orbitR, tz = A.z + Math.sin(ang) * orbitR;
+    // 회피: 가장 가까운 눈덩이 착지점이 위험 반경 안이면 반대로 도망
+    let best = 15 * 15, dgx = 0, dgz = 0;
+    for (const s of this._snowballs) {
+      const wx = A.x + s.tx, wz = A.z + s.tz;
+      const dd = (kart.pos.x - wx) ** 2 + (kart.pos.z - wz) ** 2;
+      if (dd < best) { best = dd; dgx = kart.pos.x - wx; dgz = kart.pos.z - wz; }
+    }
+    let ddx, ddz;
+    if (dgx || dgz) { const dl = Math.hypot(dgx, dgz) || 1; ddx = dgx / dl; ddz = dgz / dl; }
+    else { ddx = tx - kart.pos.x; ddz = tz - kart.pos.z; const dl = Math.hypot(ddx, ddz) || 1; ddx /= dl; ddz /= dl; }
+    const cross = kart.forward.x * ddz - kart.forward.z * ddx;
+    const dot = kart.forward.x * ddx + kart.forward.z * ddz;
     let steer = 0;
     if (dot < 0.98) steer = cross > 0 ? -1 : 1;
-    // 발사
+    // 발사(일정 간격)
     if (this._aiFireCd[idx] === undefined) this._aiFireCd[idx] = 1;
     this._aiFireCd[idx] -= dt;
-    if (this._aiFireCd[idx] <= 0 && kart.stunTimer <= 0) { this._fire(kart); this._aiFireCd[idx] = 1.4 + (idx % 3) * 0.5; }
-    return { accel: dist > 6, brake: false, steer, drift: false };
+    if (this._aiFireCd[idx] <= 0) { this._fire(kart); this._aiFireCd[idx] = 1.6 + (idx % 3) * 0.6; }
+    // 최고속을 웨이포인트 속도보다 낮게(선회 반경↓) → 웨이포인트를 뒤쫓으며 자연히 원을 그림
+    return { accel: true, brake: false, steer, drift: false, maxSpeed: 12 };
   }
 
   // 보스가 눈덩이 투척(랜덤 대상) — 맞으면 20초 정지
@@ -293,9 +304,9 @@ export class BossBattle {
     if (this._flashT > 0) this._flashT -= dt;
     this.boss.scale.setScalar(1 + Math.max(0, this._flashT) * 0.6);
 
-    // 눈덩이 투척 타이머
+    // 눈덩이 투척 타이머 — 천천히(맞으면 20초 정지라 자주 던지면 다 멈춤). 간격 ↑
     this._throwTimer -= dt;
-    if (this._throwTimer <= 0) { this._throwSnowball(karts); this._throwTimer = 2.0 + (Math.abs(Math.sin(this._t * 13.3)) % 1) * 1.4; }
+    if (this._throwTimer <= 0) { this._throwSnowball(karts); this._throwTimer = 5.5 + (Math.abs(Math.sin(this._t * 13.3)) % 1) * 2.5; }
 
     // 미사일 이동(보스로 유도) → 명중 시 -5
     const A = this.arena;

@@ -610,7 +610,8 @@ export class Kart {
     const boosting = this.boostTimer > 0;
     const throttle = input.accel || boosting;
     const braking = input.brake && !boosting;
-    const maxSp = PHYS.maxSpeed * (boosting ? PHYS.boostMultiplier : 1) * (this.stats.speed || 1);
+    let maxSp = PHYS.maxSpeed * (boosting ? PHYS.boostMultiplier : 1) * (this.stats.speed || 1);
+    if (input.maxSpeed) maxSp = Math.min(maxSp, input.maxSpeed);   // AI 선회용 속도 제한
     if (throttle) { this.speed += PHYS.accel * dt; if (this.speed > maxSp) this.speed = maxSp; }
     else if (braking) { this.speed -= PHYS.brake * dt; if (this.speed < -PHYS.reverseMax) this.speed = -PHYS.reverseMax; }
     else if (this.speed > 0) this.speed = Math.max(0, this.speed - PHYS.drag * dt);
@@ -627,10 +628,17 @@ export class Kart {
     // 이동(평면)
     _fwd.copy(this.forward); _fwd.y = 0; if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
     this.pos.addScaledVector(_fwd, this.speed * dt); this.pos.y = 0;
-    // 아레나 벽(원형 경계): 밖으로 못 나감
+    // 아레나 벽(원형 경계): 밖으로 못 나감 — '붙지 않고' 벽을 따라 미끄러지게
     if (arena) {
-      const dx = this.pos.x - arena.x, dz = this.pos.z - arena.z, d = Math.hypot(dx, dz);
-      if (d > arena.r) { const s = arena.r / d; this.pos.x = arena.x + dx * s; this.pos.z = arena.z + dz * s; this.speed *= 0.4; }
+      const dx = this.pos.x - arena.x, dz = this.pos.z - arena.z, d = Math.hypot(dx, dz) || 1;
+      if (d > arena.r) {
+        const nx = dx / d, nz = dz / d;                 // 바깥 법선
+        this.pos.x = arena.x + nx * arena.r; this.pos.z = arena.z + nz * arena.r;
+        // 진행방향에서 '바깥으로 향하는 성분' 제거 → 벽을 따라 슬라이드(속도 유지)
+        const fdotn = this.forward.x * nx + this.forward.z * nz;
+        if (fdotn > 0) { this.forward.x -= nx * fdotn; this.forward.z -= nz * fdotn; this.forward.y = 0; if (this.forward.lengthSq() > 1e-6) this.forward.normalize(); }
+        this.speed *= 0.9;
+      }
     }
     this.steerVis = THREE.MathUtils.lerp(this.steerVis, steer, 0.25);
     this.wheelSpin += this.speed * dt * 0.5;
