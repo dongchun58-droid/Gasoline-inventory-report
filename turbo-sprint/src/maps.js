@@ -138,6 +138,7 @@ export const MAPS = {
     controlPoints: iceTrack(),
     // t값은 빌드 후 icediag로 확정. 정상 t≈0.52, 그 직후 낭떠러지(gap), 이후 착지 활주로.
     caveRange: null,
+    boss: true,                       // 후반(막바퀴)에 얼음 골렘 보스전(아레나) 발동
     // 정상 t≈0.51, 그 직후 하강나선(=낭떠러지 gap), 착지는 도약으로 t≈0.64.
     gaps: [[0.518, 0.558]],           // 정상 직후 하강 구간 = 낭떠러지(무조건 점프) — 못 밟으면 추락
     fallRespawn: 0.19,                // 추락 시 성 아래(재등반 시작)로

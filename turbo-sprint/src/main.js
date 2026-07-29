@@ -20,6 +20,7 @@ import { Features } from './features.js';
 import { Obstacles } from './obstacles.js';
 import { Dragons } from './dragon.js';
 import { Penguins } from './penguin.js';
+import { BossBattle } from './boss.js';
 import { HUD } from './hud.js';
 import { setupTouch } from './touch.js';
 import { GameAudio } from './audio.js';
@@ -193,6 +194,8 @@ let hud;
 
 // ---------- 월드(맵) 상태: 맵 변경 시 재생성 ----------
 let track, itemSystem, obstacles, features, scenery, sky, envTex, dragons, penguins;
+let boss = null;                    // 얼음 왕국 보스전(맵에 boss:true 일 때)
+let bossTriggered = false;          // 이번 레이스에서 보스전 발동 여부
 let currentMapKey = 'meadow';
 
 // ---------- HDRI 환경(IBL) — Phase 7 Step 1 ----------
@@ -290,6 +293,9 @@ function buildWorld(key) {
   features = new Features(track, gradientMap, map.pad); scene.add(features.group);
   if (map.dragonSpots) { dragons = new Dragons(track, map.dragonSpots, map.dragonSides); scene.add(dragons.group); }
   if (map.penguinSpots) { penguins = new Penguins(track, map.penguinSpots, map.penguinSides); scene.add(penguins.group); }
+  // 보스전(얼음 왕국): 후반에 아레나가 닫히고 미사일로 보스 처치
+  if (boss) { scene.remove(boss.group); disposeGroup(boss.group); if (boss._hudEl) boss._hudEl.remove(); boss = null; }
+  if (map.boss) { boss = new BossBattle(scene, gradientMap); }
   enableShadows(scene); // 새 메시에 그림자 적용
   boostAnisotropy(track.group); boostAnisotropy(scenery.group); // 도로/지면 선명도(레이싱 필수)
   // 카트/AI/HUD 재타겟팅 (이미 생성된 경우)
@@ -347,6 +353,8 @@ function resetRace() {
     k.model.scale.setScalar(1);
   }
   itemSystem.reset();
+  if (boss) { if (boss.active || boss.dying) boss.end(track, karts, LAPS); boss.group.visible = false; boss.active = false; if (boss._hudEl) boss._hudEl.style.display = 'none'; }
+  bossTriggered = false;
   raceTime = 0;
   raceState = 'ready';
   countdownRem = 3.2;
@@ -678,6 +686,15 @@ function frame(nowMs) {
       else if (remaining > 1) hud.showLapPopup('LAP ' + (player.lap + 1) + ' / ' + LAPS);
     }
 
+    // 보스전 발동: 얼음 왕국에서 막바퀴(후반) 진입 시 사방이 얼음벽으로 닫힌 아레나 시작
+    if (boss && !bossTriggered && raceState === 'racing' && !player.finished && player._started && player.lap >= LAPS - 1) {
+      bossTriggered = true;
+      raceState = 'boss';
+      boss.start(track, karts);
+      hud.showLapPopup('❄ BOSS BATTLE ❄');
+      if (audio.sfxHit) audio.sfxHit();
+    }
+
     // 피니시 진입
     if (player.finished && raceState !== 'finished') {
       raceState = 'finished';
@@ -694,6 +711,29 @@ function frame(nowMs) {
       for (const cow of obstacles.cows) {
         if (player.pos.distanceToSquared(cow.mesh.position) < 260) { audio.sfxMoo(); _mooCd = 2.5; break; }
       }
+    }
+  }
+
+  // --- 보스전(아레나): 트랙에서 벗어나 평지 아레나에서 자유 주행하며 미사일로 보스 처치 ---
+  if (raceState === 'boss' && boss) {
+    if (input.consumePressed('item') && !player.finished) { boss.playerFire(player); audio.sfxItem(); }
+    accumulator += dt;
+    let steps = 0;
+    while (accumulator >= FIXED && steps < 8) {
+      player.stepFree(FIXED, player.finished ? NEUTRAL : input, boss.arena);
+      ais.forEach((ai, i) => { const inp = boss.aiInput(ai.kart, i + 1, FIXED); ai.kart.stepFree(FIXED, inp, boss.arena); });
+      resolveKartCollisions();
+      accumulator -= FIXED;
+      steps++;
+    }
+    boss.update(dt, karts, player, camera);
+    if (player.spinTimer > 0 && !_prevSpin) audio.sfxHit();
+    _prevSpin = player.spinTimer > 0; _prevBoost = player.boosting; _prevAir = player.airborne;
+    if (boss.done) {
+      boss.end(track, karts, LAPS);
+      raceState = 'racing';
+      prevPlayerLap = player.lap;
+      hud.showLapPopup('BOSS DEFEATED!');
     }
   }
 
@@ -786,6 +826,7 @@ window.__turbo = {
   get scenery() { return scenery; },
   get dragons() { return dragons; },
   get penguins() { return penguins; },
+  get boss() { return boss; },
   get mapKey() { return currentMapKey; },
   get raceState() { return raceState; },
   get countdownRem() { return countdownRem; },

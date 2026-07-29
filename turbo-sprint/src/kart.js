@@ -586,6 +586,57 @@ export class Kart {
     return true;
   }
 
+  // 보스 아레나(평지) 자유 주행 — 트랙에 얽매이지 않고 원형 경기장 안에서 움직임.
+  // input={accel,brake,steer,drift}, arena={x,z,r}. 스턴(20초 휴식)/스핀 반영.
+  stepFree(dt, input, arena) {
+    // 스턴(정지 휴식)
+    if (this.stunTimer > 0) {
+      this.stunTimer -= dt; this.speed = 0;
+      this.spinAngle = Math.sin(this.stunTimer * 40) * 0.12;
+      if (this.stunTimer <= 0) { this.spinAngle = 0; this._stunRecover = null; }
+      this._syncMesh(); return;
+    }
+    if (this.iceTimer > 0) this.iceTimer -= dt;
+    if (this.boostTimer > 0) this.boostTimer -= dt;
+    // 스핀아웃(잠깐 뱅글)
+    if (this.spinTimer > 0) {
+      this.spinTimer -= dt; this.spinAngle = (this.spinAngle || 0) + dt * 12;
+      this.speed *= 0.92;
+      _fwd.copy(this.forward); _fwd.y = 0; if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+      this.pos.addScaledVector(_fwd, this.speed * dt); this.pos.y = 0;
+      this._syncMesh(); return;
+    }
+    this.spinAngle = 0;
+    const boosting = this.boostTimer > 0;
+    const throttle = input.accel || boosting;
+    const braking = input.brake && !boosting;
+    const maxSp = PHYS.maxSpeed * (boosting ? PHYS.boostMultiplier : 1) * (this.stats.speed || 1);
+    if (throttle) { this.speed += PHYS.accel * dt; if (this.speed > maxSp) this.speed = maxSp; }
+    else if (braking) { this.speed -= PHYS.brake * dt; if (this.speed < -PHYS.reverseMax) this.speed = -PHYS.reverseMax; }
+    else if (this.speed > 0) this.speed = Math.max(0, this.speed - PHYS.drag * dt);
+    else this.speed = Math.min(0, this.speed + PHYS.drag * dt);
+    // 조향(평면 Y축 회전)
+    const steer = input.steer || 0;
+    if (steer !== 0 && Math.abs(this.speed) > 0.4) {
+      const speedFrac = Math.min(1, Math.abs(this.speed) / PHYS.maxSpeed);
+      const turnRate = THREE.MathUtils.lerp(PHYS.turnRateLow, PHYS.turnRateHigh, speedFrac) * (this.stats.turn || 1);
+      const dir = this.speed >= 0 ? 1 : -1;
+      _q.setFromAxisAngle(_up, -steer * turnRate * dir * dt);
+      this.forward.applyQuaternion(_q); this.forward.y = 0; this.forward.normalize();
+    }
+    // 이동(평면)
+    _fwd.copy(this.forward); _fwd.y = 0; if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+    this.pos.addScaledVector(_fwd, this.speed * dt); this.pos.y = 0;
+    // 아레나 벽(원형 경계): 밖으로 못 나감
+    if (arena) {
+      const dx = this.pos.x - arena.x, dz = this.pos.z - arena.z, d = Math.hypot(dx, dz);
+      if (d > arena.r) { const s = arena.r / d; this.pos.x = arena.x + dx * s; this.pos.z = arena.z + dz * s; this.speed *= 0.4; }
+    }
+    this.steerVis = THREE.MathUtils.lerp(this.steerVis, steer, 0.25);
+    this.wheelSpin += this.speed * dt * 0.5;
+    this._syncMesh();
+  }
+
   // 차량 종류 변경(모델 재생성). 이전 모델을 반환 → 호출자가 씬에서 교체.
   setType(type) {
     const old = this.model;
