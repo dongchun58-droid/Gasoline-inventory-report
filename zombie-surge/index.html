@@ -14,8 +14,14 @@
   .disp{font-family:"Barlow Condensed","Arial Narrow",sans-serif;text-transform:uppercase;letter-spacing:.03em}
   #hud{position:fixed;inset:0;pointer-events:none}
   #hud>*{position:absolute}
-  #stageLbl{top:max(10px,env(safe-area-inset-top));left:14px;font-size:16px;font-weight:700;opacity:.9}
-  #prog{top:calc(max(10px,env(safe-area-inset-top)) + 26px);left:14px;width:180px;height:6px;background:#ffffff22;border-radius:3px;overflow:hidden}
+  #stageLbl{top:calc(max(10px,env(safe-area-inset-top)) + 94px);left:14px;font-size:16px;font-weight:700;opacity:.9}
+  #heroBadge{top:max(8px,env(safe-area-inset-top));left:12px;display:flex;align-items:center;gap:8px}
+  #heroFace{width:52px;height:52px;border-radius:50%;border:3px solid var(--yellow);background:#12203099 center/cover no-repeat;box-shadow:0 2px 10px #0008}
+  #heroTxt{display:flex;flex-direction:column;line-height:1.15}
+  #heroTxt b{font-size:14px;font-weight:800;color:#ffe9a0;letter-spacing:.06em}
+  #heroTxt span{font-size:11px;color:#bcd6ee;opacity:.85}
+  #wpnPop{top:30%;left:50%;transform:translateX(-50%);font-size:34px;font-weight:800;letter-spacing:.1em;color:#ffe9a0;text-shadow:0 3px 14px #000;opacity:0;transition:opacity .25s}
+  #prog{top:calc(max(10px,env(safe-area-inset-top)) + 142px);left:14px;width:180px;height:6px;background:#ffffff22;border-radius:3px;overflow:hidden}
   #progFill{height:100%;width:0;background:var(--blue)}
   #troops{top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center}
   #troopsN{font-size:56px;line-height:1;font-weight:800;color:#8fd6ff;text-shadow:0 2px 10px #0a3a66,0 0 2px #fff}
@@ -27,7 +33,23 @@
   #bossHpFill{height:100%;width:100%;background:linear-gradient(90deg,#e0503a,#ff9a7a)}
   #msg{top:38%;left:50%;transform:translateX(-50%);font-size:44px;font-weight:800;color:#fff;text-shadow:0 3px 12px #000;opacity:0;transition:opacity .2s;white-space:nowrap;text-align:center}
   #hint{bottom:max(18px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);font-size:14px;color:#cfe8ff;opacity:.75;text-align:center}
-  #gateBtn{bottom:calc(max(18px,env(safe-area-inset-bottom)) + 40px);left:50%;transform:translateX(-50%);display:none;pointer-events:auto;background:#ffd23f;color:#3a2a00;font-weight:800;font-size:22px;padding:14px 26px;border-radius:40px;border:0;box-shadow:0 6px 20px #0008}
+  #fireBtn{bottom:max(26px,env(safe-area-inset-bottom));right:26px;width:126px;height:126px;border-radius:50%;pointer-events:auto;border:4px solid #ffe9a0;
+    background:radial-gradient(circle at 40% 34%,#ff8a4a,#d63a1e 70%);color:#fff;font-weight:800;font-size:26px;letter-spacing:.06em;
+    box-shadow:0 8px 28px #000a, inset 0 -6px 14px #0005;touch-action:none;-webkit-tap-highlight-color:transparent}
+  #fireBtn:active{transform:scale(.94);filter:brightness(1.25)}
+  #waveLbl{top:calc(max(10px,env(safe-area-inset-top)) + 66px);left:14px;font-size:20px;font-weight:800;color:#ffd23f;text-shadow:0 2px 6px #000}
+  #remain{top:calc(max(10px,env(safe-area-inset-top)) + 118px);left:14px;font-size:14px;font-weight:700;color:#ff9a80}
+  #muteBtn,#helpBtn{pointer-events:auto;position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 30px);right:14px;width:38px;height:38px;border-radius:50%;
+    border:1px solid #ffffff33;background:#0f151c99;color:#cfe8ff;font-size:17px;font-weight:700}
+  #helpBtn{right:60px}
+  #tut{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#04070ade;backdrop-filter:blur(6px);z-index:60;padding:22px;box-sizing:border-box}
+  #tut.hidden{display:none}
+  .tcard{max-width:560px;background:#111922;border:2px solid #2a3a4c;border-radius:18px;padding:24px 26px;box-shadow:0 18px 50px #000a}
+  .tcard h2{font-family:"Barlow Condensed",sans-serif;font-size:34px;margin:0 0 4px;color:#ffd23f;text-transform:uppercase}
+  .tcard p{margin:0 0 14px;color:#9fb8cf;font-size:14px}
+  .trow{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:14.5px;line-height:1.5}
+  .tico{flex:0 0 42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;background:#1b2836;border:1px solid #2f4256}
+  .tcard b{color:#eaf2f8}
   .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#07090ccc;backdrop-filter:blur(8px);gap:16px;padding:24px;box-sizing:border-box;overflow:auto}
   .screen.hidden{display:none}
   h1.title{font-size:min(84px,13vw);line-height:.9;margin:0;font-weight:800;background:linear-gradient(180deg,#fff,#8fd6ff 60%,#2f8fd6);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
@@ -53,15 +75,32 @@
 </head>
 <body>
 <div id="hud">
+  <div id="heroBadge"><div id="heroFace"></div><div id="heroTxt"><b id="heroName">COOL GUY</b><span id="heroRole">돌격 대장</span></div></div>
   <div id="stageLbl" class="disp">STAGE 1</div>
   <div id="prog"><div id="progFill"></div></div>
   <div id="troops"><div id="troopsN" class="disp">10</div><div id="weapon" class="disp">RIFLE</div></div>
   <div id="coins" class="disp">🪙 0</div>
   <div id="bossBar"><div id="bossName" class="disp">BRUTE</div><div id="bossHp"><div id="bossHpFill"></div></div></div>
   <div id="msg" class="disp"></div>
-  <div id="hint">◀ 스와이프 / ←→ 로 레인 선택 ▶</div>
-  <button id="gateBtn" class="disp">🔓 탭 연타!</button>
+  <div id="hint">◀ 스와이프 / ←→ 레인 이동 · <b>스페이스(또는 FIRE) 꾹 눌러 사격</b> ▶</div>
+  <button id="fireBtn" class="disp">FIRE</button>
+  <div id="waveLbl" class="disp">WAVE 1 / 6</div>
+  <div id="remain" class="disp"></div>
+  <div id="wpnPop" class="disp"></div>
+  <button id="muteBtn">🔊</button>
+  <button id="helpBtn">?</button>
 </div>
+
+<div id="tut" class="hidden"><div class="tcard">
+  <h2>작전 브리핑</h2>
+  <p>당신은 다리를 <b>지키는</b> 쪽입니다. 좀비 무리가 문에서 쏟아져 달려옵니다.</p>
+  <div class="trow"><div class="tico">🔥</div><div><b>스페이스를 꾹 누르거나 FIRE 버튼을 홀드</b>하면 분대 전원이 사격합니다. 손을 떼면 사격이 멈추고 좀비가 방어선까지 도달합니다.</div></div>
+  <div class="trow"><div class="tico">↔</div><div><b>좌우 스와이프 / ←→ 키</b>로 레인을 옮깁니다. 내려오는 <b>카드</b>는 지나가는 레인의 것만 획득합니다.</div></div>
+  <div class="trow"><div class="tico">＋</div><div><b>파랑 +N</b> 병력 증가 · <b>노랑 ×N</b> 배수 · <b style="color:#ff8a70">빨강 −N</b> 감소(피하세요) · <b style="color:#c9a8ff">WEAPON</b> 무기 강화 · <b style="color:#7fffe0">SHIELD</b> 6초 무적</div></div>
+  <div class="trow"><div class="tico">🔫</div><div>무기는 <b>RIFLE → SMG → SHOTGUN → MINIGUN → LASER</b> 순으로 강해집니다. 총 모양과 화력이 확실히 달라집니다.</div></div>
+  <div class="trow"><div class="tico">💀</div><div>좀비가 방어선에 닿으면 <b>병사 1명과 함께 쓰러집니다</b>. 병력이 0이 되면 실패. 마지막 웨이브엔 <b>보스</b>가 옵니다 — 바닥의 <b style="color:#ff8a70">빨간 원</b>은 광역 공격 예고이니 레인을 옮겨 피하세요.</div></div>
+  <button class="btn disp" id="tutClose" style="margin-top:10px;width:100%">전투 시작</button>
+</div></div>
 
 <div id="menu" class="screen">
   <h1 class="title disp">Zombie Surge</h1>

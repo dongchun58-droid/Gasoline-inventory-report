@@ -1,34 +1,35 @@
-// input.js — 레인 선택 입력: 키보드(←→/A/D), 터치 스와이프, 탭(문 연타)
+// input.js — 레인 이동(←→/스와이프) + 발사 홀드(스페이스/FIRE 버튼)
 export class Input {
-  constructor(el) {
-    this.lane = null;          // 이번 프레임 소비형 이동: -1 / +1
-    this.taps = 0;             // 소비형 탭 카운트
-    this._first = false; this._firstCbs = [];
+  constructor(el, fireBtn) {
+    this.lane = null; this.fire = false;
+    this._keyFire = false; this._btnFire = false;
+    this._first = false; this._cbs = [];
     window.addEventListener('keydown', (e) => {
-      if (['ArrowLeft','ArrowRight','KeyA','KeyD','Space'].includes(e.code)) e.preventDefault();
+      if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'Space'].includes(e.code)) e.preventDefault();
+      this._fire1();
       if (e.repeat) return;
-      this._fire();
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.lane = -1;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') this.lane = 1;
-      if (e.code === 'Space') this.taps++;
+      if (e.code === 'Space') { this._keyFire = true; this._sync(); }
     });
-    let sx = 0, sy = 0, moved = false;
-    el.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; moved = false; this._fire(); });
-    el.addEventListener('pointermove', (e) => {
-      if (moved || e.buttons === 0) return;
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) { this.lane = dx > 0 ? 1 : -1; moved = true; }
-    });
-    el.addEventListener('pointerup', (e) => {
-      if (!moved) {
-        // 탭: 화면 좌/우 절반으로도 레인 선택 가능 + 문 연타 카운트
-        this.taps++;
-        if (e.clientX < window.innerWidth * 0.5) this.lane = -1; else this.lane = 1;
-      }
-    });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Space') { this._keyFire = false; this._sync(); } });
+    // 터치/마우스: 화면을 누르고 있으면 발사, 좌우로 끌면 레인 이동
+    let sx = 0, moved = false, down = false;
+    const start = (e) => { down = true; sx = e.clientX; moved = false; this._fire1(); this._btnFire = true; this._sync(); };
+    const move = (e) => { if (!down || moved) return; const dx = e.clientX - sx;
+      if (Math.abs(dx) > 26) { this.lane = dx > 0 ? 1 : -1; moved = true; } };
+    const end = () => { down = false; this._btnFire = false; this._sync(); };
+    el.addEventListener('pointerdown', start); el.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+    if (fireBtn) {
+      const bd = (e) => { e.preventDefault(); e.stopPropagation(); this._fire1(); this._btnFire = true; this._sync(); };
+      const bu = (e) => { e.preventDefault(); e.stopPropagation(); this._btnFire = false; this._sync(); };
+      fireBtn.addEventListener('pointerdown', bd); fireBtn.addEventListener('pointerup', bu);
+      fireBtn.addEventListener('pointerleave', bu); fireBtn.addEventListener('pointercancel', bu);
+    }
   }
-  onFirstInput(cb) { this._firstCbs.push(cb); }
-  _fire() { if (this._first) return; this._first = true; this._firstCbs.forEach((c) => c()); }
+  _sync() { this.fire = this._keyFire || this._btnFire; }
+  onFirstInput(cb) { this._cbs.push(cb); }
+  _fire1() { if (this._first) return; this._first = true; this._cbs.forEach((c) => c()); }
   consumeLane() { const l = this.lane; this.lane = null; return l; }
-  consumeTaps() { const t = this.taps; this.taps = 0; return t; }
 }

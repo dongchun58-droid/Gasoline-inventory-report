@@ -1,10 +1,11 @@
-// main.js — ZOMBIE SURGE 엔트리: 렌더러·조명·상태 머신(menu → play → result)
+// main.js — ZOMBIE SURGE 엔트리: 렌더러·조명·상태 머신(menu → wave defense → result)
 import * as THREE from 'three';
 import { Input } from './input.js';
 import { HUD } from './hud.js';
 import { FX } from './fx.js';
-import { LaneRunner } from './lane.js';
-import { STAGES } from './stages.js';
+import { WaveDefense } from './wave.js';
+import { STAGES, CHARACTER_ORDER } from './stages.js';
+import { renderPortraits } from './squad.js';
 import { load, save } from './save.js';
 import { GameAudio } from './audio.js';
 
@@ -12,79 +13,92 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 900);
-camera.position.set(0, 7.6, 11.5);
-const sun = new THREE.DirectionalLight(0xfff2d0, 2.2); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.near = 1; sun.shadow.camera.far = 120;
-sun.shadow.camera.left = -30; sun.shadow.camera.right = 30; sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40; sun.shadow.bias = -0.0008;
+const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 900);
+camera.position.set(0, 6.6, 10.5);
+const sun = new THREE.DirectionalLight(0xfff2d0, 2.3); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.near = 1; sun.shadow.camera.far = 160;
+sun.shadow.camera.left = -34; sun.shadow.camera.right = 34; sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -40; sun.shadow.bias = -0.0008;
 scene.add(sun); scene.add(sun.target);
-const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x3a5a7a, 1.0); scene.add(hemi);
-const ambient = new THREE.AmbientLight(0xffffff, 0.25); scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x3a5a7a, 1.05); scene.add(hemi);
+scene.add(new THREE.AmbientLight(0xffffff, 0.26));
 const fx = new FX(); scene.add(fx.group);
-const input = new Input(renderer.domElement);
 const hud = new HUD();
+const input = new Input(renderer.domElement, document.getElementById('fireBtn'));
 const audio = new GameAudio();
-input.onFirstInput(() => audio.start && audio.start());
+input.onFirstInput(() => { audio.start(); audio.setScene(state.mode === 'play' ? 'wave' : 'menu'); });
 const state = { mode: 'menu', run: null, stage: null, character: 'cool', data: load() };
+const portraits = renderPortraits(CHARACTER_ORDER);
 
-function applyTheme(theme) {
-  scene.background = new THREE.Color(theme.sky); scene.fog = new THREE.Fog(theme.fog, 60, 260);
-  sun.color.setHex(theme.sun); sun.intensity = theme.time === 'sunset' ? 1.8 : 2.2;
-  sun.position.set(theme.time === 'sunset' ? -40 : 30, theme.time === 'sunset' ? 25 : 60, theme.time === 'sunset' ? -30 : -20);
-  hemi.color.setHex(theme.hemi); hemi.groundColor.setHex(theme.ground);
+document.getElementById('muteBtn').onclick = () => {
+  audio.start(); audio.muted = !audio.muted; audio.setMuted(audio.muted);
+  document.getElementById('muteBtn').textContent = audio.muted ? '🔈' : '🔊';
+};
+function applyTheme(t) {
+  scene.background = new THREE.Color(t.sky); scene.fog = new THREE.Fog(t.fog, 55, 240);
+  sun.color.setHex(t.sun); sun.intensity = t.time === 'sunset' ? 1.9 : 2.3;
+  sun.position.set(t.time === 'sunset' ? -40 : 30, t.time === 'sunset' ? 24 : 55, -18);
+  hemi.color.setHex(t.hemi); hemi.groundColor.setHex(t.ground);
 }
-function startStage(n, character) {
+function launch(n, character) {
   const st = STAGES.find((s) => s.n === n); if (!st || !st.playable) return;
   if (state.run) state.run.dispose();
   state.stage = st; state.character = character; state.data.character = character; save(state.data);
   applyTheme(st.theme);
-  state.run = new LaneRunner(scene, camera, st, character, fx, audio);
-  hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.showHint(true); setTimeout(() => hud.showHint(false), 4000);
-  state.mode = 'play'; state.slow = 0;
+  state.run = new WaveDefense(scene, camera, st, character, fx, audio);
+  hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits);
+  audio.start(); audio.setScene('wave');
+  state.mode = 'play';
 }
-function showMenu() { state.mode = 'menu'; hud.hideResult(); hud.buildMenu(state.data, startStage, showCredits); }
+function startStage(n, character) {
+  if (!state.data.seenTut) { hud.showTutorial(() => { state.data.seenTut = true; save(state.data); launch(n, character); }); }
+  else launch(n, character);
+}
+function showMenu() { state.mode = 'menu'; hud.hideResult(); audio.setScene('menu');
+  hud.buildMenu(state.data, portraits, startStage, showCredits, () => hud.showTutorial(null)); }
 function showCredits() {
-  hud.showCredits(`<b>ZOMBIE SURGE</b> — 오리지널 프로시저럴 캐릭터/환경 (M1). 외부 자산 없음.<br><br>
-  예정 자산 출처(추가 시 자동 표기): Characters/animations — Mixamo (Adobe) · Zombies — Sketchfab CC0/CC-BY · Environment — Poly Haven, Kenney, Quaternius (CC0).<br>
-  자세한 목록: <code>public/assets/ASSETS.md</code>`);
+  hud.showCredits(`<b>ZOMBIE SURGE</b> — 캐릭터·좀비·보스·환경 모두 오리지널 프로시저럴 생성(외부 모델 없음).<br>
+  사운드: 실시간 합성(레이어드 총성 + 컨볼루션 리버브 + 전쟁 타악 루프).<br><br>
+  추후 Tier-2 실사 모델 도입 시 출처 표기: Characters/animations — Mixamo (Adobe) · Zombies — Sketchfab CC0/CC-BY · Environment — Poly Haven, Kenney, Quaternius (CC0).<br>
+  전체 목록: <code>public/assets/ASSETS.md</code>`);
 }
-function finish(result) {
-  const st = state.stage, r = state.run; const clear = result === 'clear';
-  let stars = 0; if (clear) { stars = 1; if (r.troops >= Math.max(20, r.peak * 0.3)) stars++; if (r.time <= st.par) stars++; }
-  state.data.coins += r.coins; if (clear) { state.data.stars[st.n] = Math.max(state.data.stars[st.n] || 0, stars); state.data.unlocked = Math.max(state.data.unlocked, st.n + 1); }
+function finish(kind) {
+  const st = state.stage, r = state.run, clear = kind === 'clear';
+  let stars = 0; if (clear) { stars = 1; if (r.troops >= Math.max(15, r.peak * 0.3)) stars++; if (r.time <= st.par) stars++; }
+  state.data.coins += r.coins;
+  if (clear) { state.data.stars[st.n] = Math.max(state.data.stars[st.n] || 0, stars); state.data.unlocked = Math.max(state.data.unlocked, st.n + 1); }
   save(state.data);
   const hasNext = STAGES.some((s) => s.n === st.n + 1 && s.playable);
-  clear ? (audio.sfxFanfare && audio.sfxFanfare()) : (audio.sfxFail && audio.sfxFail());
+  audio.setScene('result'); clear ? audio.clear() : audio.fail();
   hud.showResult({ clear, stars, troops: r.troops, peak: r.peak, kills: r.kills, time: r.time, coins: r.coins, hasNext },
     () => startStage(st.n + 1, state.character), () => startStage(st.n, state.character), showMenu);
   state.mode = 'result';
 }
-
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  let dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (state.mode === 'play' && state.run) {
-    const r = state.run;
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const r = state.run;
+  if (state.mode === 'play' && r) {
     r.update(dt, input);
     hud.update(r.status());
-    sun.target.position.set(r.laneX, 0, r.z - 10); sun.position.set(r.laneX + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 25 : 60, r.z - 20);
+    sun.target.position.set(r.laneX, 0, -20); sun.position.set(r.laneX + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, -38);
+    if (r.status().boss) audio.setScene('boss');
     if (r.done) { state.mode = 'ending'; state.endT = 0; state.endKind = r.done; }
-  } else if (state.mode === 'ending' && state.run) {
-    state.endT += dt; state.run.update(dt * 0.35, input);   // 슬로모션 연출
-    hud.update(state.run.status());
-    if (state.endT > 1.3) finish(state.endKind);
-  } else if (state.mode === 'result' && state.run) { state.run.zombies.update(dt, state.run.t); }
-  fx.update(dt);
+  } else if (state.mode === 'ending' && r) {
+    state.endT += dt; r.update(dt * 0.35, { consumeLane: () => null, fire: false });
+    hud.update(r.status());
+    if (state.endT > 1.4) finish(state.endKind);
+  } else if (state.mode === 'result' && r) { r.zombies.update(dt, r.t); }
+  fx.update(dt, camera);
   renderer.render(scene, camera);
 }
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 applyTheme(STAGES[0].theme);
 showMenu();
 requestAnimationFrame(frame);
-window.__zs = { get run() { return state.run; }, state, startStage, STAGES, scene, camera, renderer };
+window.__zs = { get run() { return state.run; }, state, startStage: launch, STAGES, scene, camera, renderer, input, audio, fx, hud, portraits };

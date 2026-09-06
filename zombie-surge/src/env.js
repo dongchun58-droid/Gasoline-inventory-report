@@ -7,20 +7,20 @@ export const LANE_X = [-3.1, 3.1];
 export const ROAD_HALF = 6.8;
 
 export function buildEnvironment(theme, length) {
-  const g = new THREE.Group(); const L = length + 200;
+  const g = new THREE.Group(); const L = length + 120;
   // 상판
   const deckTex = deckTexture('#' + new THREE.Color(theme.deck).getHexString()); deckTex.repeat.set(3, L / 6);
   const deck = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2, 1.2, L), new THREE.MeshStandardMaterial({ map: deckTex, roughness: 0.9, normalMap: normalFromCanvas(deckTex.image, 0.6) }));
-  deck.position.set(0, -0.6, -L / 2 + 40); deck.receiveShadow = true; g.add(deck);
+  deck.position.set(0, -0.6, -L / 2 + 30); deck.receiveShadow = true; g.add(deck);
   // 중앙 점선
   const dash = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.02, 2.2), new THREE.MeshStandardMaterial({ color: 0xf2f2e8, roughness: 0.8 }), Math.floor(L / 5));
-  const m = new THREE.Matrix4(); for (let i = 0; i < dash.count; i++) { m.makeTranslation(0, 0.01, 30 - i * 5); dash.setMatrixAt(i, m); } g.add(dash);
+  const m = new THREE.Matrix4(); for (let i = 0; i < dash.count; i++) { m.makeTranslation(0, 0.01, 20 - i * 5); dash.setMatrixAt(i, m); } g.add(dash);
   // 난간(석재 기둥 + 가로대)
   const pMat = new THREE.MeshStandardMaterial({ color: theme.parapet, roughness: 0.85 });
   const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 1.3, 0.5), pMat, Math.floor(L / 4) * 2);
-  let k = 0; for (let i = 0; i < Math.floor(L / 4); i++) for (const sx of [-1, 1]) { m.makeTranslation(sx * (ROAD_HALF + 0.3), 0.65, 30 - i * 4); posts.setMatrixAt(k++, m); }
+  let k = 0; for (let i = 0; i < Math.floor(L / 4); i++) for (const sx of [-1, 1]) { m.makeTranslation(sx * (ROAD_HALF + 0.3), 0.65, 20 - i * 4); posts.setMatrixAt(k++, m); }
   posts.castShadow = true; g.add(posts);
-  for (const sx of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, L), pMat); rail.position.set(sx * (ROAD_HALF + 0.3), 1.3, -L / 2 + 40); g.add(rail); }
+  for (const sx of [-1, 1]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, L), pMat); rail.position.set(sx * (ROAD_HALF + 0.3), 1.3, -L / 2 + 30); g.add(rail); }
   // 가로등
   const lampMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.5 });
   const bulbMat = new THREE.MeshBasicMaterial({ color: theme.time === 'day' ? 0xdde8f0 : 0xffd890, toneMapped: false });
@@ -32,7 +32,7 @@ export function buildEnvironment(theme, length) {
   // 바다(스크롤 텍스처 평면)
   const wt = waterTexture(); wt.repeat.set(40, 60);
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(1600, 2400), new THREE.MeshStandardMaterial({ map: wt, color: theme.water, roughness: 0.3, metalness: 0.25, normalMap: normalFromCanvas(wt.image, 0.8) }));
-  sea.rotation.x = -Math.PI / 2; sea.position.set(0, -4.5, -L / 2 + 40); g.add(sea);
+  sea.rotation.x = -Math.PI / 2; sea.position.set(0, -4.5, -L / 2 + 30); g.add(sea);
   // 다리 교각(물 위)
   const pierMat = new THREE.MeshStandardMaterial({ color: theme.parapet, roughness: 0.9 });
   for (let i = 0; i < L / 60; i++) { const pier = new THREE.Mesh(new THREE.BoxGeometry(ROAD_HALF * 2 + 2, 6, 3), pierMat); pier.position.set(0, -3.6, -i * 60); g.add(pier); }
