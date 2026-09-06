@@ -28,7 +28,7 @@ export class WaveDefense {
     this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
     this.weaponIdx = 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.waveIdx = 0; this.phase = 'intro'; this.phaseT = 1.2; this.done = null; this.msg = null; this.shake = 0;
-    this.boss = null; this.cards = []; this.cardQueue = 0; this.cardTimer = 0; this.firing = false;
+    this.boss = null; this.cards = []; this.cardQueue = 0; this.cardTimer = 0; this.firing = false; this.spawnQ = null;
     this.R = rng(stage.n * 7919 + 13); this._trAcc = 0; this._killAcc = 0;
     this.squad.pos.set(this.laneX, 0, SQ_Z); this.squad.setCount(this.troops);
     this.totalWaves = stage.waves.length;
@@ -51,6 +51,7 @@ export class WaveDefense {
 
     this._phase(dt);
     this._cards(dt);
+    this._drain(dt);
     this._zombies(dt);
     this._boss(dt);
     this._fire(dt);
@@ -87,7 +88,8 @@ export class WaveDefense {
       // 문 서서히 열림
       for (let ln = 0; ln < 2; ln++) if (this.gateOpen[ln] > 0 && this.gateOpen[ln] < 1) this.gateOpen[ln] = Math.min(1, this.gateOpen[ln] + dt * 2.8);
       const bossAlive = this.boss && !this.boss.gone;
-      if (this.zombies.alive === 0 && !bossAlive) {
+      const pending = this.spawnQ && this.spawnQ.left > 0;
+      if (this.zombies.alive === 0 && !bossAlive && !pending) {
         this.phase = 'clear'; this.phaseT = 1.0; this._released = false;
         this.coins += 15; this.msg = { text: `WAVE ${this.waveIdx + 1} 격퇴!`, color: '#7fffb0', t: 1.4 };
       }
@@ -101,17 +103,24 @@ export class WaveDefense {
       }
     }
   }
+  // 무리를 한 번에 놓지 않고 문에서 끊임없이 밀려나오게 예약한다.
   _horde(n, type) {
-    const S = this.stage;
-    const hp = S.zombie.hp * (1 + this.troops / 22);   // 분대가 커질수록 좀비도 단단해진다
-    for (let i = 0; i < n; i++) {
-      const t = type === 'mixed' ? (this.R() < 0.42 ? 'runner' : 'walker') : type;
-      const lane = this.R() < 0.5 ? 0 : 1;
-      const x = LANE_X[lane] + (this.R() - 0.5) * 4.4;
-      const z = GATE_Z - 3 - this.R() * Math.min(26, 4 + n * 0.32);
-      this.zombies.spawn(x, z, t, hp, S.zombie.speed);
-    }
+    const hp = this.stage.zombie.hp * (1 + this.troops / 12);   // 분대가 커질수록 좀비도 단단해진다
+    this.spawnQ = { left: n, type, hp, timer: 0, batch: Math.max(4, Math.ceil(n / 9)) };
     updatePlate(this.gate.userData.plates[0], n); updatePlate(this.gate.userData.plates[1], n);
+  }
+  _drain(dt) {
+    const q = this.spawnQ; if (!q || q.left <= 0) return;
+    q.timer -= dt; if (q.timer > 0) return;
+    q.timer = 0.42;
+    const S = this.stage, k = Math.min(q.batch, q.left); q.left -= k;
+    for (let i = 0; i < k; i++) {
+      const t = q.type === 'mixed' ? (this.R() < 0.42 ? 'runner' : 'walker') : q.type;
+      const lane = this.R() < 0.5 ? 0 : 1;
+      const x = LANE_X[lane] + (this.R() - 0.5) * 5.2;   // 레인 안에서 촘촘하게
+      const z = GATE_Z - 2 - this.R() * 7;
+      this.zombies.spawn(x, z, t, q.hp, S.zombie.speed);
+    }
   }
 
   // ── 카드: 위(문 쪽)에서 분대 쪽으로 미끄러져 내려옴 ──────────────────────
@@ -190,7 +199,7 @@ export class WaveDefense {
   // ── 보스 ────────────────────────────────────────────────────────────────
   _spawnBoss(def) {
     const mesh = buildBoss(def.type); mesh.position.set(0, 0, GATE_Z - 4); this.group.add(mesh);
-    const scale = Math.max(1, Math.min(6, this.troops / 40));
+    const scale = Math.max(1, Math.min(9, this.troops / 12));
     this.boss = { def, mesh, hp: def.hp * scale, hpMax: def.hp * scale, x: 0, z: GATE_Z - 4, state: 'walk', slamCd: 1.5,
       aoeCd: def.aoeEvery, aoeT: 0, aoeLane: -1, sumCd: def.summon ? def.summon.every : 1e9, gone: false, dead: false, deadT: 0 };
     this.msg = { text: def.name, color: '#ff8a70', t: 2.0 };
@@ -214,7 +223,7 @@ export class WaveDefense {
     else { B.state = 'slam'; B.slamCd -= dt; if (B.slamCd <= 0) { B.slamCd = 1.5;
       if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - D.slam); this.audio.hit && this.audio.hit(); } this.shake = 0.4; } }
     if (D.summon) { B.sumCd -= dt; if (B.sumCd <= 0) { B.sumCd = D.summon.every; B.state = 'scream';
-      for (let i = 0; i < D.summon.n; i++) this.zombies.spawn(B.x + (this.R() - 0.5) * 7, B.z - 1 - this.R() * 5, 'runner', this.stage.zombie.hp * (1 + this.troops / 26), this.stage.zombie.speed);
+      for (let i = 0; i < D.summon.n; i++) this.zombies.spawn(B.x + (this.R() - 0.5) * 7, B.z - 1 - this.R() * 5, 'runner', this.stage.zombie.hp * (1 + this.troops / 12), this.stage.zombie.speed);
       this.audio.roar && this.audio.roar(); this.msg = { text: '비명! 좀비 소환', color: '#c0ffe0', t: 1.1 }; } }
     B.mesh.position.x = B.x; B.mesh.position.z = B.z;
     B.mesh.rotation.y = Math.atan2(sx - B.x, sz - B.z);
@@ -226,9 +235,9 @@ export class WaveDefense {
     const W = this.weapon;
     if (!this.firing || this.troops <= 0) { this.fx.hideBeam(); return; }
     // 사거리 안 타겟 목록(가까운 순)
-    const range = 13;   // 눈앞까지 붙어야 사격 — 밀려오는 압박감
+    const range = 50;   // 화면에 보이는 끝(문 부근)까지 사격
     let target = null, best = -1e9;
-    if (this.boss && !this.boss.dead && this.boss.z > SQ_Z - range) { target = this.boss; }
+    if (this.boss && !this.boss.dead && this.boss.z > GATE_Z + 8) { target = this.boss; }
     if (!target) for (const zb of this.zombies.list) { if (zb.state === 'dying') continue; if (zb.z < SQ_Z - range || zb.z > SQ_Z + 2) continue; if (zb.z > best) { best = zb.z; target = zb; } }
     if (!target) { this.fx.hideBeam(); return; }
     const isBoss = target === this.boss;
@@ -285,12 +294,12 @@ export class WaveDefense {
   }
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
-    const tx = this.laneX * 0.42, ty = 4.4 + big * 1.6, tz = SQ_Z + 9.4 + big * 2.2;
+    const tx = this.laneX * 0.42, ty = 8.6 + big * 3.0, tz = SQ_Z + 9.6 + big * 4.4;
     c.position.x += (tx - c.position.x) * Math.min(1, dt * 5);
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
     if (this.shake > 0) { this.shake -= dt; c.position.x += (Math.random() - 0.5) * this.shake * 0.6; c.position.y += (Math.random() - 0.5) * this.shake * 0.45; }
-    c.lookAt(this.laneX * 0.28, 1.1, SQ_Z - 12);
+    c.lookAt(this.laneX * 0.24, 0.6, SQ_Z - 19);
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;

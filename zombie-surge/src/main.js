@@ -39,7 +39,7 @@ document.getElementById('muteBtn').onclick = () => {
   document.getElementById('muteBtn').textContent = audio.muted ? '🔈' : '🔊';
 };
 function applyTheme(t) {
-  scene.background = new THREE.Color(t.sky); scene.fog = new THREE.Fog(t.fog, 55, 240);
+  scene.background = new THREE.Color(t.sky); scene.fog = new THREE.Fog(t.fog, 95, 320);
   sun.color.setHex(t.sun); sun.intensity = t.time === 'sunset' ? 1.9 : 2.3;
   sun.position.set(t.time === 'sunset' ? -40 : 30, t.time === 'sunset' ? 24 : 55, -18);
   hemi.color.setHex(t.hemi); hemi.groundColor.setHex(t.ground);
