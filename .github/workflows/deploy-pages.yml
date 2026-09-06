@@ -1,12 +1,14 @@
-name: Deploy TURBO SPRINT to Pages
+name: Deploy games to Pages
 
-# turbo-sprint 게임을 빌드해 GitHub Pages로 배포한다.
-# (Pages 활성화 후 재배포 트리거)
+# 두 앱을 하나의 Pages 사이트로 합성 배포:
+#   turbo-sprint/dist  → site/          (루트 — 기존 링크 유지)
+#   zombie-surge/dist  → site/zombie/   (ZOMBIE SURGE)
 on:
   push:
     branches: [main]   # main에서만 배포 (동시성 레이스 방지)
     paths:
       - 'turbo-sprint/**'
+      - 'zombie-surge/**'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -27,15 +29,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install & build
+      - name: Build TURBO SPRINT
         working-directory: turbo-sprint
         run: |
           npm ci
           npm run build
+      - name: Build ZOMBIE SURGE
+        working-directory: zombie-surge
+        run: |
+          npm ci
+          npm run build
+      - name: Compose site
+        run: |
+          rm -rf site && mkdir -p site/zombie
+          cp -r turbo-sprint/dist/. site/
+          cp -r zombie-surge/dist/. site/zombie/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: turbo-sprint/dist
+          path: site
 
   deploy:
     needs: build
