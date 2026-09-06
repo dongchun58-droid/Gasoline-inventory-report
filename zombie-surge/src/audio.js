@@ -66,16 +66,24 @@ export class GameAudio {
     // 동시 다발 방지(초당 상한) — 대신 살짝 흩뿌려 '분대 일제사격' 느낌
     this._shotCount = (this._shotCount || 0) + 1;
     if (this._shotGate && t < this._shotGate) return;
-    const P = {
-      rifle:   { gate: 0.055, f: 1700, q: 0.9, dur: 0.10, g: 0.42, lowF: 150, lowG: 0.5, rev: 0.35 },
-      smg:     { gate: 0.030, f: 2100, q: 1.1, dur: 0.06, g: 0.30, lowF: 130, lowG: 0.34, rev: 0.26 },
-      shotgun: { gate: 0.130, f: 1000, q: 0.6, dur: 0.20, g: 0.62, lowF: 90,  lowG: 0.85, rev: 0.55 },
-      minigun: { gate: 0.022, f: 1500, q: 0.8, dur: 0.05, g: 0.30, lowF: 120, lowG: 0.40, rev: 0.24 },
-      laser:   { gate: 0.045, f: 3200, q: 6.0, dur: 0.12, g: 0.26, lowF: 420, lowG: 0.20, rev: 0.40 },
-    }[weapon] || {};
+    const T = {
+      pistol:   { gate: 0.085, f: 1500, q: 0.9, dur: 0.09, g: 0.34, lowF: 160, lowG: 0.40, rev: 0.30 },
+      rifle:    { gate: 0.055, f: 1700, q: 0.9, dur: 0.10, g: 0.42, lowF: 150, lowG: 0.50, rev: 0.35 },
+      arifle:   { gate: 0.042, f: 1850, q: 1.0, dur: 0.09, g: 0.44, lowF: 145, lowG: 0.52, rev: 0.34 },
+      smg:      { gate: 0.030, f: 2100, q: 1.1, dur: 0.06, g: 0.30, lowF: 130, lowG: 0.34, rev: 0.26 },
+      hsmg:     { gate: 0.026, f: 1950, q: 1.0, dur: 0.07, g: 0.38, lowF: 120, lowG: 0.46, rev: 0.28 },
+      shotgun:  { gate: 0.130, f: 1000, q: 0.6, dur: 0.20, g: 0.62, lowF: 90,  lowG: 0.85, rev: 0.55 },
+      ashotgun: { gate: 0.080, f: 1050, q: 0.6, dur: 0.17, g: 0.60, lowF: 88,  lowG: 0.82, rev: 0.50 },
+      minigun:  { gate: 0.022, f: 1500, q: 0.8, dur: 0.05, g: 0.30, lowF: 120, lowG: 0.40, rev: 0.24 },
+      hminigun: { gate: 0.018, f: 1420, q: 0.8, dur: 0.05, g: 0.34, lowF: 108, lowG: 0.48, rev: 0.26 },
+      laser1:   { gate: 0.045, f: 3200, q: 6.0, dur: 0.12, g: 0.26, lowF: 420, lowG: 0.20, rev: 0.40 },
+      laser2:   { gate: 0.038, f: 3600, q: 7.0, dur: 0.12, g: 0.28, lowF: 460, lowG: 0.22, rev: 0.42 },
+      plasma:   { gate: 0.034, f: 2600, q: 8.0, dur: 0.16, g: 0.34, lowF: 300, lowG: 0.34, rev: 0.52 },
+    };
+    const P = T[weapon] || T.rifle;
     this._shotGate = t + P.gate;
     t += Math.random() * 0.012;
-    if (weapon === 'laser') {   // 레이저: 하강 스윕 + 하이Q 노이즈
+    if ((weapon || '').indexOf('laser') === 0 || weapon === 'plasma') {   // 레이저: 하강 스윕 + 하이Q 노이즈
       this._osc(t, { type: 'sawtooth', f: 2400, f2: 700, dur: 0.13, gain: 0.16, rev: 0.4 });
       this._noiseHit(t, { type: 'bandpass', f: P.f, q: P.q, dur: P.dur, gain: P.g, rev: P.rev });
     } else {

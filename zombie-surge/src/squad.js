@@ -44,22 +44,43 @@ export function buildGun(key, scale = 1) {
   const body = M(0x22252b, { rough: 0.35, metal: 0.75 }), dark = M(0x14161a, { rough: 0.5 }), gold = M(0xd8a33a, { rough: 0.3, metal: 0.9 });
   const glow = new THREE.MeshBasicMaterial({ color: 0x7ff0ff });
   const add = (geo, mat, x, y, z, rx = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.x = rx; g.add(m); return m; };
-  if (key === 'rifle') {
+  if (key === 'pistol') {
+    add(new THREE.BoxGeometry(0.09, 0.14, 0.34), body, 0, 0, 0.06);
+    add(new THREE.CylinderGeometry(0.024, 0.024, 0.18, 8), body, 0, 0.03, 0.26, Math.PI / 2);
+    add(new THREE.BoxGeometry(0.07, 0.20, 0.09), dark, 0, -0.14, -0.06);
+  } else if (key === 'rifle' || key === 'arifle') {
+    const big = key === 'arifle';
+    if (big) { add(new THREE.BoxGeometry(0.07, 0.07, 0.30), dark, 0, 0.13, 0.30);   // 상단 조준경
+      add(new THREE.BoxGeometry(0.09, 0.22, 0.12), dark, 0, -0.20, 0.24); }        // 확장 탄창
+  }
+  if (key === 'rifle' || key === 'arifle') {
     add(new THREE.BoxGeometry(0.09, 0.13, 0.72), body, 0, 0, 0.08);
     add(new THREE.CylinderGeometry(0.028, 0.028, 0.42, 8), body, 0, 0.035, 0.60, Math.PI / 2);
     add(new THREE.BoxGeometry(0.07, 0.2, 0.09), dark, 0, -0.15, 0.02);
     add(new THREE.BoxGeometry(0.07, 0.1, 0.22), dark, 0, -0.02, -0.36);
-  } else if (key === 'smg') {
+  } else if (key === 'smg' || key === 'hsmg') {
+    if (key === 'hsmg') { add(new THREE.CylinderGeometry(0.05, 0.05, 0.22, 10), dark, 0, 0.03, 0.50, Math.PI / 2);   // 소염기
+      add(new THREE.BoxGeometry(0.16, 0.05, 0.12), gold, 0, 0.12, 0.06); }                                          // 금색 상부 레일
+  }
+  if (key === 'smg' || key === 'hsmg') {
     add(new THREE.BoxGeometry(0.10, 0.15, 0.44), body, 0, 0, 0.04);
     add(new THREE.CylinderGeometry(0.026, 0.026, 0.24, 8), body, 0, 0.03, 0.36, Math.PI / 2);
     add(new THREE.BoxGeometry(0.06, 0.26, 0.08), dark, 0, -0.19, 0.0);
     add(new THREE.BoxGeometry(0.05, 0.05, 0.2), dark, 0, 0.10, -0.14);
-  } else if (key === 'shotgun') {
+  } else if (key === 'shotgun' || key === 'ashotgun') {
+    if (key === 'ashotgun') { add(new THREE.CylinderGeometry(0.14, 0.14, 0.20, 12), dark, 0.0, -0.10, 0.16, 0);      // 드럼 탄창
+      add(new THREE.BoxGeometry(0.05, 0.05, 0.34), gold, 0, 0.13, 0.42); }
+  }
+  if (key === 'shotgun' || key === 'ashotgun') {
     add(new THREE.BoxGeometry(0.13, 0.16, 0.80), body, 0, 0, 0.08);
     add(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10), dark, 0, 0.05, 0.62, Math.PI / 2);   // 굵은 총열
     add(new THREE.CylinderGeometry(0.038, 0.038, 0.44, 8), body, 0, -0.05, 0.56, Math.PI / 2); // 펌프
     add(new THREE.BoxGeometry(0.09, 0.13, 0.28), 0 || dark, 0, -0.03, -0.38);
-  } else if (key === 'minigun') {
+  } else if (key === 'minigun' || key === 'hminigun') {
+    if (key === 'hminigun') { add(new THREE.TorusGeometry(0.20, 0.045, 8, 16), gold, 0, 0, 0.30, Math.PI / 2);       // 총열 링
+      add(new THREE.BoxGeometry(0.30, 0.16, 0.16), dark, 0, -0.20, -0.34); }                                        // 대형 탄약함
+  }
+  if (key === 'minigun' || key === 'hminigun') {
     const barrels = new THREE.Group();
     for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; const b = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.95, 6), body);
       b.rotation.x = Math.PI / 2; b.position.set(Math.cos(a) * 0.10, Math.sin(a) * 0.10, 0.5); barrels.add(b); }
@@ -67,7 +88,14 @@ export function buildGun(key, scale = 1) {
     add(new THREE.CylinderGeometry(0.17, 0.17, 0.34, 12), dark, 0, 0, 0.02, Math.PI / 2);
     add(new THREE.BoxGeometry(0.22, 0.24, 0.30), body, 0, -0.02, -0.24);
     add(new THREE.TorusGeometry(0.12, 0.035, 6, 14), gold, 0.18, -0.16, -0.20);   // 탄띠 릴
-  } else {   // laser
+  } else {   // laser1 / laser2 / plasma
+    const tierUp = key === 'laser2' || key === 'plasma';
+    const plasma = key === 'plasma';
+    if (plasma) glow.color.setHex(0xc8a0ff);
+    if (tierUp) { for (const sx of [-1, 1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.30), glow);
+      fin.position.set(sx * 0.11, 0.06, 0.34); g.add(fin); }
+      add(new THREE.TorusGeometry(0.11, 0.028, 6, 16), glow, 0, 0.02, 0.62, Math.PI / 2); }
+    if (plasma) add(new THREE.SphereGeometry(0.10, 12, 10), glow, 0, 0.16, 0.24);
     add(new THREE.BoxGeometry(0.14, 0.18, 0.66), M(0xdfe8f0, { rough: 0.25, metal: 0.6 }), 0, 0, 0.06);
     add(new THREE.CylinderGeometry(0.055, 0.03, 0.44, 10), M(0x2b3a48, { rough: 0.3, metal: 0.7 }), 0, 0.02, 0.56, Math.PI / 2);
     add(new THREE.SphereGeometry(0.075, 12, 10), glow, 0, 0.02, 0.80);            // 발광 렌즈

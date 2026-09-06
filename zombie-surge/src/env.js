@@ -139,3 +139,30 @@ function labelTexture(text) {
   g.fillStyle = '#ffe9a0'; g.fillText(text, 192, 52);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
+// ---- 장갑차(Phase C 아군): 분대 옆에서 중기관총으로 함께 사격 ----
+export function buildAPC() {
+  const g = new THREE.Group();
+  const hull = new THREE.MeshStandardMaterial({ color: 0x4a5340, roughness: 0.65, metalness: 0.35 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x23271f, roughness: 0.7 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x6a7280, roughness: 0.35, metalness: 0.8 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x2a3a44, roughness: 0.2, metalness: 0.6 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.15, 4.6), hull); body.position.y = 1.15; g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.72, 1.2), hull); nose.position.set(0, 0.86, -2.4); g.add(nose);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.6, 1.1), glass); cab.position.set(0, 1.62, -1.5); g.add(cab);
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.46, 14), dark);
+    wh.rotation.z = Math.PI / 2; wh.position.set(sx * 1.28, 0.56, -1.5 + i * 1.6); g.add(wh);
+    const hb = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.50, 8), steel);
+    hb.rotation.z = Math.PI / 2; hb.position.copy(wh.position); g.add(hb);
+  }
+  // 상부 총탑
+  const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.56, 12), hull); turret.position.y = 2.0; g.add(turret);
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.62, 0.14), steel); shield.position.set(0, 2.15, 0.62); g.add(shield);
+  for (let i = 0; i < 4; i++) { const br = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.7, 8), steel);
+    br.rotation.x = Math.PI / 2; br.position.set((i - 1.5) * 0.11, 2.18, 1.5); g.add(br); }
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.6), dark); box.position.set(0.66, 2.02, 0.1); g.add(box);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 0.2), steel); bar.position.set(0, 0.7, -3.05); g.add(bar);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}

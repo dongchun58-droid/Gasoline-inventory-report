@@ -6,6 +6,7 @@ import { FX } from './fx.js';
 import { WaveDefense } from './wave.js';
 import { STAGES, CHARACTER_ORDER } from './stages.js';
 import { renderPortraits } from './squad.js';
+import { buildBoss } from './zombies.js';
 import { load, save } from './save.js';
 import { GameAudio } from './audio.js';
 
@@ -102,4 +103,4 @@ window.addEventListener('resize', () => { camera.aspect = window.innerWidth / wi
 applyTheme(STAGES[0].theme);
 showMenu();
 requestAnimationFrame(frame);
-window.__zs = { get run() { return state.run; }, state, startStage: launch, STAGES, scene, camera, renderer, input, audio, fx, hud, portraits };
+window.__zs = { get run() { return state.run; }, state, startStage: launch, STAGES, scene, camera, renderer, input, audio, fx, hud, portraits, THREE, buildBoss };

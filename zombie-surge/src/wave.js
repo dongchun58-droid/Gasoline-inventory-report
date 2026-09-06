@@ -5,10 +5,10 @@
 // · 병력/화기 카드는 좌·우 한쪽에 문으로 내려오고, 부수고 지나가면 획득한다.
 // · 난이도는 중간중간 내려오는 보스로 조절한다.
 import * as THREE from 'three';
-import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCard, buildSupplyGate, setGateHp, openGate } from './env.js';
+import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
 import { Squad } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
-import { WEAPONS, WEAPON_ORDER, CHARACTERS } from './stages.js';
+import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 const SQ_Z = 0;             // 방어선(분대 고정 위치)
@@ -17,8 +17,8 @@ const CARD_Z = -40;         // 카드가 내려오기 시작하는 지점
 const GATE_Z = -30;         // 보급 관문이 서 있는 자리(좌·우 차선)
 const LINE_Z = SQ_Z - 1.0;  // 여기까지 오면 달려든다
 const RANGE = 58;           // 예광탄이 날아가는 거리(화면 끝)
-const FALL = 17;            // 데미지 감쇠 거리 — 멀수록 약하게 맞아 좀비가 눈앞까지 밀고 온다
-const FAR_MIN = 0.07;       // 최대 거리에서 남는 데미지 비율
+const FALL = 26;            // 데미지 감쇠 거리 — 멀수록 약하게 맞아 좀비가 눈앞까지 밀고 온다
+const FAR_MIN = 0.22;       // 최대 거리에서 남는 데미지 비율
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 const lerp = (a, b, u) => a + (b - a) * Math.max(0, Math.min(1, u));
 
@@ -33,10 +33,12 @@ export class WaveDefense {
     this.zombies = new ZombiePool(); this.group.add(this.zombies.group);
     this.x = 0; this.limit = ROAD_HALF - 1.2;
     this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
-    this.weaponIdx = 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
+    this.weaponIdx = stage.wpnStart || 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false;
     this.boss = null; this.cards = []; this.bossIdx = 0;
     this.gates = this._buildGates();
+    this.apc = null;
+    if (stage.apc) { const m = buildAPC(); this.group.add(m); this.apc = { mesh: m, side: 1, ...stage.apc }; }
     this._spawnAcc = 0; this._cardT = 2.4; this._trAcc = 0; this._killAcc = 0;
     this.R = rng(stage.n * 7919 + 13);
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
@@ -74,6 +76,7 @@ export class WaveDefense {
     this._zombies(dt);
     this._boss(dt);
     this._fire(dt);
+    this._apc(dt);
     this.zombies.update(dt, this.t);
     this.env.update(dt);
     this._camera(dt);
@@ -93,16 +96,18 @@ export class WaveDefense {
     rate *= Math.min(1, 0.30 + this.time / 20);           // 초반은 천천히 — 관문을 열 여유
     if (this.boss) rate *= 0.55;                          // 보스 중엔 호위 정도만
     this._spawnAcc += rate * dt;
-    const hp = this.stage.zombie.hp * (1 + this.troops / 70);
+    const hp = this.stage.zombie.hp * (1 + this.troops / 90);
     while (this._spawnAcc >= 1) {
       this._spawnAcc -= 1;
       const u = (p - F.runnerFrom) / Math.max(0.01, 1 - F.runnerFrom);
       const runner = p > F.runnerFrom && this.R() < lerp(0, 0.5, u);
       // 탱커: 느리지만 아주 단단한 대형 개체 — 뚫리면 방어선이 오래 물어뜯긴다
       const tank = !runner && F.tankFrom != null && p > F.tankFrom && this.R() < (F.tankRate || 0.10);
-      const x = (this.R() * 2 - 1) * (HORDE_HALF - 0.6);
-      const z = SPAWN_Z - this.R() * 8;
-      this._newZombie(x, z, tank ? 'tank' : runner ? 'runner' : 'walker', tank ? hp * (F.tankHp || 4.5) : hp);
+      const flank = this.stage.flank && this.R() < this.stage.flank;
+      const x = flank ? (this.R() < 0.5 ? -1 : 1) * (ROAD_HALF - 0.8) : (this.R() * 2 - 1) * (HORDE_HALF - 0.6);
+      const z = flank ? SPAWN_Z + 20 + this.R() * 26 : SPAWN_Z - this.R() * 8;
+      const zb = this._newZombie(x, z, tank ? 'tank' : runner ? 'runner' : 'walker', tank ? hp * (F.tankHp || 4.5) : hp);
+      if (zb && flank) zb.flank = true;                    // 옆에서 가운데로 파고든다
     }
   }
   _newZombie(x, z, type, hp) {
@@ -115,8 +120,14 @@ export class WaveDefense {
       if (zb.state === 'dying') continue;
       if (zb.z < LINE_Z) {
         zb.state = 'walk'; zb.z += zb.speed * dt;
-        zb.x += Math.sin(this.t * zb.swaySp + zb.swayPh) * zb.sway * dt;   // 좌우로 흔들며 내려온다
-        zb.x = Math.max(-HORDE_HALF, Math.min(HORDE_HALF, zb.x));
+        if (zb.flank) {                                   // 가장자리에서 방어선 쪽으로 비스듬히
+          const dx = this.x - zb.x;
+          zb.x += Math.sign(dx) * Math.min(Math.abs(dx), zb.speed * 0.55 * dt);
+          if (Math.abs(dx) < 1.2) zb.flank = false;
+        } else {
+          zb.x += Math.sin(this.t * zb.swaySp + zb.swayPh) * zb.sway * dt;   // 좌우로 흔들며 내려온다
+          zb.x = Math.max(-HORDE_HALF, Math.min(HORDE_HALF, zb.x));
+        }
       } else {
         zb.z = LINE_Z; zb.state = 'attack'; zb.atk -= dt;                  // 방어선 도달 → 달려들어 공격
         if (zb.atk <= 0) {
@@ -159,7 +170,7 @@ export class WaveDefense {
     let value = 0, text = '';
     if (type === 'plus') { value = Math.round(lerp(S.plusRange[0], S.plusRange[1], this.R())); text = '+' + value; }
     else if (type === 'mul') { value = 2; text = '×2'; }
-    else if (type === 'minus') { value = Math.max(2, Math.round(this.troops * (0.10 + this.R() * 0.10))); text = '−' + value; }
+    else if (type === 'minus') { value = Math.min(24, Math.max(2, Math.round(this.troops * 0.07) + Math.floor(this.R() * 4))); text = '−' + value; }
     else if (type === 'weapon') text = 'WEAPON';
     else text = 'SHIELD';
     const mesh = buildCard(type, text); mesh.position.set(x, 0, CARD_Z); this.group.add(mesh);
@@ -177,13 +188,15 @@ export class WaveDefense {
   _apply(c) {
     c.taken = true; c.tt = 0;
     const before = this.troops;
-    if (c.type === 'plus') this.troops += c.value;
-    else if (c.type === 'mul') this.troops = Math.min(400, Math.round(this.troops * c.value));
+    if (c.type === 'plus') this.troops = Math.min(TROOP_CAP, this.troops + c.value);
+    else if (c.type === 'mul') this.troops = Math.min(TROOP_CAP, Math.round(this.troops * c.value));
     else if (c.type === 'minus') this.troops = Math.max(0, this.troops - c.value);
     else if (c.type === 'weapon') {
-      if (this.weaponIdx < WEAPON_ORDER.length - 1) { this.weaponIdx++; this.msg = { text: '▲ ' + this.weapon.name, color: '#c9a8ff', t: 1.6 }; }
-      else this.troops += 12;
+      const cap = this.stage.wpnMax != null ? this.stage.wpnMax : WEAPON_ORDER.length - 1;
+      if (this.weaponIdx < cap) { this.weaponIdx++; this.msg = { text: '▲ ' + this.weapon.name, color: '#c9a8ff', t: 1.6 }; }
+      else { this.troops += 6; this.msg = { text: '이 지역 최대 화기 · +6 병력', color: '#c9a8ff', t: 1.4 }; }
     } else if (c.type === 'shield') { this.shieldT = 6; this.msg = { text: 'SHIELD 6초', color: '#7fffe0', t: 1.2 }; }
+    this.troops = Math.min(TROOP_CAP, this.troops);
     this.peak = Math.max(this.peak, this.troops);
     if (c.type !== 'weapon' && c.type !== 'shield') {
       const dv = this.troops - before;
@@ -195,8 +208,8 @@ export class WaveDefense {
 
   // ── 보스 ────────────────────────────────────────────────────────────────
   _spawnBoss(def) {
-    const mesh = buildBoss(def.type); mesh.position.set(0, 0, SPAWN_Z + 6); this.group.add(mesh);
-    const scale = Math.max(1, Math.min(9, this.troops / 70));
+    const mesh = buildBoss(def); mesh.position.set(0, 0, SPAWN_Z + 6); this.group.add(mesh);
+    const scale = Math.max(1, Math.min(9, this.troops / 90));
     this.boss = { def, mesh, hp: def.hp * scale, hpMax: def.hp * scale, x: 0, z: SPAWN_Z + 6, state: 'walk',
       slamCd: 1.5, aoeCd: def.aoeEvery, aoeT: 0, aoeX: 0, sumCd: def.summon ? def.summon.every : 1e9, dead: false, deadT: 0 };
     this.msg = { text: def.name, color: '#ff8a70', t: 2.0 };
@@ -221,7 +234,7 @@ export class WaveDefense {
     else { B.state = 'slam'; B.slamCd -= dt; if (B.slamCd <= 0) { B.slamCd = 1.5;
       if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - D.slam); this.audio.hit && this.audio.hit(); } this.shake = 0.4; } }
     if (D.summon) { B.sumCd -= dt; if (B.sumCd <= 0) { B.sumCd = D.summon.every; B.state = 'scream';
-      const hp = this.stage.zombie.hp * (1 + this.troops / 70);
+      const hp = this.stage.zombie.hp * (1 + this.troops / 90);
       for (let i = 0; i < D.summon.n; i++) this._newZombie(Math.max(-HORDE_HALF, Math.min(HORDE_HALF, B.x + (this.R() - 0.5) * 9)), B.z - 1 - this.R() * 5, 'runner', hp);
       this.audio.roar && this.audio.roar(); this.msg = { text: '비명! 좀비 소환', color: '#c0ffe0', t: 1.1 }; } }
     B.mesh.position.x = B.x; B.mesh.position.z = B.z;
@@ -250,15 +263,15 @@ export class WaveDefense {
       // 부수지 않은 보급 관문이 정면에 있으면 그것부터 때린다
       let gate = null;
       for (const g of this.gates) if (!g.open && Math.abs(g.x - mx) < 2.5 + catchW) gate = g;
-      if (gate) {
-        const dmg = Math.min(left, gate.hp); gate.hp -= dmg; left -= dmg;
+      if (gate) {                                          // 관문에는 화력의 일부만 — 방어선이 완전히 비지 않게
+        const share = Math.min(left * 0.45, gate.hp); gate.hp -= share; left -= share;
         hitZ = GATE_Z;
         if (gate.hp <= 0) this._breakGate(gate);
       }
       while (left > 0 && guard++ < 10) {
         let tgt = null, best = -1e9, isBoss = false;
         const B = this.boss;
-        if (B && !B.dead && Math.abs(B.x - mx) < 1.9 + catchW && B.z > SQ_Z - RANGE) { tgt = B; best = B.z; isBoss = true; }
+        if (B && !B.dead && Math.abs(B.x - mx) < 1.9 * (B.def.scale || 1) + catchW && B.z > SQ_Z - RANGE) { tgt = B; best = B.z; isBoss = true; }
         for (const zb of this.zombies.list) {
           if (zb.state === 'dying') continue;
           // 가까이 붙을수록 좌우로 더 넓게 대응한다(방어선에 달라붙은 좀비를 반드시 칠 수 있게)
@@ -299,6 +312,37 @@ export class WaveDefense {
         if (fired <= 14) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);
       }
+    }
+  }
+  // 장갑차: 분대 바깥쪽에 붙어 넓은 폭으로 함께 쏜다
+  _apc(dt) {
+    const A = this.apc; if (!A) return;
+    const want = this.x > 0 ? -1 : 1;                       // 도로 안쪽에 오도록 반대편에 배치
+    A.side += (want - A.side) * Math.min(1, dt * 2.2);
+    const ax = Math.max(-ROAD_HALF + 1.4, Math.min(ROAD_HALF - 1.4, this.x + A.side * A.off));
+    A.mesh.position.set(ax, 0, SQ_Z + 0.6);
+    A.x = ax;
+    if (!this.firing) return;
+    let left = A.dps * dt, guard = 0, hitZ = SQ_Z - RANGE;
+    while (left > 0 && guard++ < 8) {
+      let tgt = null, best = -1e9, isBoss = false;
+      const B = this.boss;
+      if (B && !B.dead && Math.abs(B.x - ax) < 1.9 * (B.def.scale || 1) + A.arc && B.z > SQ_Z - RANGE) { tgt = B; best = B.z; isBoss = true; }
+      for (const zb of this.zombies.list) {
+        if (zb.state === 'dying') continue;
+        if (Math.abs(zb.x - ax) > A.arc) continue;
+        if (zb.z < SQ_Z - RANGE || zb.z > SQ_Z + 1.5) continue;
+        if (zb.z > best) { best = zb.z; tgt = zb; isBoss = false; }
+      }
+      if (!tgt) break;
+      hitZ = Math.max(hitZ, best);
+      const fall = Math.max(FAR_MIN, Math.min(1, 1.15 - (SQ_Z - best) / FALL));
+      const dmg = Math.min(left * fall, tgt.hp); tgt.hp -= dmg; left -= dmg / Math.max(0.001, fall);
+      if (tgt.hp <= 0) { if (isBoss) { this._bossDie(); break; } this._kill(tgt); } else break;
+    }
+    if (Math.random() < 0.6) {
+      this.fx.tracer(_a.set(ax, 1.55, SQ_Z - 0.4), _b.set(ax + (Math.random() - 0.5) * A.arc, 1.5, hitZ), 0xffb050, 0.15);
+      this.fx.flash(_c.set(ax, 1.55, SQ_Z - 0.6), 1.5, 0xffc070);
     }
   }
   _camera(dt) {
