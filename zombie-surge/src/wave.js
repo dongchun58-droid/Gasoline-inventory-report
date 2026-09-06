@@ -12,7 +12,8 @@ import { WEAPONS, WEAPON_ORDER, CHARACTERS } from './stages.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 const SQ_Z = 0;             // 방어선(분대 고정 위치)
-const SPAWN_Z = -74;        // 좀비/카드가 나타나는 지점
+const SPAWN_Z = -74;        // 좀비가 나타나는 지점
+const DOOR_Z = -40;         // 카드 문이 나타나는 지점(앞쪽 — 바로 눈에 들어오게)
 const LINE_Z = SQ_Z - 1.0;  // 여기까지 오면 달려든다
 const RANGE = 58;           // 사격이 닿는 거리(화면 끝)
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -141,8 +142,8 @@ export class WaveDefense {
       else if (type === 'weapon') text = 'WEAPON';
       else text = 'SHIELD';
       const mesh = buildCardDoor(type, text);
-      mesh.position.set(x, 0, SPAWN_Z); this.group.add(mesh);
-      const d = { type, value, x, z: SPAWN_Z, mesh, broken: false, bt: 0 };
+      mesh.position.set(x, 0, DOOR_Z); this.group.add(mesh);
+      const d = { type, value, x, z: DOOR_Z, mesh, broken: false, bt: 0 };
       this.doors.push(d); return d;
     };
     if (this.R() < 0.55) { mk(-SIDE_X); mk(SIDE_X); }        // 바깥 좌·우 둘 중 선택
@@ -264,12 +265,12 @@ export class WaveDefense {
   }
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
-    const tx = this.x * 0.42, ty = 8.8 + big * 3.0, tz = SQ_Z + 11.2 + big * 4.2;
+    const tx = this.x * 0.62, ty = 8.8 + big * 2.8, tz = SQ_Z + 11.6 + big * 4.0;
     c.position.x += (tx - c.position.x) * Math.min(1, dt * 5);
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
     if (this.shake > 0) { this.shake -= dt; c.position.x += (Math.random() - 0.5) * this.shake * 0.6; c.position.y += (Math.random() - 0.5) * this.shake * 0.45; }
-    c.lookAt(this.x * 0.24, 0.6, SQ_Z - 21);
+    c.lookAt(this.x * 0.40, 0.6, SQ_Z - 17);
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;

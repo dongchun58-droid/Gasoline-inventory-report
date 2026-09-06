@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { deckTexture, waterTexture, cardTexture, plateTexture } from './textures.js';
 import { normalFromCanvas } from './pbrtex.js';
 
-export const ROAD_HALF = 8.8;    // 다리 반폭
-export const HORDE_HALF = 5.0;   // 좀비가 내려오는 가운데 통로
-export const SIDE_X = 7.0;       // 카드 문이 내려오는 바깥 좌·우 차선
+export const ROAD_HALF = 11.4;   // 다리 반폭
+export const HORDE_HALF = 5.2;   // 좀비가 내려오는 가운데 통로
+export const SIDE_X = 9.0;       // 카드 문이 내려오는 바깥 좌·우 차선(방어선에서 충분히 떨어뜨림)
 
 export function buildEnvironment(theme, length) {
   const g = new THREE.Group(); const L = length + 120;
@@ -76,22 +76,22 @@ export function buildCardDoor(type, text) {
   const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
   const iron = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.5, metalness: 0.6 });
   const stone = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.9 });
-  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.55, 3.6, 0.55), stone); p.position.set(sx * 2.6, 1.8, 0); g.add(p); }
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, 3.0, 0.4), stone); p.position.set(sx * 2.0, 1.5, 0); g.add(p); }
   for (const sx of [-1, 1]) {                       // 양쪽으로 열리는 문짝
-    const half = new THREE.Group(); half.position.set(sx * 2.4, 0, 0);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.9, 0.2), wood); panel.position.set(-sx * 1.15, 1.45, 0); half.add(panel);
-    for (let b = 0; b < 2; b++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.11, 0.24), iron); bar.position.set(-sx * 1.15, 0.8 + b * 1.35, 0); half.add(bar); }
+    const half = new THREE.Group(); half.position.set(sx * 1.85, 0, 0);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.75, 2.3, 0.16), wood); panel.position.set(-sx * 0.88, 1.15, 0); half.add(panel);
+    for (let b = 0; b < 2; b++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.09, 0.2), iron); bar.position.set(-sx * 0.88, 0.66 + b * 1.05, 0); half.add(bar); }
     g.add(half); g.userData[sx < 0 ? 'L' : 'R'] = half;
   }
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.24), new THREE.MeshBasicMaterial({ map: cardTexture(type, text), toneMapped: false }));
-  face.position.set(0, 4.3, 0.05); g.add(face); g.userData.face = face;
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 0.6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(2.7, 1.73), new THREE.MeshBasicMaterial({ map: cardTexture(type, text), toneMapped: false }));
+  face.position.set(0, 4.15, 0.05); g.add(face); g.userData.face = face;
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 0.5), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false }));
   strip.rotation.x = -Math.PI / 2; strip.position.y = 0.03; g.add(strip);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 export function breakDoor(door, u) {    // u 0→1 : 문짝이 열리며 표지판이 떠오른다
   door.userData.L.rotation.y = -u * 2.1; door.userData.R.rotation.y = u * 2.1;
-  door.userData.face.position.y = 4.3 + u * 2.2; door.userData.face.material.opacity = 1 - u;
+  door.userData.face.position.y = 4.15 + u * 2.2; door.userData.face.material.opacity = 1 - u;
   door.userData.face.material.transparent = true;
 }
