@@ -2,7 +2,7 @@
 // 폭력 수위: 짙은 체액 + 재 소멸. 절단/붉은 피 없음.
 import * as THREE from 'three';
 
-const MAX = 260;
+const MAX = 460;
 const _m = new THREE.Matrix4(), _r = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.8, metalness: o.metal ?? 0, emissive: o.em ?? 0x000000, emissiveIntensity: o.ei ?? 0 });
 

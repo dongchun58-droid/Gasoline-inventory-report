@@ -6,7 +6,7 @@ export const WEAPONS = {
   smg:     { key: 'smg',     name: 'SMG',     dps: 5.0,  rate: 18, arc: 0.80, tracer: 0xffe070, w: 0.07,  pellets: 1, flash: 0.65, beam: false, gun: 0x8a5a2e, gunScale: 1.45 },
   shotgun: { key: 'shotgun', name: 'SHOTGUN', dps: 9.0,  rate: 5,  arc: 1.70, tracer: 0xffc040, w: 0.105, pellets: 5, flash: 1.5,  beam: false, gun: 0x2f6b4a, gunScale: 1.6 },
   minigun: { key: 'minigun', name: 'MINIGUN', dps: 16.0, rate: 34, arc: 1.35, tracer: 0xffd050, w: 0.10,  pellets: 1, flash: 1.1,  beam: false, gun: 0xb08a3a, gunScale: 1.7 },
-  laser:   { key: 'laser',   name: 'LASER',   dps: 27.0, rate: 26, arc: 2.40, tracer: 0x7ff0ff, w: 0.20,  pellets: 1, flash: 1.3,  beam: true,  gun: 0xdfeff8, gunScale: 1.6 },
+  laser:   { key: 'laser',   name: 'LASER',   dps: 27.0, rate: 26, arc: 2.40, tracer: 0x7ff0ff, w: 0.13,  pellets: 1, flash: 1.3,  beam: true,  gun: 0xdfeff8, gunScale: 1.6 },
 };
 export const WEAPON_ORDER = ['rifle', 'smg', 'shotgun', 'minigun', 'laser'];
 
@@ -35,16 +35,16 @@ export const STAGES = [
     startTroops: 12, cardSpeed: 17, plusRange: [5, 13],
     cards: { plus: 0.60, mul: 0.03, minus: 0.11, weapon: 0.16, shield: 0.10 },
     zombie: { hp: 4, speed: 4.4 },
-    flow: { quota: 240, rate: [2.8, 8.5], runnerFrom: 0.32, cardEvery: [5.0, 4.2],
+    flow: { quota: 600, gateHp: 130, rate: [4.0, 28], runnerFrom: 0.30, cardEvery: [4.4, 3.2],
             bosses: [ { at: 0.45, type: 'brute', name: 'BRUTE', hp: 520, speed: 3.4, slam: 3, aoe: 0.16, aoeEvery: 7.5 },
                       { at: 1.00, type: 'brute', name: 'BRUTE LORD', hp: 900, speed: 3.6, slam: 5, aoe: 0.22, aoeEvery: 6.5 } ] },
     par: 150 },
   { n: 2, name: '항만 · 노을', phase: 'A', playable: true,
     theme: { sky: 0xf0a060, fog: 0xe8a878, sun: 0xffc080, deck: 0x9a9088, parapet: 0x8a7a6a, water: 0x3a3a70, hemi: 0xffc9a0, ground: 0x4a3a3a, time: 'sunset' },
-    startTroops: 16, cardSpeed: 18, plusRange: [6, 15],
+    startTroops: 20, cardSpeed: 18, plusRange: [6, 15],
     cards: { plus: 0.57, mul: 0.03, minus: 0.14, weapon: 0.16, shield: 0.10 },
     zombie: { hp: 5, speed: 4.8 },
-    flow: { quota: 300, rate: [3.4, 10.5], runnerFrom: 0.22, cardEvery: [4.8, 4.0],
+    flow: { quota: 900, gateHp: 200, rate: [5.0, 38], runnerFrom: 0.20, cardEvery: [4.2, 3.0],
             bosses: [ { at: 0.30, type: 'brute', name: 'BRUTE', hp: 620, speed: 3.6, slam: 4, aoe: 0.18, aoeEvery: 7 },
                       { at: 0.65, type: 'screamer', name: 'SCREAMER', hp: 780, speed: 4.0, slam: 4, aoe: 0.20, aoeEvery: 6.5, summon: { n: 6, every: 8 } },
                       { at: 1.00, type: 'screamer', name: 'SCREAMER ALPHA', hp: 1400, speed: 4.2, slam: 6, aoe: 0.26, aoeEvery: 5.5, summon: { n: 8, every: 7 } } ] },

@@ -5,7 +5,7 @@
 // · 병력/화기 카드는 좌·우 한쪽에 문으로 내려오고, 부수고 지나가면 획득한다.
 // · 난이도는 중간중간 내려오는 보스로 조절한다.
 import * as THREE from 'three';
-import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCardDoor, breakDoor } from './env.js';
+import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCard, buildSupplyGate, setGateHp, openGate } from './env.js';
 import { Squad } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS } from './stages.js';
@@ -13,7 +13,8 @@ import { WEAPONS, WEAPON_ORDER, CHARACTERS } from './stages.js';
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 const SQ_Z = 0;             // 방어선(분대 고정 위치)
 const SPAWN_Z = -74;        // 좀비가 나타나는 지점
-const DOOR_Z = -40;         // 카드 문이 나타나는 지점(앞쪽 — 바로 눈에 들어오게)
+const CARD_Z = -40;         // 카드가 내려오기 시작하는 지점
+const GATE_Z = -30;         // 보급 관문이 서 있는 자리(좌·우 차선)
 const LINE_Z = SQ_Z - 1.0;  // 여기까지 오면 달려든다
 const RANGE = 58;           // 사격이 닿는 거리(화면 끝)
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -32,10 +33,18 @@ export class WaveDefense {
     this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
     this.weaponIdx = 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false;
-    this.boss = null; this.doors = []; this.bossIdx = 0;
+    this.boss = null; this.cards = []; this.bossIdx = 0;
+    this.gates = this._buildGates();
     this._spawnAcc = 0; this._cardT = 2.4; this._trAcc = 0; this._killAcc = 0;
     this.R = rng(stage.n * 7919 + 13);
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
+  }
+  // 좌·우 차선에 보급 관문 하나씩. 쏴서 부수면 그 차선에서 카드가 계속 내려온다.
+  _buildGates() {
+    return [-1, 1].map((sx) => {
+      const mesh = buildSupplyGate(); mesh.position.set(sx * SIDE_X, 0, GATE_Z); this.group.add(mesh);
+      return { x: sx * SIDE_X, mesh, hp: this.F.gateHp, maxHp: this.F.gateHp, open: false, openT: 0, cardT: 1.2 };
+    });
   }
   get weapon() { return WEAPONS[WEAPON_ORDER[this.weaponIdx]]; }
   get prog() { return Math.min(1, this.kills / this.F.quota); }
@@ -58,7 +67,8 @@ export class WaveDefense {
     if (this.shieldT > 0) this.shieldT -= dt;
 
     this._spawn(dt);
-    this._doors(dt);
+    this._gates(dt);
+    this._cardsUpdate(dt);
     this._zombies(dt);
     this._boss(dt);
     this._fire(dt);
@@ -78,9 +88,10 @@ export class WaveDefense {
     if (B && !this.boss && p >= B.at) { this.bossIdx++; this._spawnBoss(B); }
     if (p >= 1) return;                                   // 목표를 채우면 최종 보스만 남는다
     let rate = lerp(F.rate[0], F.rate[1], p);
+    rate *= Math.min(1, 0.35 + this.time / 14);           // 첫 몇 초는 천천히 — 관문을 열 여유
     if (this.boss) rate *= 0.55;                          // 보스 중엔 호위 정도만
     this._spawnAcc += rate * dt;
-    const hp = this.stage.zombie.hp * (1 + this.troops / 26);
+    const hp = this.stage.zombie.hp * (1 + this.troops / 70);
     while (this._spawnAcc >= 1) {
       this._spawnAcc -= 1;
       const u = (p - F.runnerFrom) / Math.max(0.01, 1 - F.runnerFrom);
@@ -118,60 +129,69 @@ export class WaveDefense {
     this._killAcc++; if (this._killAcc % 3 === 0) this.audio.zdie && this.audio.zdie();
   }
 
-  // ── 카드 문: 좌 또는 우로 내려온다. 부수고 지나가면 획득 ──────────────────
-  _doors(dt) {
-    const F = this.F;
-    this._cardT -= dt;
-    if (this._cardT <= 0 && this.prog < 1) { this._cardT = lerp(F.cardEvery[0], F.cardEvery[1], this.prog); this._spawnDoors(); }
-    for (let i = this.doors.length - 1; i >= 0; i--) {
-      const d = this.doors[i];
-      d.z += this.stage.cardSpeed * dt; d.mesh.position.z = d.z;
-      if (d.broken) { d.bt += dt; breakDoor(d.mesh, Math.min(1, d.bt * 2.6)); }
-      else if (d.z >= SQ_Z - 1.2 && Math.abs(this.x - d.x) < 2.5) this._apply(d);
-      if (d.z > SQ_Z + 10) { this.group.remove(d.mesh); this.doors.splice(i, 1); }
+  // ── 보급 관문: 부수기 전엔 카드가 안 나온다 ─────────────────────────────
+  _gates(dt) {
+    for (const g of this.gates) {
+      if (!g.open) { setGateHp(g.mesh, g.hp / g.maxHp); continue; }
+      if (g.openT < 1) { g.openT = Math.min(1, g.openT + dt * 2.2); openGate(g.mesh, g.openT); }
+      g.cardT -= dt;
+      if (g.cardT <= 0 && this.prog < 1) { g.cardT = lerp(this.F.cardEvery[0], this.F.cardEvery[1], this.prog); this._spawnCard(g.x); }
     }
   }
-  _spawnDoors() {
-    const S = this.stage;
-    const mk = (x) => {
-      const type = pick(S.cards, this.R);
-      let value = 0, text = '';
-      if (type === 'plus') { value = Math.round(lerp(S.plusRange[0], S.plusRange[1], this.R())); text = '+' + value; }
-      else if (type === 'mul') { value = 2; text = '×2'; }
-      else if (type === 'minus') { value = Math.max(2, Math.round(this.troops * (0.12 + this.R() * 0.12))); text = '−' + value; }
-      else if (type === 'weapon') text = 'WEAPON';
-      else text = 'SHIELD';
-      const mesh = buildCardDoor(type, text);
-      mesh.position.set(x, 0, DOOR_Z); this.group.add(mesh);
-      const d = { type, value, x, z: DOOR_Z, mesh, broken: false, bt: 0 };
-      this.doors.push(d); return d;
-    };
-    if (this.R() < 0.55) { mk(-SIDE_X); mk(SIDE_X); }        // 바깥 좌·우 둘 중 선택
-    else mk((this.R() < 0.5 ? -1 : 1) * SIDE_X);             // 한쪽만
+  _breakGate(g) {
+    g.open = true; g.hp = 0; g.cardT = 0.6;
+    this.fx.spark(_a.set(g.x, 2.0, GATE_Z), 60, 0xffd23f);
+    this.fx.ash(_a.set(g.x, 1.4, GATE_Z), 40);
+    this.msg = { text: '보급 관문 돌파! 카드가 내려옵니다', color: '#ffd23f', t: 2.0 };
+    this.coins += 20; this.shake = 0.45;
+    this.audio.gateOpen ? this.audio.gateOpen() : this.audio.card && this.audio.card(false);
   }
-  _apply(d) {
-    d.broken = true; d.bt = 0;
+
+  // ── 카드: 열린 관문에서 계속 내려온다 ───────────────────────────────────
+  _spawnCard(x) {
+    const S = this.stage;
+    const type = pick(S.cards, this.R);
+    let value = 0, text = '';
+    if (type === 'plus') { value = Math.round(lerp(S.plusRange[0], S.plusRange[1], this.R())); text = '+' + value; }
+    else if (type === 'mul') { value = 2; text = '×2'; }
+    else if (type === 'minus') { value = Math.max(2, Math.round(this.troops * (0.10 + this.R() * 0.10))); text = '−' + value; }
+    else if (type === 'weapon') text = 'WEAPON';
+    else text = 'SHIELD';
+    const mesh = buildCard(type, text); mesh.position.set(x, 0, CARD_Z); this.group.add(mesh);
+    this.cards.push({ type, value, x, z: CARD_Z, mesh, taken: false, tt: 0 });
+  }
+  _cardsUpdate(dt) {
+    for (let i = this.cards.length - 1; i >= 0; i--) {
+      const c = this.cards[i];
+      c.z += this.stage.cardSpeed * dt; c.mesh.position.z = c.z;
+      if (c.taken) { c.tt += dt; c.mesh.position.y += dt * 6; c.mesh.scale.multiplyScalar(1 - dt * 3.0); }
+      else if (c.z >= SQ_Z - 1.0 && Math.abs(this.x - c.x) < 2.6) this._apply(c);
+      if (c.z > SQ_Z + 9 || c.tt > 0.9) { this.group.remove(c.mesh); this.cards.splice(i, 1); }
+    }
+  }
+  _apply(c) {
+    c.taken = true; c.tt = 0;
     const before = this.troops;
-    if (d.type === 'plus') this.troops += d.value;
-    else if (d.type === 'mul') this.troops = Math.min(400, Math.round(this.troops * d.value));
-    else if (d.type === 'minus') this.troops = Math.max(0, this.troops - d.value);
-    else if (d.type === 'weapon') {
+    if (c.type === 'plus') this.troops += c.value;
+    else if (c.type === 'mul') this.troops = Math.min(400, Math.round(this.troops * c.value));
+    else if (c.type === 'minus') this.troops = Math.max(0, this.troops - c.value);
+    else if (c.type === 'weapon') {
       if (this.weaponIdx < WEAPON_ORDER.length - 1) { this.weaponIdx++; this.msg = { text: '▲ ' + this.weapon.name, color: '#c9a8ff', t: 1.6 }; }
       else this.troops += 12;
-    } else if (d.type === 'shield') { this.shieldT = 6; this.msg = { text: 'SHIELD 6초', color: '#7fffe0', t: 1.2 }; }
+    } else if (c.type === 'shield') { this.shieldT = 6; this.msg = { text: 'SHIELD 6초', color: '#7fffe0', t: 1.2 }; }
     this.peak = Math.max(this.peak, this.troops);
-    if (d.type !== 'weapon' && d.type !== 'shield') {
+    if (c.type !== 'weapon' && c.type !== 'shield') {
       const dv = this.troops - before;
       this.msg = { text: (dv >= 0 ? '+' : '') + dv + ' 병력', color: dv >= 0 ? '#8fd6ff' : '#ff8a70', t: 1.0 };
     }
-    this.fx.spark(_a.set(d.x, 1.6, d.z), 26, d.type === 'minus' ? 0xe0503a : 0xffd23f);
-    this.audio.card && this.audio.card(d.type === 'minus');
+    this.fx.spark(_a.set(c.x, 1.6, c.z), 22, c.type === 'minus' ? 0xe0503a : 0xffd23f);
+    this.audio.card && this.audio.card(c.type === 'minus');
   }
 
   // ── 보스 ────────────────────────────────────────────────────────────────
   _spawnBoss(def) {
     const mesh = buildBoss(def.type); mesh.position.set(0, 0, SPAWN_Z + 6); this.group.add(mesh);
-    const scale = Math.max(1, Math.min(9, this.troops / 26));
+    const scale = Math.max(1, Math.min(9, this.troops / 70));
     this.boss = { def, mesh, hp: def.hp * scale, hpMax: def.hp * scale, x: 0, z: SPAWN_Z + 6, state: 'walk',
       slamCd: 1.5, aoeCd: def.aoeEvery, aoeT: 0, aoeX: 0, sumCd: def.summon ? def.summon.every : 1e9, dead: false, deadT: 0 };
     this.msg = { text: def.name, color: '#ff8a70', t: 2.0 };
@@ -196,7 +216,7 @@ export class WaveDefense {
     else { B.state = 'slam'; B.slamCd -= dt; if (B.slamCd <= 0) { B.slamCd = 1.5;
       if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - D.slam); this.audio.hit && this.audio.hit(); } this.shake = 0.4; } }
     if (D.summon) { B.sumCd -= dt; if (B.sumCd <= 0) { B.sumCd = D.summon.every; B.state = 'scream';
-      const hp = this.stage.zombie.hp * (1 + this.troops / 26);
+      const hp = this.stage.zombie.hp * (1 + this.troops / 70);
       for (let i = 0; i < D.summon.n; i++) this._newZombie(Math.max(-HORDE_HALF, Math.min(HORDE_HALF, B.x + (this.R() - 0.5) * 9)), B.z - 1 - this.R() * 5, 'runner', hp);
       this.audio.roar && this.audio.roar(); this.msg = { text: '비명! 좀비 소환', color: '#c0ffe0', t: 1.1 }; } }
     B.mesh.position.x = B.x; B.mesh.position.z = B.z;
@@ -222,13 +242,23 @@ export class WaveDefense {
     for (let c = 0; c < cols; c++) {
       const mx = this.x + colX[c];
       let left = budget, guard = 0, hitZ = SQ_Z - RANGE;
-      while (left > 0 && guard++ < 8) {
+      // 부수지 않은 보급 관문이 정면에 있으면 그것부터 때린다
+      let gate = null;
+      for (const g of this.gates) if (!g.open && Math.abs(g.x - mx) < 2.5 + catchW) gate = g;
+      if (gate) {
+        const dmg = Math.min(left, gate.hp); gate.hp -= dmg; left -= dmg;
+        hitZ = GATE_Z;
+        if (gate.hp <= 0) this._breakGate(gate);
+      }
+      while (left > 0 && guard++ < 10) {
         let tgt = null, best = -1e9, isBoss = false;
         const B = this.boss;
         if (B && !B.dead && Math.abs(B.x - mx) < 1.9 + catchW && B.z > SQ_Z - RANGE) { tgt = B; best = B.z; isBoss = true; }
         for (const zb of this.zombies.list) {
           if (zb.state === 'dying') continue;
-          if (Math.abs(zb.x - mx) > catchW) continue;
+          // 가까이 붙을수록 좌우로 더 넓게 대응한다(방어선에 달라붙은 좀비를 반드시 칠 수 있게)
+          const near = 1 - Math.min(1, (SQ_Z - zb.z) / 14);
+          if (Math.abs(zb.x - mx) > catchW + near * 2.8) continue;
           if (zb.z < SQ_Z - RANGE || zb.z > SQ_Z + 1.5) continue;
           if (zb.z > best) { best = zb.z; tgt = zb; isBoss = false; }
         }
@@ -242,9 +272,10 @@ export class WaveDefense {
     // 표적이 없어도 정면으로 직사한다(조준하지 않는다는 느낌)
     this.fx.hideBeam();
     if (W.beam) {
-      for (const [mx, hz] of shots) {
-        this.fx.tracer(_a.set(mx, 0.92, SQ_Z - 0.7), _b.set(mx, 0.92, hz), W.tracer, W.w);
-        if (Math.random() < 0.30) this.fx.flash(_c.set(mx, 0.92, SQ_Z - 0.9), W.flash, 0x9ff4ff);
+      for (let i = 0; i < shots.length; i += 2) {          // 한 칸 걸러 — 빔이 한 덩어리로 뭉치지 않게
+        const sh = shots[i];
+        this.fx.tracer(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0], 0.92, sh[1]), W.tracer, W.w);
+        if (Math.random() < 0.35) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0x9ff4ff);
       }
       this._trAcc += W.rate * dt;
       while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot(W.key); }

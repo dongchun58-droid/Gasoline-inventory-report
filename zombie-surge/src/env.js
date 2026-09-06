@@ -95,3 +95,47 @@ export function breakDoor(door, u) {    // u 0→1 : 문짝이 열리며 표지�
   door.userData.face.position.y = 4.15 + u * 2.2; door.userData.face.material.opacity = 1 - u;
   door.userData.face.material.transparent = true;
 }
+
+// ---- 보급 관문: 스테이지 시작 시 좌·우 차선에 하나씩 서 있다.
+// 쏴서 부수면 그 차선에서 카드가 계속 내려온다(내구도 = def.hp).
+export function buildSupplyGate() {
+  const g = new THREE.Group(); g.userData = {};
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.9 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.5, metalness: 0.6 });
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.2, 0.5), stone); p.position.set(sx * 2.4, 2.1, 0); g.add(p); }
+  const lintel = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.55, 0.6), stone); lintel.position.y = 4.35; g.add(lintel);
+  for (const sx of [-1, 1]) {
+    const half = new THREE.Group(); half.position.set(sx * 2.2, 0, 0);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(2.1, 3.5, 0.24), wood); panel.position.set(-sx * 1.05, 1.75, 0); half.add(panel);
+    for (let b = 0; b < 3; b++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.14, 0.28), iron); bar.position.set(-sx * 1.05, 0.6 + b * 1.2, 0); half.add(bar); }
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), iron); boss.position.set(-sx * 1.75, 1.8, 0.14); half.add(boss);
+    g.add(half); g.userData[sx < 0 ? 'L' : 'R'] = half;
+  }
+  // 내구도 바
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.44), new THREE.MeshBasicMaterial({ color: 0x2a1410, toneMapped: false }));
+  back.position.set(0, 5.0, 0.05); g.add(back);
+  const bar = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 0.30), new THREE.MeshBasicMaterial({ color: 0xffb03a, toneMapped: false }));
+  bar.position.set(0, 5.0, 0.07); g.add(bar); g.userData.bar = bar;
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.8), new THREE.MeshBasicMaterial({ map: labelTexture('보급 관문'), transparent: true, toneMapped: false }));
+  tag.position.set(0, 5.7, 0.05); g.add(tag);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+export function setGateHp(gate, frac) {
+  const b = gate.userData.bar; b.scale.x = Math.max(0.001, frac);
+  b.position.x = -(1 - Math.max(0, frac)) * 2.2;
+  b.material.color.setHex(frac > 0.5 ? 0xffb03a : frac > 0.22 ? 0xff7a3a : 0xe0503a);
+}
+export function openGate(gate, u) {   // u 0→1
+  gate.userData.L.rotation.y = -u * 2.2; gate.userData.R.rotation.y = u * 2.2;
+  gate.userData.bar.visible = u < 0.02;
+}
+function labelTexture(text) {
+  const cv = document.createElement('canvas'); cv.width = 384; cv.height = 96; const g = cv.getContext('2d');
+  g.clearRect(0, 0, 384, 96);
+  g.font = 'bold 58px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 10; g.strokeStyle = 'rgba(0,0,0,0.75)'; g.strokeText(text, 192, 52);
+  g.fillStyle = '#ffe9a0'; g.fillText(text, 192, 52);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
