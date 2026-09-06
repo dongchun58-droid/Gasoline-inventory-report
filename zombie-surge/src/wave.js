@@ -16,7 +16,9 @@ const SPAWN_Z = -74;        // 좀비가 나타나는 지점
 const CARD_Z = -40;         // 카드가 내려오기 시작하는 지점
 const GATE_Z = -30;         // 보급 관문이 서 있는 자리(좌·우 차선)
 const LINE_Z = SQ_Z - 1.0;  // 여기까지 오면 달려든다
-const RANGE = 58;           // 사격이 닿는 거리(화면 끝)
+const RANGE = 58;           // 예광탄이 날아가는 거리(화면 끝)
+const FALL = 17;            // 데미지 감쇠 거리 — 멀수록 약하게 맞아 좀비가 눈앞까지 밀고 온다
+const FAR_MIN = 0.07;       // 최대 거리에서 남는 데미지 비율
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 const lerp = (a, b, u) => a + (b - a) * Math.max(0, Math.min(1, u));
 
@@ -88,7 +90,7 @@ export class WaveDefense {
     if (B && !this.boss && p >= B.at) { this.bossIdx++; this._spawnBoss(B); }
     if (p >= 1) return;                                   // 목표를 채우면 최종 보스만 남는다
     let rate = lerp(F.rate[0], F.rate[1], p);
-    rate *= Math.min(1, 0.35 + this.time / 14);           // 첫 몇 초는 천천히 — 관문을 열 여유
+    rate *= Math.min(1, 0.30 + this.time / 20);           // 초반은 천천히 — 관문을 열 여유
     if (this.boss) rate *= 0.55;                          // 보스 중엔 호위 정도만
     this._spawnAcc += rate * dt;
     const hp = this.stage.zombie.hp * (1 + this.troops / 70);
@@ -96,9 +98,11 @@ export class WaveDefense {
       this._spawnAcc -= 1;
       const u = (p - F.runnerFrom) / Math.max(0.01, 1 - F.runnerFrom);
       const runner = p > F.runnerFrom && this.R() < lerp(0, 0.5, u);
+      // 탱커: 느리지만 아주 단단한 대형 개체 — 뚫리면 방어선이 오래 물어뜯긴다
+      const tank = !runner && F.tankFrom != null && p > F.tankFrom && this.R() < (F.tankRate || 0.10);
       const x = (this.R() * 2 - 1) * (HORDE_HALF - 0.6);
       const z = SPAWN_Z - this.R() * 8;
-      this._newZombie(x, z, runner ? 'runner' : 'walker', hp);
+      this._newZombie(x, z, tank ? 'tank' : runner ? 'runner' : 'walker', tank ? hp * (F.tankHp || 4.5) : hp);
     }
   }
   _newZombie(x, z, type, hp) {
@@ -116,8 +120,9 @@ export class WaveDefense {
       } else {
         zb.z = LINE_Z; zb.state = 'attack'; zb.atk -= dt;                  // 방어선 도달 → 달려들어 공격
         if (zb.atk <= 0) {
-          zb.atk = 0.85;
-          if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - 1); this.shake = Math.max(this.shake, 0.18); this.audio.hit && this.audio.hit(); }
+          zb.atk = zb.type === 'tank' ? 0.7 : 0.85;
+          const bite = zb.type === 'tank' ? 3 : 1;
+          if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - bite); this.shake = Math.max(this.shake, zb.type === 'tank' ? 0.3 : 0.18); this.audio.hit && this.audio.hit(); }
           this.fx.spark(_a.set(zb.x, 0.7, zb.z), 5, 0xff8a50);
         }
       }
@@ -264,7 +269,9 @@ export class WaveDefense {
         }
         if (!tgt) break;
         hitZ = Math.max(hitZ, best);
-        const dmg = Math.min(left, tgt.hp); tgt.hp -= dmg; left -= dmg;
+        // 거리 감쇠: 가까이 붙을수록 훨씬 아프게 맞는다
+        const fall = Math.max(FAR_MIN, Math.min(1, 1.15 - (SQ_Z - best) / FALL));
+        const dmg = Math.min(left * fall, tgt.hp); tgt.hp -= dmg; left -= dmg / Math.max(0.001, fall);
         if (tgt.hp <= 0) { if (isBoss) { this._bossDie(); break; } this._kill(tgt); } else break;
       }
       shots.push([mx, hitZ]);

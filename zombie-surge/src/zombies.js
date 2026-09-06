@@ -31,9 +31,11 @@ export class ZombiePool {
   }
   spawn(x, z, type, hp, speed) {
     if (this.list.length >= MAX) return null;
-    const runner = type === 'runner';
-    const zb = { x, z, hp, maxHp: hp, type, speed: speed * (runner ? 1.85 : 1) * (0.88 + Math.random() * 0.28),
-      state: 'walk', dieT: 0, ph: Math.random() * 6.28, scale: (runner ? 0.92 : 1.02) + Math.random() * 0.12, atk: 0.2 };
+    const runner = type === 'runner', tank = type === 'tank';
+    const spd = runner ? 1.85 : tank ? 0.62 : 1;
+    const sc = runner ? 0.92 : tank ? 1.46 : 1.02;
+    const zb = { x, z, hp, maxHp: hp, type, speed: speed * spd * (0.88 + Math.random() * 0.28),
+      state: 'walk', dieT: 0, ph: Math.random() * 6.28, scale: sc + Math.random() * 0.12, atk: 0.2 };
     this.list.push(zb); return zb;
   }
   get alive() { let n = 0; for (const z of this.list) if (z.state !== 'dying') n++; return n; }
@@ -45,7 +47,7 @@ export class ZombiePool {
       const p = this.parts[k], im = this.inst[k]; im.count = n;
       for (let i = 0; i < n; i++) {
         const z = this.list[i];
-        const cyc = (t * (z.type === 'runner' ? 12 : 7) + z.ph) % 6.283;
+        const cyc = (t * (z.type === 'runner' ? 12 : z.type === 'tank' ? 4.6 : 7) + z.ph) % 6.283;
         let sc = z.scale, y = 0;
         if (z.state === 'dying') { const u = z.dieT / 0.5; sc = z.scale * (1 - u * 0.9); y = -u * 0.8; }
         _q.setFromAxisAngle(_v.set(0, 1, 0), Math.sin(cyc) * 0.10);

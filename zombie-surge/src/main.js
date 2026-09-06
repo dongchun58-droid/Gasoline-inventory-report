@@ -39,9 +39,10 @@ document.getElementById('muteBtn').onclick = () => {
   document.getElementById('muteBtn').textContent = audio.muted ? '🔈' : '🔊';
 };
 function applyTheme(t) {
-  scene.background = new THREE.Color(t.sky); scene.fog = new THREE.Fog(t.fog, 95, 320);
-  sun.color.setHex(t.sun); sun.intensity = t.time === 'sunset' ? 1.9 : 2.3;
+  scene.background = new THREE.Color(t.sky); scene.fog = new THREE.Fog(t.fog, t.time === 'night' ? 70 : 95, t.time === 'night' ? 240 : 320);
+  sun.color.setHex(t.sun); sun.intensity = t.time === 'night' ? 0.85 : t.time === 'sunset' ? 1.9 : 2.3;
   sun.position.set(t.time === 'sunset' ? -40 : 30, t.time === 'sunset' ? 24 : 55, -18);
+  renderer.toneMappingExposure = t.time === 'night' ? 1.25 : 1.08;
   hemi.color.setHex(t.hemi); hemi.groundColor.setHex(t.ground);
 }
 function launch(n, character) {
