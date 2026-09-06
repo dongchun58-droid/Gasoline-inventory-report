@@ -3,8 +3,9 @@ import * as THREE from 'three';
 import { deckTexture, waterTexture, cardTexture, plateTexture } from './textures.js';
 import { normalFromCanvas } from './pbrtex.js';
 
-export const LANE_X = [-3.1, 3.1];
-export const ROAD_HALF = 6.8;
+export const ROAD_HALF = 8.8;    // 다리 반폭
+export const HORDE_HALF = 5.0;   // 좀비가 내려오는 가운데 통로
+export const SIDE_X = 7.0;       // 카드 문이 내려오는 바깥 좌·우 차선
 
 export function buildEnvironment(theme, length) {
   const g = new THREE.Group(); const L = length + 120;
@@ -15,6 +16,14 @@ export function buildEnvironment(theme, length) {
   // 중앙 점선
   const dash = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.02, 2.2), new THREE.MeshStandardMaterial({ color: 0xf2f2e8, roughness: 0.8 }), Math.floor(L / 5));
   const m = new THREE.Matrix4(); for (let i = 0; i < dash.count; i++) { m.makeTranslation(0, 0.01, 20 - i * 5); dash.setMatrixAt(i, m); } g.add(dash);
+  // 통로 구분선: 가운데(좀비) / 바깥 좌·우(카드)
+  const laneMat = new THREE.MeshBasicMaterial({ color: 0xfff0b0, transparent: true, opacity: 0.30, toneMapped: false, depthWrite: false });
+  for (const sx of [-1, 1]) {
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(0.26, L), laneMat);
+    line.rotation.x = -Math.PI / 2; line.position.set(sx * HORDE_HALF, 0.02, -L / 2 + 30); g.add(line);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, L), new THREE.MeshBasicMaterial({ color: 0x8fd6ff, transparent: true, opacity: 0.07, toneMapped: false, depthWrite: false }));
+    glow.rotation.x = -Math.PI / 2; glow.position.set(sx * SIDE_X, 0.015, -L / 2 + 30); g.add(glow);
+  }
   // 난간(석재 기둥 + 가로대)
   const pMat = new THREE.MeshStandardMaterial({ color: theme.parapet, roughness: 0.85 });
   const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 1.3, 0.5), pMat, Math.floor(L / 4) * 2);
@@ -60,29 +69,29 @@ export function buildCard(type, text) {
   return g;
 }
 
-// ---- 문(양 레인 각각 목재 문 + 숫자판; 돌 기둥 3개) ----
-export function buildGate(counts) {
-  const g = new THREE.Group(); g.userData = { doors: [], plates: [], counts: counts.slice() };
-  const stone = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.9 });
+// ---- 카드 문(부수고 지나가면 획득) : 좌/우 한쪽에 내려온다 ----
+export function buildCardDoor(type, text) {
+  const g = new THREE.Group(); g.userData = {};
+  const col = { plus: 0x2f8fd6, mul: 0xffd23f, minus: 0xe0503a, weapon: 0x8a5cf6, shield: 0x2fd6b8 }[type] || 0xffffff;
   const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.85 });
   const iron = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.5, metalness: 0.6 });
-  for (const x of [-ROAD_HALF + 0.3, 0, ROAD_HALF - 0.3]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, 4.2, 0.8), stone); p.position.set(x, 2.1, 0); g.add(p); }
-  for (let lane = 0; lane < 2; lane++) {
-    const cx = LANE_X[lane]; const door = new THREE.Group(); door.position.set(cx, 0, 0);
-    for (const sx of [-1, 1]) {
-      const half = new THREE.Group(); half.position.set(sx * 2.7, 0, 0);   // 힌지(기둥 쪽)
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.3, 0.22), wood); panel.position.set(-sx * 1.3, 1.65, 0); half.add(panel);
-      for (let b = 0; b < 2; b++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.26), iron); bar.position.set(-sx * 1.3, 0.9 + b * 1.5, 0); half.add(bar); }
-      door.add(half); door.userData[sx < 0 ? 'L' : 'R'] = half;
-    }
-    g.add(door); g.userData.doors.push(door);
-    const tex = plateTexture(counts[lane]);
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-    plate.position.set(cx, 4.0, 0.42); g.add(plate); g.userData.plates.push(tex);
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.9 });
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.55, 3.6, 0.55), stone); p.position.set(sx * 2.6, 1.8, 0); g.add(p); }
+  for (const sx of [-1, 1]) {                       // 양쪽으로 열리는 문짝
+    const half = new THREE.Group(); half.position.set(sx * 2.4, 0, 0);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.9, 0.2), wood); panel.position.set(-sx * 1.15, 1.45, 0); half.add(panel);
+    for (let b = 0; b < 2; b++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.11, 0.24), iron); bar.position.set(-sx * 1.15, 0.8 + b * 1.35, 0); half.add(bar); }
+    g.add(half); g.userData[sx < 0 ? 'L' : 'R'] = half;
   }
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 2.24), new THREE.MeshBasicMaterial({ map: cardTexture(type, text), toneMapped: false }));
+  face.position.set(0, 4.3, 0.05); g.add(face); g.userData.face = face;
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 0.6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false }));
+  strip.rotation.x = -Math.PI / 2; strip.position.y = 0.03; g.add(strip);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
-export function openDoor(gate, lane, u) {     // u 0→1
-  const d = gate.userData.doors[lane]; d.userData.L.rotation.y = -u * 1.9; d.userData.R.rotation.y = u * 1.9;
+export function breakDoor(door, u) {    // u 0→1 : 문짝이 열리며 표지판이 떠오른다
+  door.userData.L.rotation.y = -u * 2.1; door.userData.R.rotation.y = u * 2.1;
+  door.userData.face.position.y = 4.3 + u * 2.2; door.userData.face.material.opacity = 1 - u;
+  door.userData.face.material.transparent = true;
 }

@@ -25,8 +25,8 @@ export class HUD {
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
-    this.el.wave.textContent = `WAVE ${s.wave} / ${s.waves}`;
-    this.el.remain.textContent = s.phase === 'assault' && s.remain > 0 ? `남은 좀비 ${s.remain}` : (s.phase === 'cards' ? '보급 — 카드를 고르세요' : '');
+    this.el.wave.textContent = `처치 ${s.kills} / ${s.quota}`;
+    this.el.remain.textContent = s.remain > 0 ? `접근 중 ${s.remain}` : '';
     if (s.boss) { this.el.bossBar.style.display = 'block'; this.el.bossName.textContent = s.boss.name; this.el.bossFill.style.width = (Math.max(0, s.boss.frac) * 100) + '%'; }
     else this.el.bossBar.style.display = 'none';
     if (s.msg && s.msg !== this._last) { this._last = s.msg; this.el.msg.textContent = s.msg.text; this.el.msg.style.color = s.msg.color; this.el.msg.style.opacity = 1; this._msgT = s.msg.t; }

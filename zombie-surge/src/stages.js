@@ -1,11 +1,12 @@
-// stages.js — 무기 티어 · 캐릭터 · 웨이브 방어 스테이지 데이터
-// 화력 차이를 '확실히': dps/rate/스프레드/트레이서 굵기 모두 계단식으로 벌림.
+// stages.js — 무기 티어 · 캐릭터 · 연속 방어전 스테이지 데이터
+// 화력 차이를 '확실히': dps/연사/좌우 포착 폭(arc)/트레이서 굵기를 계단식으로 벌린다.
+// arc = 각 열이 정면에서 좌우로 몇 m까지 표적을 잡는지. 무기를 올리면 화력뿐 아니라 '폭'이 넓어진다.
 export const WEAPONS = {
-  rifle:   { key: 'rifle',   name: 'RIFLE',   dps: 0.85, rate: 9,  spread: 0.06, tracer: 0xfff0a0, w: 0.075, len: 5.5, pellets: 1, flash: 0.7,  beam: false, gun: 0x4a5460, gunScale: 1.5 },
-  smg:     { key: 'smg',     name: 'SMG',     dps: 1.7,  rate: 18, spread: 0.13, tracer: 0xffe070, w: 0.07,  len: 4.2, pellets: 1, flash: 0.65, beam: false, gun: 0x8a5a2e, gunScale: 1.45 },
-  shotgun: { key: 'shotgun', name: 'SHOTGUN', dps: 3.2,  rate: 5,  spread: 0.34, tracer: 0xffc040, w: 0.105, len: 3.4, pellets: 5, flash: 1.5,  beam: false, gun: 0x2f6b4a, gunScale: 1.6 },
-  minigun: { key: 'minigun', name: 'MINIGUN', dps: 6.0,  rate: 34, spread: 0.16, tracer: 0xffd050, w: 0.10,  len: 6.5, pellets: 1, flash: 1.1,  beam: false, gun: 0xb08a3a, gunScale: 1.7 },
-  laser:   { key: 'laser',   name: 'LASER',   dps: 10.5, rate: 26, spread: 0.02, tracer: 0x7ff0ff, w: 0.20,  len: 9.0, pellets: 1, flash: 1.3,  beam: true,  gun: 0xdfeff8, gunScale: 1.6 },
+  rifle:   { key: 'rifle',   name: 'RIFLE',   dps: 2.6,  rate: 9,  arc: 0.55, tracer: 0xfff0a0, w: 0.075, pellets: 1, flash: 0.7,  beam: false, gun: 0x4a5460, gunScale: 1.5 },
+  smg:     { key: 'smg',     name: 'SMG',     dps: 5.0,  rate: 18, arc: 0.80, tracer: 0xffe070, w: 0.07,  pellets: 1, flash: 0.65, beam: false, gun: 0x8a5a2e, gunScale: 1.45 },
+  shotgun: { key: 'shotgun', name: 'SHOTGUN', dps: 9.0,  rate: 5,  arc: 1.70, tracer: 0xffc040, w: 0.105, pellets: 5, flash: 1.5,  beam: false, gun: 0x2f6b4a, gunScale: 1.6 },
+  minigun: { key: 'minigun', name: 'MINIGUN', dps: 16.0, rate: 34, arc: 1.35, tracer: 0xffd050, w: 0.10,  pellets: 1, flash: 1.1,  beam: false, gun: 0xb08a3a, gunScale: 1.7 },
+  laser:   { key: 'laser',   name: 'LASER',   dps: 27.0, rate: 26, arc: 2.40, tracer: 0x7ff0ff, w: 0.20,  pellets: 1, flash: 1.3,  beam: true,  gun: 0xdfeff8, gunScale: 1.6 },
 };
 export const WEAPON_ORDER = ['rifle', 'smg', 'shotgun', 'minigun', 'laser'];
 
@@ -22,26 +23,31 @@ export const CHARACTERS = {
 };
 export const CHARACTER_ORDER = ['cool', 'hulk', 'princess', 'bearded'];
 
-// 웨이브 방어: 각 스테이지는 웨이브 배열. cards=선택 카드 쌍 수, horde=몰려오는 좀비 수
-const W = (cards, horde, type, opts = {}) => ({ cards, horde, type, ...opts });
+// 연속 방어전: 웨이브 구간 없이 쭉 내려온다.
+//   quota      처치 목표(진행도 = kills / quota)
+//   rate       초당 스폰 수 [시작 → 끝]
+//   runnerFrom 이 진행도부터 러너가 섞인다
+//   cardEvery  카드 문 간격(초) [시작 → 끝]
+//   bosses     at(진행도)에서 내려오는 보스. 마지막(at:1)을 잡아야 클리어.
 export const STAGES = [
   { n: 1, name: '도시 외곽 다리', phase: 'A', playable: true,
     theme: { sky: 0x8fc2ea, fog: 0xa9d0ea, sun: 0xfff2d0, deck: 0xb9b3a6, parapet: 0xd8d2c4, water: 0x0e4d92, hemi: 0xbfe6ff, ground: 0x3a5a7a, time: 'day' },
-    startTroops: 12, cardSpeed: 17, plusRange: [4, 11],
-    cards: { plus: 0.60, mul: 0.05, minus: 0.11, weapon: 0.14, shield: 0.10 },
-    zombie: { hp: 4, speed: 4.8 },
-    waves: [ W(2, 26, 'walker'), W(2, 40, 'walker'), W(3, 60, 'mixed'), W(2, 80, 'runner'),
-             W(3, 110, 'mixed'), W(2, 0, 'boss', { boss: { type: 'brute', name: 'BRUTE', hp: 900, speed: 3.6, slam: 6, aoe: 0.26, aoeEvery: 6.5, escort: 24 } }) ],
+    startTroops: 12, cardSpeed: 17, plusRange: [5, 13],
+    cards: { plus: 0.60, mul: 0.03, minus: 0.11, weapon: 0.16, shield: 0.10 },
+    zombie: { hp: 4, speed: 4.4 },
+    flow: { quota: 240, rate: [3.2, 11.0], runnerFrom: 0.30, cardEvery: [5.0, 4.0],
+            bosses: [ { at: 0.45, type: 'brute', name: 'BRUTE', hp: 520, speed: 3.4, slam: 3, aoe: 0.16, aoeEvery: 7.5 },
+                      { at: 1.00, type: 'brute', name: 'BRUTE LORD', hp: 900, speed: 3.6, slam: 5, aoe: 0.22, aoeEvery: 6.5 } ] },
     par: 150 },
   { n: 2, name: '항만 · 노을', phase: 'A', playable: true,
     theme: { sky: 0xf0a060, fog: 0xe8a878, sun: 0xffc080, deck: 0x9a9088, parapet: 0x8a7a6a, water: 0x3a3a70, hemi: 0xffc9a0, ground: 0x4a3a3a, time: 'sunset' },
-    startTroops: 14, cardSpeed: 19, plusRange: [5, 14],
-    cards: { plus: 0.55, mul: 0.06, minus: 0.15, weapon: 0.14, shield: 0.10 },
-    zombie: { hp: 6, speed: 5.4 },
-    waves: [ W(2, 36, 'walker'), W(2, 60, 'runner'), W(3, 90, 'mixed'),
-             W(2, 0, 'boss', { boss: { type: 'brute', name: 'BRUTE', hp: 700, speed: 3.8, slam: 6, aoe: 0.26, aoeEvery: 6.5, escort: 20 } }),
-             W(3, 120, 'mixed'), W(2, 150, 'runner'), W(3, 180, 'mixed'),
-             W(2, 0, 'boss', { boss: { type: 'screamer', name: 'SCREAMER', hp: 1600, speed: 4.0, slam: 8, aoe: 0.30, aoeEvery: 5.5, escort: 30, summon: { n: 7, every: 8 } } }) ],
+    startTroops: 16, cardSpeed: 18, plusRange: [6, 15],
+    cards: { plus: 0.57, mul: 0.03, minus: 0.14, weapon: 0.16, shield: 0.10 },
+    zombie: { hp: 6, speed: 5.0 },
+    flow: { quota: 320, rate: [4.5, 16.0], runnerFrom: 0.18, cardEvery: [4.8, 3.8],
+            bosses: [ { at: 0.30, type: 'brute', name: 'BRUTE', hp: 620, speed: 3.6, slam: 4, aoe: 0.18, aoeEvery: 7 },
+                      { at: 0.65, type: 'screamer', name: 'SCREAMER', hp: 780, speed: 4.0, slam: 4, aoe: 0.20, aoeEvery: 6.5, summon: { n: 6, every: 8 } },
+                      { at: 1.00, type: 'screamer', name: 'SCREAMER ALPHA', hp: 1400, speed: 4.2, slam: 6, aoe: 0.26, aoeEvery: 5.5, summon: { n: 8, every: 7 } } ] },
     par: 210 },
   { n: 3, name: '고속도로 · 밤', phase: 'A', playable: false },
   { n: 4, name: '붕괴 시가지', phase: 'A', playable: false },

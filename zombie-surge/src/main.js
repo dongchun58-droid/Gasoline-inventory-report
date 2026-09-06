@@ -68,7 +68,7 @@ function showCredits() {
 }
 function finish(kind) {
   const st = state.stage, r = state.run, clear = kind === 'clear';
-  let stars = 0; if (clear) { stars = 1; if (r.troops >= Math.max(15, r.peak * 0.3)) stars++; if (r.time <= st.par) stars++; }
+  let stars = 0; if (clear) { stars = 1; if (r.troops >= Math.max(15, r.peak * 0.35)) stars++; if (r.time <= st.par) stars++; }
   state.data.coins += r.coins;
   if (clear) { state.data.stars[st.n] = Math.max(state.data.stars[st.n] || 0, stars); state.data.unlocked = Math.max(state.data.unlocked, st.n + 1); }
   save(state.data);
@@ -86,11 +86,11 @@ function frame(now) {
   if (state.mode === 'play' && r) {
     r.update(dt, input);
     hud.update(r.status());
-    sun.target.position.set(r.laneX, 0, -20); sun.position.set(r.laneX + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, -38);
+    sun.target.position.set(r.x, 0, -20); sun.position.set(r.x + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, -38);
     if (r.status().boss) audio.setScene('boss');
     if (r.done) { state.mode = 'ending'; state.endT = 0; state.endKind = r.done; }
   } else if (state.mode === 'ending' && r) {
-    state.endT += dt; r.update(dt * 0.35, { consumeLane: () => null, fire: false });
+    state.endT += dt; r.update(dt * 0.35, { steer: null, axis: 0, fire: false });
     hud.update(r.status());
     if (state.endT > 1.4) finish(state.endKind);
   } else if (state.mode === 'result' && r) { r.zombies.update(dt, r.t); }

@@ -120,7 +120,7 @@ export class Squad {
     this.faceInst.count = 0; this.faceInst.frustumCulled = false; this.group.add(this.faceInst);
     // 총(인스턴스) — 무기 교체 시 지오메트리 스왑
     this.gunInst = null; this._setGunInstance('rifle');
-    this.slots = []; this._cols = 0; this._layout(9);
+    this.slots = []; this.colX = []; this._cols = 0; this._layout(9);
     this.leader = buildHero(character); this.group.add(this.leader);
   }
   _setGunInstance(key) {
@@ -139,16 +139,18 @@ export class Squad {
   _layout(cols) {
     if (cols === this._cols) return; this._cols = cols;
     this.slots.length = 0;
+    this.colX = []; for (let c = 0; c < cols; c++) this.colX.push((c - (cols - 1) / 2) * 0.52);
     for (let i = 0; i < MAX; i++) { const row = Math.floor(i / cols), col = i % cols;
       this.slots.push({ x: (col - (cols - 1) / 2) * 0.52 + (row % 2) * 0.26, z: row * 0.46, ph: (i * 0.37) % 1 }); }
   }
   setWeapon(key) { if (key === this.weapon) return; this.weapon = key; this._setGunInstance(key);
     const L = this.leader.userData.parts; if (L.gun) { L.gunHolder.remove(L.gun); L.gun = buildGun(key, (WEAPONS[key] || WEAPONS.rifle).gunScale || 1.3); L.gunHolder.add(L.gun); } }
   setCount(n) { this.count = Math.max(0, Math.round(n)); }
+  get cols() { return this._cols; }
   update(dt, camera) {
     this.t += dt;
     const show = Math.min(MAX, this.count); this.shown = show;
-    this._layout(Math.max(9, Math.min(16, Math.ceil(show / 5))));   // 최대 5줄 깊이 유지
+    this._layout(Math.max(7, Math.min(11, Math.ceil(show / 7))));   // 폭은 도로보다 좁게 — 조준(좌우 이동)이 의미를 갖도록
     const fire = this.firing;
     for (let k = 0; k < this.parts.length; k++) {
       const p = this.parts[k], im = this.inst[k]; im.count = show;
