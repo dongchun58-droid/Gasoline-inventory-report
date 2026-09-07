@@ -6,7 +6,7 @@
 // · 난이도는 중간중간 내려오는 보스로 조절한다.
 import * as THREE from 'three';
 import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
-import { Squad } from './squad.js';
+import { Squad, FORMATION_KEYS } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 
@@ -63,6 +63,11 @@ export class WaveDefense {
       this.x += Math.max(-speed * dt, Math.min(speed * dt, tx - this.x));
     } else if (input.axis) this.x += input.axis * speed * dt;
     this.x = Math.max(-this.limit, Math.min(this.limit, this.x));
+    if (input.consumeForm && input.consumeForm()) {
+      this.formIdx = ((this.formIdx || 0) + 1) % FORMATION_KEYS.length;
+      this.squad.setFormation(FORMATION_KEYS[this.formIdx]);
+      this.msg = { text: this.squad.form.name + ' — ' + this.squad.form.desc, color: '#8fd6ff', t: 1.6 };
+    }
     this.firing = !!input.fire;
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.squad.firing = this.firing && this.troops > 0;
@@ -227,7 +232,7 @@ export class WaveDefense {
       B.aoeT -= dt; B.state = 'slam';
       if (B.aoeT <= 0) { this.fx.hideMarker();
         if (Math.abs(this.x - B.aoeX) < 4.2 && this.shieldT <= 0) {
-          this.troops = Math.max(0, this.troops - Math.max(3, Math.round(this.troops * D.aoe))); this.shake = 0.55; this.audio.hit && this.audio.hit(); }
+          this.troops = Math.max(0, this.troops - Math.min(42, Math.max(3, Math.round(this.troops * D.aoe)))); this.shake = 0.55; this.audio.hit && this.audio.hit(); }
         this.fx.spark(_a.set(B.aoeX, 0.4, SQ_Z), 30, 0xff9a50); B.state = 'walk'; }
     } else if (d > 3.6) { B.state = 'walk'; B.x += dx / d * D.speed * dt; B.z += dz / d * D.speed * dt;
       B.x = Math.max(-HORDE_HALF, Math.min(HORDE_HALF, B.x)); }
@@ -254,8 +259,8 @@ export class WaveDefense {
     const W = this.weapon;
     if (!this.firing || this.troops <= 0) { this.fx.hideBeam(); return; }
     const cols = this.squad.cols, colX = this.squad.colX;
-    const catchW = W.arc;                                  // 무기가 좋아질수록 좌우 포착 폭이 넓어진다
-    const budget = this.troops * W.dps * (this.C.bonus.dps || 1) * dt / cols;
+    const catchW = W.arc * this.squad.form.fan;            // 무기 + 대형에 따라 좌우 포착 폭이 달라진다
+    const budget = this.troops * W.dps * (this.C.bonus.dps || 1) * this.squad.form.dps * dt / cols;
     const shots = [];
     for (let c = 0; c < cols; c++) {
       const mx = this.x + colX[c];
@@ -356,7 +361,7 @@ export class WaveDefense {
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;
-    return { troops: this.troops, weapon: this.weapon.name, kills: this.kills, quota: this.F.quota,
+    return { troops: this.troops, cap: TROOP_CAP, formation: this.squad.form.name, weapon: this.weapon.name, kills: this.kills, quota: this.F.quota,
       prog: this.prog, coins: this.coins, boss: B, msg: this.msg, shield: this.shieldT > 0,
       remain: this.zombies.alive, firing: this.firing };
   }

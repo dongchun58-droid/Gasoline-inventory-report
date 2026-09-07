@@ -3,6 +3,54 @@ import * as THREE from 'three';
 import { CHARACTERS, WEAPONS } from './stages.js';
 
 const MAX = 80;
+
+// ── 대형: N 키로 순환. 배치뿐 아니라 사격 부채각(fan)과 화력(dps)도 달라진다 ──
+export const FORMATIONS = [
+  { key: 'block',  name: '사각 대형', fan: 1.00, dps: 1.00, desc: '균형 잡힌 기본 대형' },
+  { key: 'wide',   name: '횡대 대형', fan: 1.45, dps: 0.88, desc: '좌우로 넓게 — 넓은 정면' },
+  { key: 'wedge',  name: '쐐기 대형', fan: 0.62, dps: 1.32, desc: '정면 집중 — 좁고 강하게' },
+  { key: 'circle', name: '원형 대형', fan: 2.30, dps: 0.80, desc: '전방위 — 사방에서 올 때' },
+  { key: 'cross',  name: '십자 대형', fan: 1.70, dps: 0.94, desc: '사방 대응 · 화력 유지' },
+];
+export const FORMATION_KEYS = FORMATIONS.map((f) => f.key);
+
+// 대형별 슬롯 좌표(정면 = -z). i 번째 병사의 자리
+function formationSlots(key, n) {
+  const out = [];
+  const g = 0.52;                                    // 병사 간격
+  if (key === 'wide') {
+    const cols = Math.max(11, Math.min(26, Math.ceil(n / 3)));
+    for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols;
+      out.push({ x: (c - (cols - 1) / 2) * g + (r % 2) * g * 0.5, z: r * g * 0.9 }); }
+  } else if (key === 'wedge') {
+    let i = 0, row = 0;
+    while (i < n) { const w = row + 1;               // 1, 2, 3 … 앞이 뾰족한 삼각형
+      for (let c = 0; c < w && i < n; c++, i++) out.push({ x: (c - (w - 1) / 2) * g, z: row * g * 0.86 });
+      row++; }
+  } else if (key === 'circle') {
+    out.push({ x: 0, z: 0 });
+    let i = 1, ring = 1;
+    while (i < n) { const r = ring * g * 1.15, cnt = Math.max(6, Math.round(2 * Math.PI * r / g));
+      for (let k = 0; k < cnt && i < n; k++, i++) { const a = (k / cnt) * Math.PI * 2;
+        out.push({ x: Math.cos(a) * r, z: Math.sin(a) * r }); }
+      ring++; }
+  } else if (key === 'cross') {
+    const arm = Math.ceil(n / 4);
+    for (let i = 0; i < n; i++) { const a = i % 4, d = (Math.floor(i / 4) + 1) * g * 0.95;
+      const j = Math.floor(i / 4) % 3 - 1;           // 팔 두께 3
+      if (a === 0) out.push({ x: j * g, z: -d });
+      else if (a === 1) out.push({ x: j * g, z: d });
+      else if (a === 2) out.push({ x: -d, z: j * g });
+      else out.push({ x: d, z: j * g });
+      if (d > arm * g) { /* 팔이 너무 길어지면 그대로 둔다 */ }
+    }
+  } else {                                            // block
+    const cols = Math.max(7, Math.min(11, Math.ceil(n / 7)));
+    for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols;
+      out.push({ x: (c - (cols - 1) / 2) * g + (r % 2) * g * 0.5, z: r * g * 0.88 }); }
+  }
+  return out;
+}
 const _m = new THREE.Matrix4(), _r = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.55, metalness: o.metal ?? 0.0, emissive: o.em ?? 0x000000, emissiveIntensity: o.ei ?? 0 });
 
@@ -138,7 +186,7 @@ export class Squad {
   constructor(character = 'cool') {
     this.group = new THREE.Group();
     this.C = CHARACTERS[character] || CHARACTERS.cool;
-    this.count = 0; this.shown = 0; this.t = 0; this.firing = false; this.weapon = 'rifle';
+    this.count = 0; this.shown = 0; this.t = 0; this.firing = false; this.weapon = 'rifle'; this.heading = 0;
     this.pos = new THREE.Vector3();
     this.parts = makeParts(this.C);
     this.inst = this.parts.map((p) => { const im = new THREE.InstancedMesh(p.geo, p.mat, MAX); im.count = 0; im.castShadow = true; im.frustumCulled = false; this.group.add(im); return im; });
@@ -148,7 +196,9 @@ export class Squad {
     this.faceInst.count = 0; this.faceInst.frustumCulled = false; this.group.add(this.faceInst);
     // 총(인스턴스) — 무기 교체 시 지오메트리 스왑
     this.gunInst = null; this._setGunInstance('rifle');
-    this.slots = []; this.colX = []; this._cols = 0; this._layout(9);
+    this.slots = []; this.colX = []; this._cols = 0; this._shape = null; this._shownFor = -1;
+    this.formation = 'block';
+    this._layout();
     this.leader = buildHero(character); this.group.add(this.leader);
   }
   _setGunInstance(key) {
@@ -163,14 +213,21 @@ export class Squad {
     this.gunInst.count = 0; this.gunInst.castShadow = true; this.gunInst.frustumCulled = false; this.group.add(this.gunInst);
     geos.forEach((g) => g.dispose());
   }
-  // 열 수에 맞춰 슬롯 재배치(넓은 대열 = 얕은 깊이)
-  _layout(cols) {
-    if (cols === this._cols) return; this._cols = cols;
-    this.slots.length = 0;
-    this.colX = []; for (let c = 0; c < cols; c++) this.colX.push((c - (cols - 1) / 2) * 0.52);
-    for (let i = 0; i < MAX; i++) { const row = Math.floor(i / cols), col = i % cols;
-      this.slots.push({ x: (col - (cols - 1) / 2) * 0.52 + (row % 2) * 0.26, z: row * 0.46, ph: (i * 0.37) % 1 }); }
+  // 현재 대형 + 인원에 맞춰 슬롯/사격 열 재계산
+  _layout() {
+    const n = Math.max(1, Math.min(MAX, this.shown || this.count || 1));
+    if (this._shape === this.formation && this._shownFor === n) return;
+    this._shape = this.formation; this._shownFor = n;
+    this.slots = formationSlots(this.formation, MAX).map((p, i) => ({ x: p.x, z: p.z, ph: (i * 0.37) % 1 }));
+    // 사격 열: 실제 배치된 병사들의 x를 버킷으로 묶는다(직선 사격 모드용)
+    const xs = this.slots.slice(0, n).map((p) => p.x);
+    const min = Math.min(...xs), max = Math.max(...xs);
+    const cols = Math.max(5, Math.min(13, Math.round((max - min) / 0.52) + 1));
+    this.colX = []; for (let c = 0; c < cols; c++) this.colX.push(min + ((max - min) * c) / Math.max(1, cols - 1));
+    this._cols = cols;
   }
+  setFormation(key) { if (key === this.formation) return; this.formation = key; this._layout(); }
+  get form() { return FORMATIONS.find((f) => f.key === this.formation) || FORMATIONS[0]; }
   setWeapon(key) { if (key === this.weapon) return; this.weapon = key; this._setGunInstance(key);
     const L = this.leader.userData.parts; if (L.gun) { L.gunHolder.remove(L.gun); L.gun = buildGun(key, (WEAPONS[key] || WEAPONS.rifle).gunScale || 1.3); L.gunHolder.add(L.gun); } }
   setCount(n) { this.count = Math.max(0, Math.round(n)); }
@@ -178,15 +235,17 @@ export class Squad {
   update(dt, camera) {
     this.t += dt;
     const show = Math.min(MAX, this.count); this.shown = show;
-    this._layout(Math.max(7, Math.min(11, Math.ceil(show / 7))));   // 폭은 도로보다 좁게 — 조준(좌우 이동)이 의미를 갖도록
+    this._layout();
     const fire = this.firing;
     for (let k = 0; k < this.parts.length; k++) {
       const p = this.parts[k], im = this.inst[k]; im.count = show;
+      const ch = Math.cos(this.heading), sh = Math.sin(this.heading);
       for (let i = 0; i < show; i++) {
         const sl = this.slots[i];
+        const rx = sl.x * ch - sl.z * sh, rz = sl.x * sh + sl.z * ch;
         const bob = Math.sin(this.t * 4 + sl.ph * 6.28) * 0.02 + (fire ? Math.abs(Math.sin(this.t * 22 + sl.ph)) * 0.012 : 0);
-        _q.setFromAxisAngle(_v.set(0, 1, 0), Math.PI);
-        _m.compose(_v.set(this.pos.x + sl.x, bob, this.pos.z + sl.z), _q, _s);
+        _q.setFromAxisAngle(_v.set(0, 1, 0), Math.PI + this.heading);
+        _m.compose(_v.set(this.pos.x + rx, bob, this.pos.z + rz), _q, _s);
         _m.multiply(local(p, this.t, sl.ph, fire));
         im.setMatrixAt(i, _m);
       }
@@ -194,19 +253,22 @@ export class Squad {
     }
     // 얼굴 + 총
     this.faceInst.count = show; this.gunInst.count = show;
+    const ch2 = Math.cos(this.heading), sh2 = Math.sin(this.heading);
     for (let i = 0; i < show; i++) {
       const sl = this.slots[i];
+      const rx = sl.x * ch2 - sl.z * sh2, rz = sl.x * sh2 + sl.z * ch2;
       const bob = Math.sin(this.t * 4 + sl.ph * 6.28) * 0.02;
-      // 얼굴: 머리 앞면(-z 방향)에 부착
-      _q.setFromAxisAngle(_v.set(0, 1, 0), Math.PI);
-      _m.compose(_v.set(this.pos.x + sl.x, 1.235 + bob, this.pos.z + sl.z), _q, _s);
+      _q.setFromAxisAngle(_v.set(0, 1, 0), Math.PI + this.heading);
+      _m.compose(_v.set(this.pos.x + rx, 1.235 + bob, this.pos.z + rz), _q, _s);
       this.faceInst.setMatrixAt(i, _m);
       const rec = fire ? Math.abs(Math.sin(this.t * 26 + sl.ph * 3)) * 0.05 : 0;
-      _m.compose(_v.set(this.pos.x + sl.x + 0.27, 0.94 + bob, this.pos.z + sl.z - 0.56 + rec), _q, _s);
+      const gx = 0.27, gz = -0.56 + rec;
+      _m.compose(_v.set(this.pos.x + rx + gx * ch2 - gz * sh2, 0.94 + bob, this.pos.z + rz + gx * sh2 + gz * ch2), _q, _s);
       this.gunInst.setMatrixAt(i, _m);
     }
     this.faceInst.instanceMatrix.needsUpdate = true; this.gunInst.instanceMatrix.needsUpdate = true;
-    this.leader.position.set(this.pos.x, 0, this.pos.z - 0.55);
+    this.leader.position.set(this.pos.x - Math.sin(this.heading) * -0.55, 0, this.pos.z - Math.cos(this.heading) * 0.55);
+    this.leader.rotation.y = this.heading;
     animateHero(this.leader, this.t, fire);
   }
 }

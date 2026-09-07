@@ -2,32 +2,41 @@
 export class Input {
   constructor(el, fireBtn) {
     this.axis = 0;            // -1 ~ 1 : 키보드 좌우
+    this.axisZ = 0;           // -1 ~ 1 : 키보드 앞뒤(필드 모드)
     this.steer = null;        // -1 ~ 1 : 화면을 끌면 그 위치로 분대가 따라감
+    this.steerZ = null;       // -1 ~ 1 : 세로 드래그(필드 모드)
+    this.formKey = false;     // N 키: 대형 변경(한 번만 소비)
     this.fire = false;
-    this._l = false; this._r = false;
+    this._l = false; this._r = false; this._u = false; this._d = false;
     this._keyFire = false; this._btnFire = false;
     this._first = false; this._cbs = [];
-    const L = ['ArrowLeft', 'KeyA'], R = ['ArrowRight', 'KeyD'];
+    const L = ['ArrowLeft', 'KeyA'], R = ['ArrowRight', 'KeyD'], U = ['ArrowUp', 'KeyW'], D = ['ArrowDown', 'KeyS'];
     window.addEventListener('keydown', (e) => {
-      if ([...L, ...R, 'Space'].includes(e.code)) e.preventDefault();
+      if ([...L, ...R, ...U, ...D, 'Space'].includes(e.code)) e.preventDefault();
       this._fire1();
       if (L.includes(e.code)) this._l = true;
       if (R.includes(e.code)) this._r = true;
+      if (U.includes(e.code)) this._u = true;
+      if (D.includes(e.code)) this._d = true;
       if (e.code === 'Space') this._keyFire = true;
+      if (e.code === 'KeyN' && !e.repeat) this.formKey = true;
       this._sync();
     });
     window.addEventListener('keyup', (e) => {
       if (L.includes(e.code)) this._l = false;
       if (R.includes(e.code)) this._r = false;
+      if (U.includes(e.code)) this._u = false;
+      if (D.includes(e.code)) this._d = false;
       if (e.code === 'Space') this._keyFire = false;
       this._sync();
     });
     // 터치/마우스: 누르고 있으면 사격, 좌우로 끌면 그 지점으로 분대가 이동
     let down = false;
     const at = (e) => (e.clientX / window.innerWidth - 0.5) * 2;
-    const start = (e) => { down = true; this.steer = at(e); this._fire1(); this._btnFire = true; this._sync(); };
-    const move = (e) => { if (down) this.steer = at(e); };
-    const end = () => { down = false; this.steer = null; this._btnFire = false; this._sync(); };
+    const atZ = (e) => (e.clientY / window.innerHeight - 0.5) * 2;
+    const start = (e) => { down = true; this.steer = at(e); this.steerZ = atZ(e); this._fire1(); this._btnFire = true; this._sync(); };
+    const move = (e) => { if (down) { this.steer = at(e); this.steerZ = atZ(e); } };
+    const end = () => { down = false; this.steer = null; this.steerZ = null; this._btnFire = false; this._sync(); };
     el.addEventListener('pointerdown', start); el.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
     if (fireBtn) {   // FIRE 버튼은 이동 없이 사격만
@@ -37,7 +46,9 @@ export class Input {
       fireBtn.addEventListener('pointerleave', bu); fireBtn.addEventListener('pointercancel', bu);
     }
   }
-  _sync() { this.axis = (this._r ? 1 : 0) - (this._l ? 1 : 0); this.fire = this._keyFire || this._btnFire; }
+  _sync() { this.axis = (this._r ? 1 : 0) - (this._l ? 1 : 0);
+    this.axisZ = (this._d ? 1 : 0) - (this._u ? 1 : 0); this.fire = this._keyFire || this._btnFire; }
+  consumeForm() { const f = this.formKey; this.formKey = false; return f; }
   onFirstInput(cb) { this._cbs.push(cb); }
   _fire1() { if (this._first) return; this._first = true; this._cbs.forEach((c) => c()); }
 }

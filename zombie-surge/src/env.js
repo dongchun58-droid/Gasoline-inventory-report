@@ -166,3 +166,76 @@ export function buildAPC() {
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
+
+// ---- 평야 필드(Phase B/C): 사방이 트인 개활지 ----
+export const FIELD_R = 46;          // 전장 반경
+export function buildField(theme, R = FIELD_R) {
+  const g = new THREE.Group();
+  // 지면
+  const gt = fieldTexture(theme.deck); gt.repeat.set(30, 30);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(R + 34, 64),
+    new THREE.MeshStandardMaterial({ map: gt, roughness: 0.95, normalMap: normalFromCanvas(gt.image, 0.5) }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; g.add(ground);
+  // 교전 한계선(빛나는 링)
+  const ring = new THREE.Mesh(new THREE.RingGeometry(R - 0.5, R + 0.5, 96),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, toneMapped: false, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring);
+  // 외곽 철조망 기둥
+  const postMat = new THREE.MeshStandardMaterial({ color: theme.parapet, roughness: 0.85 });
+  const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.35, 2.4, 0.35), postMat, 72);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < 72; i++) { const a = (i / 72) * Math.PI * 2;
+    m.makeTranslation(Math.cos(a) * (R + 3), 1.2, Math.sin(a) * (R + 3)); posts.setMatrixAt(i, m); }
+  posts.castShadow = true; g.add(posts);
+  const wire = new THREE.Mesh(new THREE.TorusGeometry(R + 3, 0.06, 6, 96), new THREE.MeshStandardMaterial({ color: 0x6a7280, roughness: 0.5, metalness: 0.6 }));
+  wire.rotation.x = Math.PI / 2; wire.position.y = 2.0; g.add(wire);
+  // 흩어진 바위 · 마른 나무 · 드럼통(개활지 실루엣)
+  const rockMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.parapet).multiplyScalar(0.8), roughness: 1 });
+  const barMat = new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.8 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3b2c1e, roughness: 0.95 });
+  let seed = 8123; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 46; i++) {
+    const a = rnd() * Math.PI * 2, d = 14 + rnd() * (R + 22);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (d < R - 4 && Math.abs(z) < 22) continue;                    // 교전 중심은 비워둔다
+    const k = rnd();
+    if (k < 0.45) { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + rnd() * 1.5), rockMat);
+      r.position.set(x, 0.2, z); r.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3); r.castShadow = true; g.add(r); }
+    else if (k < 0.75) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.28, 4 + rnd() * 3, 7), trunkMat);
+      t.position.set(x, 2.2, z); t.rotation.z = (rnd() - 0.5) * 0.3; t.castShadow = true; g.add(t);
+      for (let b = 0; b < 3; b++) { const br = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.10, 1.6, 5), trunkMat);
+        br.position.set(x + (rnd() - 0.5) * 1.2, 3.4 + rnd() * 1.2, z + (rnd() - 0.5) * 1.2);
+        br.rotation.set(rnd() - 0.5, 0, rnd() - 0.5); g.add(br); } }
+    else { const d2 = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.4, 12), barMat);
+      d2.position.set(x, 0.7, z); d2.rotation.z = rnd() < 0.4 ? Math.PI / 2 : 0; d2.castShadow = true; g.add(d2); }
+  }
+  // 먼 산 실루엣
+  const farMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.fog).multiplyScalar(0.6), roughness: 1 });
+  for (let i = 0; i < 26; i++) { const a = (i / 26) * Math.PI * 2 + 0.1;
+    const h = 16 + ((i * 37) % 30), w = 26 + ((i * 13) % 22);
+    const b = new THREE.Mesh(new THREE.ConeGeometry(w, h, 4), farMat);
+    b.position.set(Math.cos(a) * (R + 120), h / 2 - 4, Math.sin(a) * (R + 120)); b.rotation.y = a; g.add(b);
+  }
+  return { group: g, update() {} };
+}
+
+// 평야 지면 텍스처: 벽돌 결이 없는 얼룩덜룩한 흙/풀
+function fieldTexture(hex) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+  const base = new THREE.Color(hex);
+  g.fillStyle = '#' + base.getHexString(); g.fillRect(0, 0, 256, 256);
+  let seed = 4451; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 900; i++) {                       // 흙 얼룩
+    const c = base.clone().multiplyScalar(0.72 + rnd() * 0.55);
+    g.fillStyle = 'rgba(' + (c.r * 255 | 0) + ',' + (c.g * 255 | 0) + ',' + (c.b * 255 | 0) + ',' + (0.16 + rnd() * 0.3) + ')';
+    const r = 3 + rnd() * 22; g.beginPath(); g.ellipse(rnd() * 256, rnd() * 256, r, r * (0.5 + rnd()), rnd() * 3, 0, 7); g.fill();
+  }
+  for (let i = 0; i < 700; i++) {                       // 마른 풀
+    const c = base.clone().multiplyScalar(1.25 + rnd() * 0.4);
+    g.strokeStyle = 'rgba(' + (c.r * 255 | 0) + ',' + (c.g * 255 | 0) + ',' + (c.b * 255 | 0) + ',' + (0.18 + rnd() * 0.3) + ')';
+    g.lineWidth = 1 + rnd(); const x = rnd() * 256, y = rnd() * 256;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - 0.5) * 6, y - 3 - rnd() * 6); g.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+}

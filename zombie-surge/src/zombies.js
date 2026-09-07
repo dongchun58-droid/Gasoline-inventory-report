@@ -50,7 +50,7 @@ export class ZombiePool {
         const cyc = (t * (z.type === 'runner' ? 12 : z.type === 'tank' ? 4.6 : 7) + z.ph) % 6.283;
         let sc = z.scale, y = 0;
         if (z.state === 'dying') { const u = z.dieT / 0.5; sc = z.scale * (1 - u * 0.9); y = -u * 0.8; }
-        _q.setFromAxisAngle(_v.set(0, 1, 0), Math.sin(cyc) * 0.10);
+        _q.setFromAxisAngle(_v.set(0, 1, 0), (z.ang || 0) + Math.sin(cyc) * 0.10);
         _m.compose(_v.set(z.x, y, z.z), _q, _s.set(sc, sc, sc));
         _m.multiply(local(p, cyc, z.state, t, z.ph));
         im.setMatrixAt(i, _m);

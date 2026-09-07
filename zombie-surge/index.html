@@ -25,6 +25,7 @@
   #progFill{height:100%;width:0;background:var(--blue)}
   #troops{top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center}
   #troopsN{font-size:56px;line-height:1;font-weight:800;color:#8fd6ff;text-shadow:0 2px 10px #0a3a66,0 0 2px #fff}
+  #troopCap{font-size:15px;font-weight:700;color:#9fc4e0;margin-top:-2px;letter-spacing:.04em;opacity:.85}
   #weapon{font-size:14px;font-weight:700;color:#cfe8ff;margin-top:2px;letter-spacing:.08em}
   #coins{top:max(10px,env(safe-area-inset-top));right:14px;font-size:18px;font-weight:700;color:var(--yellow)}
   #bossBar{top:calc(max(8px,env(safe-area-inset-top)) + 84px);left:50%;transform:translateX(-50%);width:min(520px,70vw);display:none;text-align:center}
@@ -78,11 +79,11 @@
   <div id="heroBadge"><div id="heroFace"></div><div id="heroTxt"><b id="heroName">COOL GUY</b><span id="heroRole">돌격 대장</span></div></div>
   <div id="stageLbl" class="disp">STAGE 1</div>
   <div id="prog"><div id="progFill"></div></div>
-  <div id="troops"><div id="troopsN" class="disp">10</div><div id="weapon" class="disp">RIFLE</div></div>
+  <div id="troops"><div id="troopsN" class="disp">10</div><div id="troopCap" class="disp">/ 260</div><div id="weapon" class="disp">RIFLE</div></div>
   <div id="coins" class="disp">🪙 0</div>
   <div id="bossBar"><div id="bossName" class="disp">BRUTE</div><div id="bossHp"><div id="bossHpFill"></div></div></div>
   <div id="msg" class="disp"></div>
-  <div id="hint">◀ 드래그 / ←→ 좌우 이동 · <b>스페이스(또는 FIRE) 꾹 눌러 직진 사격</b> ▶</div>
+  <div id="hint">◀ 드래그 / WASD·방향키 이동 · <b>스페이스(또는 FIRE) 꾹 눌러 사격</b> · <b>N</b> 대형 변경 ▶</div>
   <button id="fireBtn" class="disp">FIRE</button>
   <div id="waveLbl" class="disp">WAVE 1 / 6</div>
   <div id="remain" class="disp"></div>
@@ -100,6 +101,8 @@
   <div class="trow"><div class="tico">＋</div><div>내려오는 카드는 지나가며 획득 — <b>파랑 +N</b> 병력 · <b>노랑 ×2</b> 배수 · <b style="color:#ff8a70">빨강 −N</b> 감소(피하세요) · <b style="color:#c9a8ff">WEAPON</b> 무기 강화 · <b style="color:#7fffe0">SHIELD</b> 6초 무적</div></div>
   <div class="trow"><div class="tico">🔫</div><div>무기는 <b>12단계</b>입니다 — PISTOL → RIFLE → AUTO RIFLE → SMG → HEAVY SMG → SHOTGUN → AUTO SHOT → MINIGUN → HVY MINI → LASER I → LASER II → PLASMA. 올릴수록 화력이 세지고 <b>좌우로 잡는 폭도 넓어져</b> 조준이 쉬워집니다. 단, <b>스테이지마다 올릴 수 있는 상한</b>이 있어서 레이저 이상은 후반 지역에서만 손에 넣을 수 있습니다.</div></div>
   <div class="trow"><div class="tico">💀</div><div>좀비가 방어선까지 오면 <b>병사에게 달려들어 물어뜯습니다</b>. 병력이 0이 되면 실패. 중간중간 <b>보스</b>가 내려오고, 바닥의 <b style="color:#ff8a70">빨간 원</b>은 광역 공격 예고이니 옆으로 피하세요.</div></div>
+  <div class="trow"><div class="tico">🌾</div><div><b>5단계부터는 사방이 트인 평야</b>입니다. <b>WASD / 방향키로 전·후·좌·우 자유 이동</b>(화면을 끌어도 됩니다). 좀비가 360° 전 방향에서 몰려오고, 사격은 <b>바라보는 쪽 부채꼴</b>로 나갑니다 — 무기를 올릴수록 부채각이 넓어져 상위 무기는 사실상 <b>전방위 사격</b>이 됩니다. 등 뒤로 붙은 좀비는 방향과 관계없이 근접 대응으로 처리합니다.</div></div>
+  <div class="trow"><div class="tico">🔷</div><div><b>N 키로 대형 변경</b> — 사각(균형) · 횡대(부채각 +45%, 화력 −12%) · 쐐기(부채각 −38%, 화력 +32%) · 원형(부채각 +130%, 화력 −20%) · 십자(부채각 +70%). 상황에 맞게 바꾸세요.</div></div>
   <button class="btn disp" id="tutClose" style="margin-top:10px;width:100%">전투 시작</button>
 </div></div>
   <div class="trow"><div class="tico">↔</div><div><b>좌우 스와이프 / ←→ 키</b>로 레인을 옮깁니다. 내려오는 <b>카드</b>는 지나가는 레인의 것만 획득합니다.</div></div>

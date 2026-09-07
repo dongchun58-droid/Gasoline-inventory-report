@@ -4,6 +4,7 @@ import { Input } from './input.js';
 import { HUD } from './hud.js';
 import { FX } from './fx.js';
 import { WaveDefense } from './wave.js';
+import { FieldRun } from './field.js';
 import { STAGES, CHARACTER_ORDER } from './stages.js';
 import { renderPortraits } from './squad.js';
 import { buildBoss } from './zombies.js';
@@ -51,7 +52,8 @@ function launch(n, character) {
   if (state.run) state.run.dispose();
   state.stage = st; state.character = character; state.data.character = character; save(state.data);
   applyTheme(st.theme);
-  state.run = new WaveDefense(scene, camera, st, character, fx, audio);
+  state.run = st.field ? new FieldRun(scene, camera, st, character, fx, audio)
+                       : new WaveDefense(scene, camera, st, character, fx, audio);
   hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits);
   audio.start(); audio.setScene('wave');
   state.mode = 'play';
@@ -88,11 +90,12 @@ function frame(now) {
   if (state.mode === 'play' && r) {
     r.update(dt, input);
     hud.update(r.status());
-    sun.target.position.set(r.x, 0, -20); sun.position.set(r.x + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, -38);
+    const rz = r.z || 0;
+    sun.target.position.set(r.x, 0, rz - 20); sun.position.set(r.x + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, rz - 38);
     if (r.status().boss) audio.setScene('boss');
     if (r.done) { state.mode = 'ending'; state.endT = 0; state.endKind = r.done; }
   } else if (state.mode === 'ending' && r) {
-    state.endT += dt; r.update(dt * 0.35, { steer: null, axis: 0, fire: false });
+    state.endT += dt; r.update(dt * 0.35, { steer: null, steerZ: null, axis: 0, axisZ: 0, fire: false, consumeForm: () => false });
     hud.update(r.status());
     if (state.endT > 1.4) finish(state.endKind);
   } else if (state.mode === 'result' && r) { r.zombies.update(dt, r.t); }
