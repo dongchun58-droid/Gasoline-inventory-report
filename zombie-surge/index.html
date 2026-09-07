@@ -25,7 +25,9 @@
   #progFill{height:100%;width:0;background:var(--blue)}
   #troops{top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);text-align:center}
   #troopsN{font-size:56px;line-height:1;font-weight:800;color:#8fd6ff;text-shadow:0 2px 10px #0a3a66,0 0 2px #fff}
-  #troopCap{font-size:15px;font-weight:700;color:#9fc4e0;margin-top:-2px;letter-spacing:.04em;opacity:.85}
+  #troopLine{display:flex;align-items:baseline;justify-content:center;gap:6px}
+  #troopCap{font-size:20px;font-weight:800;color:#bcd9f0;letter-spacing:.02em;text-shadow:0 2px 8px #0a3a66,0 0 2px #000}
+  #formLbl{font-size:12px;font-weight:700;color:#ffe9a0;letter-spacing:.06em;margin-top:1px;text-shadow:0 1px 4px #000}
   #weapon{font-size:14px;font-weight:700;color:#cfe8ff;margin-top:2px;letter-spacing:.08em}
   #coins{top:max(10px,env(safe-area-inset-top));right:14px;font-size:18px;font-weight:700;color:var(--yellow)}
   #bossBar{top:calc(max(8px,env(safe-area-inset-top)) + 84px);left:50%;transform:translateX(-50%);width:min(520px,70vw);display:none;text-align:center}
@@ -43,16 +45,21 @@
   #muteBtn,#helpBtn{pointer-events:auto;position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 30px);right:14px;width:38px;height:38px;border-radius:50%;
     border:1px solid #ffffff33;background:#0f151c99;color:#cfe8ff;font-size:17px;font-weight:700}
   #helpBtn{right:60px}
-  #tut{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#04070ade;backdrop-filter:blur(6px);z-index:60;padding:22px;box-sizing:border-box}
-  #tut.hidden{display:none}
-  .tcard{max-width:560px;background:#111922;border:2px solid #2a3a4c;border-radius:18px;padding:24px 26px;box-shadow:0 18px 50px #000a}
+  #tut{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#04070af2;z-index:60;padding:14px;box-sizing:border-box;pointer-events:auto}
+  #tut.hidden{display:none!important;visibility:hidden;pointer-events:none}
+  .tcard{max-width:560px;width:100%;max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);display:flex;flex-direction:column;
+    background:#111922;border:2px solid #2a3a4c;border-radius:18px;padding:18px 20px calc(14px + env(safe-area-inset-bottom));box-shadow:0 18px 50px #000a;box-sizing:border-box}
+  .tbody{flex:1 1 auto;min-height:0;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:4px}
+  #tutClose{flex:0 0 auto;margin-top:12px!important;width:100%}
   .tcard h2{font-family:"Barlow Condensed",sans-serif;font-size:34px;margin:0 0 4px;color:#ffd23f;text-transform:uppercase}
   .tcard p{margin:0 0 14px;color:#9fb8cf;font-size:14px}
   .trow{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:14.5px;line-height:1.5}
   .tico{flex:0 0 42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;background:#1b2836;border:1px solid #2f4256}
   .tcard b{color:#eaf2f8}
-  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#07090ccc;backdrop-filter:blur(8px);gap:16px;padding:24px;box-sizing:border-box;overflow:auto}
-  .screen.hidden{display:none}
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:#07090cf2;gap:16px;padding:24px 20px calc(24px + env(safe-area-inset-bottom));box-sizing:border-box;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  .screen>*{flex:0 0 auto}
+  .screen::before,.screen::after{content:'';margin:auto 0;flex:1 1 auto;min-height:0}
+  .screen.hidden{display:none!important;visibility:hidden;pointer-events:none}
   h1.title{font-size:min(84px,13vw);line-height:.9;margin:0;font-weight:800;background:linear-gradient(180deg,#fff,#8fd6ff 60%,#2f8fd6);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
   .sub{font-size:15px;color:#a9c7e0;margin-top:-8px}
   .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
@@ -67,11 +74,46 @@
   .st .stars{font-size:11px;color:var(--yellow);letter-spacing:1px;margin-top:-2px}
   .btn{pointer-events:auto;cursor:pointer;border:0;border-radius:40px;padding:14px 34px;font-size:22px;font-weight:800;background:var(--blue);color:#fff;box-shadow:0 8px 24px #0008}
   .btn.ghost{background:#ffffff18;color:#cfe8ff;font-size:16px;padding:10px 22px}
+  /* 화면이 짧아도 행동 버튼은 항상 손에 닿게 */
+  .actbar{position:sticky;bottom:0;padding:8px 0 calc(4px + env(safe-area-inset-bottom));z-index:3;
+    background:linear-gradient(180deg,#07090c00,#07090cee 34%,#07090cf6);width:100%}
   .stat{display:flex;gap:26px;font-size:15px;color:#cfe8ff}
   .stat b{display:block;font-size:24px;color:#fff}
   #resTitle{font-size:64px;margin:0}
   #resStars{font-size:44px;color:var(--yellow);letter-spacing:6px}
   .credits{max-width:520px;font-size:13px;color:#a9c7e0;line-height:1.6;text-align:left}
+  /* ── 휴대폰: 좁고 낮은 화면에서도 버튼에 반드시 닿게 ── */
+  @media (max-height:560px), (max-width:720px){
+    .tcard{padding:14px 16px calc(10px + env(safe-area-inset-bottom));border-radius:14px}
+    .tcard h2{font-size:24px}
+    .tcard p, .trow div:last-child{font-size:12.5px;line-height:1.45}
+    .trow{gap:8px;margin-bottom:8px}
+    .tico{font-size:18px;min-width:22px}
+    #tutClose{padding:12px 20px;font-size:19px}
+    .chr{width:88px;font-size:11.5px;padding:8px 4px}
+    .chr .ic{width:48px;height:48px}
+    .chr small{font-size:10px}
+    .grid{grid-template-columns:repeat(5,52px);gap:8px}
+    .st{width:52px;height:52px;font-size:21px}
+    .btn{padding:11px 24px;font-size:18px}
+    .btn.ghost{padding:9px 16px;font-size:14px}
+    .sub{font-size:13px}
+    #resTitle{font-size:42px}
+    .stat{gap:16px;font-size:13px}
+    .stat b{font-size:19px}
+    #hint{font-size:11px}
+    h1.title{font-size:min(46px,8.5vw)}
+    .screen{gap:9px;padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+    .screen::before,.screen::after{min-height:0;flex:0 1 auto}
+    .row{gap:7px}
+    #fireBtn{width:96px;height:96px;font-size:19px;bottom:max(16px,env(safe-area-inset-bottom));right:16px}
+    #troopsN{font-size:38px}
+    #troopCap{font-size:16px}
+    #formLbl{font-size:10.5px}
+    #heroFace{width:42px;height:42px}
+    #msg{font-size:30px}
+    #wpnPop{font-size:26px}
+  }
 </style>
 </head>
 <body>
@@ -79,7 +121,7 @@
   <div id="heroBadge"><div id="heroFace"></div><div id="heroTxt"><b id="heroName">COOL GUY</b><span id="heroRole">돌격 대장</span></div></div>
   <div id="stageLbl" class="disp">STAGE 1</div>
   <div id="prog"><div id="progFill"></div></div>
-  <div id="troops"><div id="troopsN" class="disp">10</div><div id="troopCap" class="disp">/ 260</div><div id="weapon" class="disp">RIFLE</div></div>
+  <div id="troops"><div id="troopLine"><div id="troopsN" class="disp">10</div><div id="troopCap" class="disp">/ 260</div></div><div id="weapon" class="disp">RIFLE</div><div id="formLbl" class="disp">사각 대형 · N</div></div>
   <div id="coins" class="disp">🪙 0</div>
   <div id="bossBar"><div id="bossName" class="disp">BRUTE</div><div id="bossHp"><div id="bossHpFill"></div></div></div>
   <div id="msg" class="disp"></div>
@@ -92,7 +134,7 @@
   <button id="helpBtn">?</button>
 </div>
 
-<div id="tut" class="hidden"><div class="tcard">
+<div id="tut" class="hidden"><div class="tcard"><div class="tbody">
   <h2>작전 브리핑</h2>
   <p>다리를 <b>지키는</b> 쪽입니다. 좀비 무리가 넓은 한 줄로 끊임없이 내려옵니다.</p>
   <div class="trow"><div class="tico">🔥</div><div><b>스페이스를 꾹 누르거나 FIRE 버튼을 홀드</b>하면 사격합니다. 조준은 없습니다 — <b>분대 바로 앞 직진</b>으로만 나가니, 좀비가 있는 쪽으로 <b>직접 움직여</b> 맞춰야 합니다.</div></div>
@@ -103,7 +145,7 @@
   <div class="trow"><div class="tico">💀</div><div>좀비가 방어선까지 오면 <b>병사에게 달려들어 물어뜯습니다</b>. 병력이 0이 되면 실패. 중간중간 <b>보스</b>가 내려오고, 바닥의 <b style="color:#ff8a70">빨간 원</b>은 광역 공격 예고이니 옆으로 피하세요.</div></div>
   <div class="trow"><div class="tico">🌾</div><div><b>5단계부터는 사방이 트인 평야</b>입니다. <b>WASD / 방향키로 전·후·좌·우 자유 이동</b>(화면을 끌어도 됩니다). 좀비가 360° 전 방향에서 몰려오고, 사격은 <b>바라보는 쪽 부채꼴</b>로 나갑니다 — 무기를 올릴수록 부채각이 넓어져 상위 무기는 사실상 <b>전방위 사격</b>이 됩니다. 등 뒤로 붙은 좀비는 방향과 관계없이 근접 대응으로 처리합니다.</div></div>
   <div class="trow"><div class="tico">🔷</div><div><b>N 키로 대형 변경</b> — 사각(균형) · 횡대(부채각 +45%, 화력 −12%) · 쐐기(부채각 −38%, 화력 +32%) · 원형(부채각 +130%, 화력 −20%) · 십자(부채각 +70%). 상황에 맞게 바꾸세요.</div></div>
-  <button class="btn disp" id="tutClose" style="margin-top:10px;width:100%">전투 시작</button>
+  </div><button class="btn disp" id="tutClose" style="margin-top:10px;width:100%">전투 시작</button>
 </div></div>
   <div class="trow"><div class="tico">↔</div><div><b>좌우 스와이프 / ←→ 키</b>로 레인을 옮깁니다. 내려오는 <b>카드</b>는 지나가는 레인의 것만 획득합니다.</div></div>
   <div class="trow"><div class="tico">＋</div><div><b>파랑 +N</b> 병력 증가 · <b>노랑 ×N</b> 배수 · <b style="color:#ff8a70">빨강 −N</b> 감소(피하세요) · <b style="color:#c9a8ff">WEAPON</b> 무기 강화 · <b style="color:#7fffe0">SHIELD</b> 6초 무적</div></div>
@@ -117,14 +159,14 @@
   <div class="sub">10개의 미션 — 병력을 키워 좀비 웨이브를 돌파하라</div>
   <div class="row" id="chars"></div>
   <div class="grid" id="stages"></div>
-  <div class="row"><button class="btn disp" id="playBtn">▶ 출격</button><button class="btn ghost disp" id="creditsBtn">Credits</button></div>
+  <div class="row actbar"><button class="btn disp" id="playBtn">▶ 출격</button><button class="btn ghost disp" id="creditsBtn">Credits</button></div>
 </div>
 
 <div id="result" class="screen hidden">
   <h1 id="resTitle" class="title disp">Mission Clear</h1>
   <div id="resStars">★★★</div>
   <div class="stat"><div>병력<b id="rTroops">0</b></div><div>최대 병력<b id="rPeak">0</b></div><div>좀비 처치<b id="rKills">0</b></div><div>시간<b id="rTime">0s</b></div><div>코인<b id="rCoins">0</b></div></div>
-  <div class="row"><button class="btn disp" id="nextBtn">다음 스테이지 ▶</button><button class="btn ghost disp" id="retryBtn">다시</button><button class="btn ghost disp" id="menuBtn">메뉴</button></div>
+  <div class="row actbar"><button class="btn disp" id="nextBtn">다음 스테이지 ▶</button><button class="btn ghost disp" id="retryBtn">다시</button><button class="btn ghost disp" id="menuBtn">메뉴</button></div>
 </div>
 
 <div id="credits" class="screen hidden">

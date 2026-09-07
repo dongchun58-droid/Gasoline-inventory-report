@@ -30,15 +30,28 @@ export class Input {
       if (e.code === 'Space') this._keyFire = false;
       this._sync();
     });
-    // 터치/마우스: 누르고 있으면 사격, 좌우로 끌면 그 지점으로 분대가 이동
-    let down = false;
-    const at = (e) => (e.clientX / window.innerWidth - 0.5) * 2;
-    const atZ = (e) => (e.clientY / window.innerHeight - 0.5) * 2;
-    const start = (e) => { down = true; this.steer = at(e); this.steerZ = atZ(e); this._fire1(); this._btnFire = true; this._sync(); };
-    const move = (e) => { if (down) { this.steer = at(e); this.steerZ = atZ(e); } };
+    // 터치/마우스: 누른 지점이 조이스틱 원점. 그대로 누르고만 있으면 사격만 하고
+    // 움직이지 않는다(휴대폰에서 탭했다고 분대가 끌려가지 않도록).
+    let down = false, ox = 0, oy = 0;
+    const unit = () => Math.max(70, Math.min(window.innerWidth, window.innerHeight) * 0.20);
+    const upd = (e) => {
+      const u = unit(), dead = u * 0.22;
+      const dx = e.clientX - ox, dy = e.clientY - oy;
+      if (Math.hypot(dx, dy) < dead) { this.steer = 0; this.steerZ = 0; return; }
+      this.steer = Math.max(-1, Math.min(1, dx / u));
+      this.steerZ = Math.max(-1, Math.min(1, dy / u));
+    };
+    const start = (e) => { down = true; ox = e.clientX; oy = e.clientY; this.steer = 0; this.steerZ = 0;
+      this._fire1(); this._btnFire = true; this._sync(); };
+    const move = (e) => { if (down) upd(e); };
     const end = () => { down = false; this.steer = null; this.steerZ = null; this._btnFire = false; this._sync(); };
     el.addEventListener('pointerdown', start); el.addEventListener('pointermove', move);
     window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+    // 앱 전환·포커스 상실 시 사격/이동이 눌린 채 남지 않도록 정리(모바일)
+    const reset = () => { down = false; this.steer = null; this.steerZ = null;
+      this._btnFire = false; this._keyFire = false; this._l = this._r = this._u = this._d = false; this._sync(); };
+    window.addEventListener('blur', reset);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
     if (fireBtn) {   // FIRE 버튼은 이동 없이 사격만
       const bd = (e) => { e.preventDefault(); e.stopPropagation(); this._fire1(); this._btnFire = true; this._sync(); };
       const bu = (e) => { e.preventDefault(); e.stopPropagation(); this._btnFire = false; this._sync(); };

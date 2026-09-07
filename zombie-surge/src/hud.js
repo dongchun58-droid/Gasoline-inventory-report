@@ -7,7 +7,7 @@ export class HUD {
       bossBar: $('bossBar'), bossName: $('bossName'), bossFill: $('bossHpFill'), msg: $('msg'), hint: $('hint'),
       menu: $('menu'), result: $('result'), credits: $('credits'), wave: $('waveLbl'), remain: $('remain'),
       fire: $('fireBtn'), tut: $('tut'), badge: $('heroBadge'), face: $('heroFace'), hname: $('heroName'), hrole: $('heroRole'),
-      wpnPop: $('wpnPop'), cap: $('troopCap') };
+      wpnPop: $('wpnPop'), cap: $('troopCap'), form: $('formLbl') };
     this._msgT = 0; this._last = null; this._wpnT = 0; this._wpn = null;
   }
   setStage(st) { this.el.stage.textContent = `STAGE ${st.n} · ${st.name}`; }
@@ -17,7 +17,8 @@ export class HUD {
     this.el.face.style.borderColor = '#' + c.trim.toString(16).padStart(6, '0'); }
   update(s) {
     this.el.troops.textContent = s.troops;
-    this.el.cap.textContent = '/ ' + (s.cap || 260) + (s.formation ? '   ·   ' + s.formation + ' (N)' : '');
+    this.el.cap.textContent = '/ ' + (s.cap || 260);
+    this.el.form.textContent = (s.formation || '사각 대형') + ' · N';
     this.el.troops.style.color = s.shield ? '#7fffe0' : (s.firing ? '#ffe9a0' : '#8fd6ff');
     this.el.weapon.textContent = s.weapon + (s.shield ? ' · SHIELD' : '');
     // 무기 교체를 화면 중앙 배너로 확실히 알림

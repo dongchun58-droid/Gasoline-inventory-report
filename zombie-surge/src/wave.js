@@ -58,10 +58,8 @@ export class WaveDefense {
     this.t += dt; this.time += dt;
     // ── 좌우 자유 이동
     const speed = 15.5;
-    if (input.steer != null) {
-      const tx = input.steer * this.limit * 1.15;
-      this.x += Math.max(-speed * dt, Math.min(speed * dt, tx - this.x));
-    } else if (input.axis) this.x += input.axis * speed * dt;
+    const ax = input.steer != null ? input.steer : (input.axis || 0);
+    if (ax) this.x += Math.max(-1, Math.min(1, ax)) * speed * dt;
     this.x = Math.max(-this.limit, Math.min(this.limit, this.x));
     if (input.consumeForm && input.consumeForm()) {
       this.formIdx = ((this.formIdx || 0) + 1) % FORMATION_KEYS.length;
