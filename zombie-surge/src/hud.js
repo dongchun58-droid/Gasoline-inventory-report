@@ -27,8 +27,10 @@ export class HUD {
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
-    this.el.wave.textContent = `처치 ${s.kills} / ${s.quota}`;
-    this.el.remain.textContent = s.remain > 0 ? `접근 중 ${s.remain}` : '';
+    this.el.wave.textContent = s.quota ? `처치 ${s.kills} / ${s.quota}`
+      : `배수 ×${s.tier}  ·  석상 ${s.smashed}격파 / ${s.missed}실패`;
+    this.el.remain.textContent = s.statue ? `황금 석상 내구도 ${Math.round(s.statue.frac * 100)}%`
+      : (s.remain > 0 ? `접근 중 ${s.remain}` : '');
     if (s.boss) { this.el.bossBar.style.display = 'block'; this.el.bossName.textContent = s.boss.name; this.el.bossFill.style.width = (Math.max(0, s.boss.frac) * 100) + '%'; }
     else this.el.bossBar.style.display = 'none';
     if (s.msg && s.msg !== this._last) { this._last = s.msg; this.el.msg.textContent = s.msg.text; this.el.msg.style.color = s.msg.color; this.el.msg.style.opacity = 1; this._msgT = s.msg.t; }
@@ -50,11 +52,15 @@ export class HUD {
       chars.appendChild(d);
     }
     const grid = $('stages'); grid.innerHTML = ''; this.selStage = Math.min(save.unlocked, 2);
-    for (const st of STAGES) {
-      const d = document.createElement('div'); const locked = st.n > save.unlocked || !st.playable;
-      d.className = 'st' + (locked ? ' lock' : '') + (st.n === this.selStage ? ' sel' : ''); d.dataset.n = st.n;
+    // 보너스는 언제나 열려 있으니 눈에 먼저 띄게 앞에 놓는다
+    const order = [...STAGES].sort((a, b) => (b.bonus ? 1 : 0) - (a.bonus ? 1 : 0));
+    for (const st of order) {
+      const d = document.createElement('div');
+      const locked = st.bonus ? false : (st.n > save.unlocked || !st.playable);   // 보너스는 언제나 열려 있다
+      d.className = 'st' + (locked ? ' lock' : '') + (st.bonus ? ' bonus' : '') + (st.n === this.selStage ? ' sel' : ''); d.dataset.n = st.n;
       const stars = save.stars[st.n] ? '★'.repeat(save.stars[st.n]) : (st.playable ? '' : '준비중');
-      d.innerHTML = `<span class="disp">${st.n}</span><span class="stars">${stars}</span>`;
+      d.innerHTML = st.bonus ? `<span class="disp" style="font-size:19px">보너스</span><span class="stars">황금 관문</span>`
+                             : `<span class="disp">${st.n}</span><span class="stars">${stars}</span>`;
       if (!locked) d.onclick = () => { this.selStage = st.n; grid.querySelectorAll('.st').forEach((x) => x.classList.toggle('sel', +x.dataset.n === st.n)); };
       grid.appendChild(d);
     }

@@ -170,4 +170,17 @@ export const STAGES = [
                       B(0.80, 'warlord', 'cleaver', 'IRON TYRANT', 5000, 1.90, { speed: 5.6, slam: 16, aoe: 0.36, aoeEvery: 4.2 }),
                       B(1.00, 'warlord', 'maul', '좀비 로드', 6500, 2.40, { speed: 5.0, slam: 13, aoe: 0.30, aoeEvery: 4.6, summon: { n: 16, every: 5.5 } }) ] },
     par: 600 },
+
+  // ── 보너스: 3개 레인 황금 관문 (Last War 광고 스타일) ──────────────────
+  { n: 11, name: '황금 관문', phase: 'BONUS', playable: true, bonus: true, gauntlet: {
+      enemyRate: [1.6, 16], enemySpeed: 5.2,
+      statueEvery: [20, 12], statueSpeed: 5.5, statueHp: 150, statueGrow: 1.55,
+      numberEvery: 5.5, numberSpeed: 5.6, numberHp: 45, numberGrow: 2.0,
+      plusEvery: 0.85, plusSpeed: 15,
+      giantEvery: [30, 18], giantHp: 700, giantGrow: 1.5, finalHp: 7000 },
+    theme: { sky: 0x1a1030, fog: 0x2c1c48, sun: 0xffd8a0, deck: 0xd8d2c4, parapet: 0x8a5cf6, water: 0x120a24, hemi: 0x7a5ab8, ground: 0x241640, time: 'night' },
+    startTroops: 45, cardSpeed: 18, plusRange: [1, 1], wpnStart: 2, wpnMax: 11,
+    cards: { plus: 1, mul: 0, minus: 0, weapon: 0, shield: 0 },
+    zombie: { hp: 1, speed: 5.2 },
+    par: 240 },
 ];

@@ -239,3 +239,58 @@ function fieldTexture(hex) {
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
+// ── 보너스 스테이지 오브젝트 ─────────────────────────────────────────────
+// 가운데 레인에 내려오는 '숫자 블록' — 쏴서 부수면 배수가 올라간다
+export function buildNumberBlock(text) {
+  const g = new THREE.Group(); g.userData = {};
+  const face = new THREE.MeshBasicMaterial({ map: numberTexture(text), transparent: true, toneMapped: false });
+  const slab = new THREE.MeshStandardMaterial({ color: 0xe8eef4, roughness: 0.35, metalness: 0.25 });
+  const rim = new THREE.MeshStandardMaterial({ color: 0xb06ad8, roughness: 0.3, metalness: 0.7, emissive: 0x6a2a9a, emissiveIntensity: 0.5 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(5.0, 4.6, 0.9), slab); body.position.y = 2.9; g.add(body);
+  for (const sy of [-1, 1]) { const bar = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.42, 1.05), rim);
+    bar.position.set(0, 2.9 + sy * 2.5, 0); g.add(bar); }
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.42, 5.6, 0.55), rim);
+    p.position.set(sx * 2.7, 2.9, 0); g.add(p); }
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 4.1), face); f.position.set(0, 2.9, 0.47); g.add(f);
+  g.userData.face = f;
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 0.5), new THREE.MeshBasicMaterial({ color: 0x2a1030, toneMapped: false }));
+  back.position.set(0, 5.85, 0.5); g.add(back);
+  const bar2 = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 0.34), new THREE.MeshBasicMaterial({ color: 0xc98aff, toneMapped: false }));
+  bar2.position.set(0, 5.85, 0.53); g.add(bar2); g.userData.bar = bar2;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+// 왼쪽 레인의 황금 석상 — 받침대 + 금빛 거인. 부수면 보상, 못 부수면 큰 손실.
+export function buildStatue(inner, scale = 1) {
+  const g = new THREE.Group(); g.userData = {};
+  const gold = new THREE.MeshStandardMaterial({ color: 0xe8b032, roughness: 0.24, metalness: 0.95, emissive: 0x6a4a08, emissiveIntensity: 0.25 });
+  const base = new THREE.MeshStandardMaterial({ color: 0xc99a2a, roughness: 0.35, metalness: 0.85 });
+  const ped = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.1, 4.0), base); ped.position.y = 0.55; g.add(ped);
+  const ped2 = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.34, 4.5), base); ped2.position.y = 1.22; g.add(ped2);
+  inner.position.y = 1.4; inner.traverse((o) => { if (o.isMesh) o.material = gold; });
+  g.add(inner);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 0.5), new THREE.MeshBasicMaterial({ color: 0x3a2408, toneMapped: false }));
+  const bar = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.34), new THREE.MeshBasicMaterial({ color: 0xffd23f, toneMapped: false }));
+  const hy = 1.4 + (inner.userData.height || 4) + 0.9;
+  back.position.set(0, hy, 0.4); bar.position.set(0, hy, 0.43); g.add(back, bar); g.userData.bar = bar;
+  g.scale.setScalar(scale);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+export function setBarFrac(mesh, frac, w) {
+  const b = mesh.userData.bar; if (!b) return;
+  b.scale.x = Math.max(0.001, frac);
+  b.position.x = -(1 - Math.max(0, frac)) * (w / 2);
+}
+function numberTexture(text) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+  g.clearRect(0, 0, 256, 256);
+  g.font = 'bold ' + (text.length > 2 ? 130 : text.length > 1 ? 168 : 200) + 'px Barlow Condensed, Arial Narrow, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 16; g.strokeStyle = '#2a1030'; g.strokeText(text, 128, 138);
+  const grd = g.createLinearGradient(0, 40, 0, 220);
+  grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.55, '#dfe8f2'); grd.addColorStop(1, '#9fb0c4');
+  g.fillStyle = grd; g.fillText(text, 128, 138);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}

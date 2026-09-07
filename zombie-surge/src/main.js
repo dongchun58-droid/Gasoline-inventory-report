@@ -5,6 +5,7 @@ import { HUD } from './hud.js';
 import { FX } from './fx.js';
 import { WaveDefense } from './wave.js';
 import { FieldRun } from './field.js';
+import { GauntletRun } from './gauntlet.js';
 import { STAGES, CHARACTER_ORDER } from './stages.js';
 import { renderPortraits } from './squad.js';
 import { buildBoss } from './zombies.js';
@@ -52,8 +53,8 @@ function launch(n, character) {
   if (state.run) state.run.dispose();
   state.stage = st; state.character = character; state.data.character = character; save(state.data);
   applyTheme(st.theme);
-  state.run = st.field ? new FieldRun(scene, camera, st, character, fx, audio)
-                       : new WaveDefense(scene, camera, st, character, fx, audio);
+  const Run = st.bonus ? GauntletRun : st.field ? FieldRun : WaveDefense;
+  state.run = new Run(scene, camera, st, character, fx, audio);
   hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits);
   audio.start(); audio.setScene('wave');
   state.mode = 'play';
