@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { ROAD_HALF, HORDE_HALF, SIDE_X, buildEnvironment, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
 import { Squad, FORMATION_KEYS } from './squad.js';
-import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
+import { ZombiePool, buildBoss, animateBoss, buildProjectile } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
@@ -35,7 +35,7 @@ export class WaveDefense {
     this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
     this.weaponIdx = stage.wpnStart || 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false;
-    this.boss = null; this.cards = []; this.bossIdx = 0;
+    this.boss = null; this.cards = []; this.bossIdx = 0; this.shots = [];
     this.gates = this._buildGates();
     this.apc = null;
     if (stage.apc) { const m = buildAPC(); this.group.add(m); this.apc = { mesh: m, side: 1, ...stage.apc }; }
@@ -78,6 +78,7 @@ export class WaveDefense {
     this._cardsUpdate(dt);
     this._zombies(dt);
     this._boss(dt);
+    this._shots(dt);
     this._fire(dt);
     this._apc(dt);
     this.zombies.update(dt, this.t);
@@ -222,17 +223,20 @@ export class WaveDefense {
     const B = this.boss; if (!B) return;
     if (B.dead) { B.deadT += dt; B.mesh.position.y = -B.deadT * 1.4; B.mesh.rotation.z += dt * 0.5;
       B.mesh.scale.setScalar(Math.max(0.01, 1 - B.deadT * 0.5));
-      if (B.deadT > 1.5) { this.group.remove(B.mesh); this.boss = null; } return; }
+      if (B.deadT > 1.5) { this.group.remove(B.mesh); this.boss = null; this.fx.hideMarker(); } return; }
     const D = B.def, dx = this.x - B.x, dz = SQ_Z - B.z, d = Math.hypot(dx, dz);
     B.aoeCd -= dt;
-    if (B.aoeT <= 0 && B.aoeCd <= 0 && d < 30) { B.aoeX = this.x; B.aoeT = 1.3; this.fx.showMarker(B.aoeX, SQ_Z); B.aoeCd = D.aoeEvery; }
-    if (B.aoeT > 0) {
-      B.aoeT -= dt; B.state = 'slam';
-      if (B.aoeT <= 0) { this.fx.hideMarker();
-        if (Math.abs(this.x - B.aoeX) < 4.2 && this.shieldT <= 0) {
-          this.troops = Math.max(0, this.troops - Math.min(42, Math.max(3, Math.round(this.troops * D.aoe)))); this.shake = 0.55; this.audio.hit && this.audio.hit(); }
-        this.fx.spark(_a.set(B.aoeX, 0.4, SQ_Z), 30, 0xff9a50); B.state = 'walk'; }
-    } else if (d > 3.6) { B.state = 'walk'; B.x += dx / d * D.speed * dt; B.z += dz / d * D.speed * dt;
+    if (B.aoeT <= 0 && B.aoeCd <= 0 && d < 44) {          // 대형 광역: 예고 원 + 큰 투사체
+      B.aoeX = this.x; B.aoeT = 1.35; this.fx.showMarker(B.aoeX, SQ_Z); B.aoeCd = D.aoeEvery;
+      this._launch(B, B.aoeX, SQ_Z, 1.35, 1.55, Math.min(42, Math.max(4, Math.round(this.troops * D.aoe))), 4.4, true);
+      this.audio.roar && this.audio.roar();
+    }
+    if (B.aoeT > 0) { B.aoeT -= dt; B.state = 'slam'; if (B.aoeT <= 0) { this.fx.hideMarker(); B.state = 'walk'; } }
+    // 잦은 원거리 사격: 작은 투사체를 계속 날린다
+    B.shotCd = (B.shotCd || D.shotEvery) - dt;
+    if (B.shotCd <= 0 && d < 52) { B.shotCd = D.shotEvery;
+      this._launch(B, this.x + (this.R() - 0.5) * 5, SQ_Z, 0.95, 0.85, D.shotDmg, 2.8, false); }
+    if (d > 3.6) { B.state = 'walk'; B.x += dx / d * D.speed * dt; B.z += dz / d * D.speed * dt;
       B.x = Math.max(-HORDE_HALF, Math.min(HORDE_HALF, B.x)); }
     else { B.state = 'slam'; B.slamCd -= dt; if (B.slamCd <= 0) { B.slamCd = 1.5;
       if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - D.slam); this.audio.hit && this.audio.hit(); } this.shake = 0.4; } }
@@ -243,6 +247,36 @@ export class WaveDefense {
     B.mesh.position.x = B.x; B.mesh.position.z = B.z;
     B.mesh.rotation.y = Math.atan2(this.x - B.x, SQ_Z - B.z);
     animateBoss(B.mesh, this.t, B.state);
+  }
+  // 투사체 발사 · 비행 · 명중
+  _launch(B, tx, tz, flight, scale, dmg, radius, big) {
+    const mesh = buildProjectile(B.def.ammo, scale * (B.def.scale || 1) * 0.9);
+    const sx = B.x, sy = 2.6 * (B.def.scale || 1), sz = B.z;
+    mesh.position.set(sx, sy, sz); this.group.add(mesh);
+    this.shots.push({ mesh, sx, sy, sz, tx, tz, t: 0, dur: flight, dmg, radius, big,
+      arc: big ? 9 : 5.5, ammo: B.def.ammo });
+    if (!big) this.fx.spark(_a.set(sx, sy, sz), 6, 0xff9a50);
+  }
+  _shots(dt) {
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const s = this.shots[i]; s.t += dt;
+      const u = Math.min(1, s.t / s.dur);
+      const x = s.sx + (s.tx - s.sx) * u, z = s.sz + (s.tz - s.sz) * u;
+      const y = s.sy + (0.6 - s.sy) * u + Math.sin(u * Math.PI) * s.arc;
+      s.mesh.position.set(x, y, z);
+      if (s.ammo === 'bolt') { s.mesh.rotation.y = Math.atan2(s.tx - s.sx, s.tz - s.sz);
+        s.mesh.rotation.x = -Math.atan2(s.arc * Math.cos(u * Math.PI) * 3.1, Math.hypot(s.tx - s.sx, s.tz - s.sz)); }
+      else s.mesh.rotation.set(s.t * 5, s.t * 3.6, 0);
+      if (s.ammo === 'fire' && Math.random() < 0.7) this.fx.spark(_a.set(x, y, z), 2, 0xffa040);
+      if (u >= 1) {
+        this.group.remove(s.mesh); this.shots.splice(i, 1);
+        const hit = Math.abs(this.x - s.tx) < s.radius;
+        if (hit && this.shieldT <= 0) { this.troops = Math.max(0, this.troops - s.dmg); this.audio.hit && this.audio.hit(); }
+        this.shake = Math.max(this.shake, s.big ? 0.6 : 0.25);
+        this.fx.spark(_a.set(s.tx, 0.4, s.tz), s.big ? 34 : 14, s.ammo === 'fire' ? 0xff8a30 : 0xc8bda8);
+        if (s.big) this.fx.ash(_a.set(s.tx, 0.5, s.tz), 22);
+      }
+    }
   }
   _bossDie() {
     const B = this.boss; B.dead = true; B.deadT = 0; this.fx.hideMarker();
@@ -257,7 +291,7 @@ export class WaveDefense {
     const W = this.weapon;
     if (!this.firing || this.troops <= 0) { this.fx.hideBeam(); return; }
     const cols = this.squad.cols, colX = this.squad.colX;
-    const catchW = W.arc * this.squad.form.fan;            // 무기 + 대형에 따라 좌우 포착 폭이 달라진다
+    const catchW = W.arc * (this.squad.form.roadFan || 1);            // 무기 + 대형에 따라 좌우 포착 폭이 달라진다
     const budget = this.troops * W.dps * (this.C.bonus.dps || 1) * this.squad.form.dps * dt / cols;
     const shots = [];
     for (let c = 0; c < cols; c++) {
@@ -310,7 +344,7 @@ export class WaveDefense {
         const c = Math.floor(Math.random() * cols), sh = shots[c];
         for (let p = 0; p < W.pellets; p++) {
           const jx = (Math.random() - 0.5) * catchW * 1.7;
-          this.fx.tracer(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w);
+          this.fx.bullet(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w * 0.68);
         }
         if (fired <= 14) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);

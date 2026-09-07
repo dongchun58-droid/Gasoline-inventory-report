@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { FIELD_R, buildField, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
 import { Squad } from './squad.js';
-import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
+import { ZombiePool, buildBoss, animateBoss, buildProjectile } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 import { FORMATION_KEYS } from './squad.js';
 
@@ -36,7 +36,7 @@ export class FieldRun {
     this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
     this.weaponIdx = stage.wpnStart || 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false;
-    this.boss = null; this.cards = []; this.bossIdx = 0; this.formIdx = 0;
+    this.boss = null; this.cards = []; this.bossIdx = 0; this.formIdx = 0; this.shots = [];
     this.gates = this._buildGates();
     this.apc = null;
     if (stage.apc) { const m = buildAPC(); this.group.add(m); this.apc = { mesh: m, a: 1.6, ...stage.apc }; }
@@ -94,6 +94,7 @@ export class FieldRun {
     this._cardsUpdate(dt);
     this._zombies(dt);
     this._boss(dt);
+    this._shots(dt);
     this._fire(dt);
     this._apc(dt);
     this.zombies.update(dt, this.t);
@@ -239,17 +240,20 @@ export class FieldRun {
     const B = this.boss; if (!B) return;
     if (B.dead) { B.deadT += dt; B.mesh.position.y = -B.deadT * 1.4; B.mesh.rotation.z += dt * 0.5;
       B.mesh.scale.multiplyScalar(Math.max(0.01, 1 - dt * 1.1));
-      if (B.deadT > 1.5) { this.group.remove(B.mesh); this.boss = null; } return; }
+      if (B.deadT > 1.5) { this.group.remove(B.mesh); this.boss = null; this.fx.hideMarker(); } return; }
     const D = B.def, dx = this.x - B.x, dz = this.z - B.z, d = Math.hypot(dx, dz) || 1;
     B.aoeCd -= dt;
-    if (B.aoeT <= 0 && B.aoeCd <= 0 && d < 30) { B.aoeX = this.x; B.aoeZ = this.z; B.aoeT = 1.3; this.fx.showMarker(B.aoeX, B.aoeZ); B.aoeCd = D.aoeEvery; }
-    if (B.aoeT > 0) {
-      B.aoeT -= dt; B.state = 'slam';
-      if (B.aoeT <= 0) { this.fx.hideMarker();
-        if (Math.hypot(this.x - B.aoeX, this.z - B.aoeZ) < 4.6 && this.shieldT <= 0) {
-          this.troops = Math.max(0, this.troops - Math.min(42, Math.max(3, Math.round(this.troops * D.aoe)))); this.shake = 0.55; this.audio.hit && this.audio.hit(); }
-        this.fx.spark(_a.set(B.aoeX, 0.4, B.aoeZ), 30, 0xff9a50); B.state = 'walk'; }
-    } else if (d > 3.6) { B.state = 'walk'; B.x += dx / d * D.speed * dt; B.z += dz / d * D.speed * dt; }
+    if (B.aoeT <= 0 && B.aoeCd <= 0 && d < 42) {
+      B.aoeX = this.x; B.aoeZ = this.z; B.aoeT = 1.35; this.fx.showMarker(B.aoeX, B.aoeZ); B.aoeCd = D.aoeEvery;
+      this._launch(B, B.aoeX, B.aoeZ, 1.35, 1.55, Math.min(42, Math.max(4, Math.round(this.troops * D.aoe))), 4.8, true);
+      this.audio.roar && this.audio.roar();
+    }
+    if (B.aoeT > 0) { B.aoeT -= dt; B.state = 'slam'; if (B.aoeT <= 0) { this.fx.hideMarker(); B.state = 'walk'; } }
+    B.shotCd = (B.shotCd || D.shotEvery) - dt;
+    if (B.shotCd <= 0 && d < 50) { B.shotCd = D.shotEvery;
+      const a2 = this.R() * Math.PI * 2, r2 = this.R() * 4;
+      this._launch(B, this.x + Math.cos(a2) * r2, this.z + Math.sin(a2) * r2, 0.95, 0.85, D.shotDmg, 3.0, false); }
+    if (d > 3.6) { B.state = 'walk'; B.x += dx / d * D.speed * dt; B.z += dz / d * D.speed * dt; }
     else { B.state = 'slam'; B.slamCd -= dt; if (B.slamCd <= 0) { B.slamCd = 1.5;
       if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - D.slam); this.audio.hit && this.audio.hit(); } this.shake = 0.4; } }
     if (D.summon) { B.sumCd -= dt; if (B.sumCd <= 0) { B.sumCd = D.summon.every; B.state = 'scream';
@@ -260,6 +264,36 @@ export class FieldRun {
     B.mesh.position.set(B.x, 0, B.z);
     B.mesh.rotation.y = Math.atan2(dx, dz);
     animateBoss(B.mesh, this.t, B.state);
+  }
+  // 투사체 발사 · 비행 · 명중
+  _launch(B, tx, tz, flight, scale, dmg, radius, big) {
+    const mesh = buildProjectile(B.def.ammo, scale * (B.def.scale || 1) * 0.9);
+    const sy = 2.6 * (B.def.scale || 1);
+    mesh.position.set(B.x, sy, B.z); this.group.add(mesh);
+    this.shots.push({ mesh, sx: B.x, sy, sz: B.z, tx, tz, t: 0, dur: flight, dmg, radius, big,
+      arc: big ? 9 : 5.5, ammo: B.def.ammo });
+    if (!big) this.fx.spark(_a.set(B.x, sy, B.z), 6, 0xff9a50);
+  }
+  _shots(dt) {
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      const s = this.shots[i]; s.t += dt;
+      const u = Math.min(1, s.t / s.dur);
+      const x = s.sx + (s.tx - s.sx) * u, z = s.sz + (s.tz - s.sz) * u;
+      const y = s.sy + (0.6 - s.sy) * u + Math.sin(u * Math.PI) * s.arc;
+      s.mesh.position.set(x, y, z);
+      if (s.ammo === 'bolt') { s.mesh.rotation.y = Math.atan2(s.tx - s.sx, s.tz - s.sz);
+        s.mesh.rotation.x = -Math.atan2(s.arc * Math.cos(u * Math.PI) * 3.1, Math.hypot(s.tx - s.sx, s.tz - s.sz)); }
+      else s.mesh.rotation.set(s.t * 5, s.t * 3.6, 0);
+      if (s.ammo === 'fire' && Math.random() < 0.7) this.fx.spark(_a.set(x, y, z), 2, 0xffa040);
+      if (u >= 1) {
+        this.group.remove(s.mesh); this.shots.splice(i, 1);
+        if (Math.hypot(this.x - s.tx, this.z - s.tz) < s.radius && this.shieldT <= 0) {
+          this.troops = Math.max(0, this.troops - s.dmg); this.audio.hit && this.audio.hit(); }
+        this.shake = Math.max(this.shake, s.big ? 0.6 : 0.25);
+        this.fx.spark(_a.set(s.tx, 0.4, s.tz), s.big ? 34 : 14, s.ammo === 'fire' ? 0xff8a30 : 0xc8bda8);
+        if (s.big) this.fx.ash(_a.set(s.tx, 0.5, s.tz), 22);
+      }
+    }
   }
   _bossDie() {
     const B = this.boss; B.dead = true; B.deadT = 0; this.fx.hideMarker();
@@ -273,17 +307,34 @@ export class FieldRun {
   _fire(dt) {
     const W = this.weapon;
     if (!this.firing || this.troops <= 0) { this.fx.hideBeam(); return; }
+    // 대형이 사격 패턴을 결정한다
+    const P = this.squad.form.pattern || { mode: 'fan', k: 1 };
+    const base = baseFan(this.weaponIdx);
+    const angles = [];
+    if (P.mode === 'cardinal') {                       // 동서남북(또는 8방향)만, 방향마다 좁게
+      for (let d = 0; d < P.dirs; d++) { const c = this.face + (d / P.dirs) * Math.PI * 2;
+        for (let k = 0; k < P.per; k++) angles.push(c + (P.per === 1 ? 0 : (k / (P.per - 1) - 0.5)) * P.spread * 2); }
+    } else if (P.mode === 'sparse') {                  // 360°지만 갈래가 적어 듬성듬성
+      for (let k = 0; k < P.rays; k++) angles.push(this.face + (k / P.rays) * Math.PI * 2);
+    } else {                                           // 정면 부채꼴
+      const fan0 = Math.min(Math.PI * 2, base * P.k * 1.35), full0 = fan0 >= Math.PI * 1.98;
+      for (let k = 0; k < RAYS; k++) { const u = k / (RAYS - 1) - 0.5;
+        angles.push(full0 ? this.face + (k / RAYS) * Math.PI * 2 : this.face + u * fan0); }
+    }
     const fan = this.fan, full = fan >= Math.PI * 1.98;
     const total = this.troops * W.dps * (this.C.bonus.dps || 1) * this.squad.form.dps * dt;
     // 눈앞(5m 안)에 붙은 놈은 방향과 무관하게 전원이 대응한다 — 뒤로 돌아온 좀비가
     // 영영 안 맞고 계속 물어뜯는 구멍을 막는다.
     this._pointBlank(total * 0.30);
-    const budget = total * 0.70 / RAYS;
-    const tol = Math.max(0.16, (full ? Math.PI * 2 : fan) / RAYS * 1.15);   // 각 갈래가 담당하는 각도 폭(빈틈 없이)
+    const N = angles.length;
+    const budget = total * 0.70 / N;
+    // 갈래가 적을수록(원형 대형) 각 갈래가 담당하는 폭도 좁아 빈틈이 생긴다
+    const tol = P.mode === 'cardinal' ? Math.max(0.14, P.spread)
+              : P.mode === 'sparse' ? 0.18
+              : Math.max(0.16, (full ? Math.PI * 2 : fan) / N * 1.15);
     const shots = [];
-    for (let k = 0; k < RAYS; k++) {
-      const u = RAYS === 1 ? 0 : k / (RAYS - 1) - 0.5;
-      const ang = full ? this.face + (k / RAYS) * Math.PI * 2 : this.face + u * fan;
+    for (let k = 0; k < N; k++) {
+      const ang = angles[k];
       const ca = Math.cos(ang), sa = Math.sin(ang);
       let left = budget, guard = 0, hitD = RANGE;
       while (left > 0 && guard++ < 8) {
@@ -321,26 +372,29 @@ export class FieldRun {
     this.fx.hideBeam();
     const src = _a.set(0, 0.95, 0);
     if (W.beam) {
-      for (let i = 0; i < shots.length; i += 2) {
+      // 넓은 전장에서는 빔이 화면을 덮지 않도록 얇게 · 성기게
+      const step = shots.length > 14 ? 3 : shots.length > 8 ? 2 : 1;
+      const off = Math.floor(Math.random() * step);
+      for (let i = off; i < shots.length; i += step) {
         const [ca, sa, d] = shots[i];
-        src.set(this.x + ca * 0.9, 0.95, this.z + sa * 0.9);
-        this.fx.tracer(src, _b.set(this.x + ca * d, 0.95, this.z + sa * d), W.tracer, W.w);
-        if (Math.random() < 0.35) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash, W.tracer);
+        src.set(this.x + ca * 1.0, 0.95, this.z + sa * 1.0);
+        this.fx.tracer(src, _b.set(this.x + ca * d, 0.95, this.z + sa * d), W.tracer, W.w * 0.42);
+        if (Math.random() < 0.28) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash * 0.75, W.tracer);
       }
       this._trAcc += W.rate * dt;
       while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot(W.key); }
     } else {
-      this._trAcc += W.rate * dt * Math.max(1, RAYS * 0.5);
+      this._trAcc += W.rate * dt * Math.max(1, N * 0.42);
       let fired = 0;
-      while (this._trAcc >= 1 && fired < 40) {
+      while (this._trAcc >= 1 && fired < 30) {
         this._trAcc -= 1; fired++;
         const [ca, sa, d] = shots[Math.floor(Math.random() * shots.length)];
         const j = (Math.random() - 0.5) * 0.10;
         const c2 = Math.cos(Math.atan2(sa, ca) + j), s2 = Math.sin(Math.atan2(sa, ca) + j);
-        src.set(this.x + ca * 0.9, 0.95, this.z + sa * 0.9);
+        src.set(this.x + ca * 1.0, 0.95, this.z + sa * 1.0);
         for (let p = 0; p < W.pellets; p++)
-          this.fx.tracer(src, _b.set(this.x + c2 * d, 0.95 + (Math.random() - 0.5) * 0.3, this.z + s2 * d), W.tracer, W.w);
-        if (fired <= 14) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash, 0xffd070);
+          this.fx.bullet(src, _b.set(this.x + c2 * d, 0.95 + (Math.random() - 0.5) * 0.25, this.z + s2 * d), W.tracer, W.w * 0.62);
+        if (fired <= 8) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash * 0.8, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);
       }
     }

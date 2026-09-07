@@ -35,9 +35,13 @@ export const CHARACTER_ORDER = ['cool', 'hulk', 'princess', 'bearded'];
 export const TROOP_CAP = 260;
 
 // 보스: kind = 실루엣, weapon = 손에 든 것, scale = 덩치(뒤로 갈수록 커진다)
+const AMMO = { brute: 'rock', warlord: 'rock', butcher: 'fire', reaper: 'bolt', screamer: 'fire' };
 const B = (at, kind, weapon, name, hp, scale, o = {}) =>
   ({ at, kind, weapon, name, hp, scale, speed: o.speed || 3.8, slam: o.slam || 5,
-     aoe: o.aoe || 0.20, aoeEvery: o.aoeEvery || 6.5, summon: o.summon });
+     aoe: o.aoe || 0.20, aoeEvery: o.aoeEvery || 6.5, summon: o.summon,
+     ammo: o.ammo || AMMO[kind] || 'rock',
+     // 원거리 연사: 예고 원 + 실제 투사체가 날아와 꽂힌다
+     shotEvery: o.shotEvery || 2.2, shotDmg: o.shotDmg || Math.max(2, Math.round((o.slam || 5) * 0.5)) });
 
 export const STAGES = [
   { n: 1, name: '도시 외곽 다리', phase: 'A', playable: true,
@@ -46,8 +50,8 @@ export const STAGES = [
     cards: { plus: 0.60, mul: 0.05, minus: 0.10, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 5, speed: 4.4 },
     flow: { quota: 480, gateHp: 90, rate: [3.0, 11], runnerFrom: 0.30, tankFrom: 0.55, tankRate: 0.06, tankHp: 4.0, cardEvery: [2.31, 1.65],
-            bosses: [ B(0.45, 'brute', 'none', 'BRUTE', 520, 1.00, { speed: 3.4, slam: 3, aoe: 0.16, aoeEvery: 7.5 }),
-                      B(1.00, 'brute', 'maul', 'BRUTE LORD', 900, 1.15, { speed: 3.6, slam: 5, aoe: 0.22, aoeEvery: 6.5 }) ] },
+            bosses: [ B(0.45, 'brute', 'none', 'BRUTE', 830, 1.00, { speed: 3.4, slam: 3, aoe: 0.16, aoeEvery: 5.4, shotEvery: 2.9 }),
+                      B(1.00, 'brute', 'maul', 'BRUTE LORD', 1436, 1.15, { speed: 3.6, slam: 5, aoe: 0.22, aoeEvery: 5.1, shotEvery: 2.8 }) ] },
     par: 150 },
 
   { n: 2, name: '항만 · 노을', phase: 'A', playable: true,
@@ -56,9 +60,9 @@ export const STAGES = [
     cards: { plus: 0.58, mul: 0.05, minus: 0.12, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 7, speed: 4.8 },
     flow: { quota: 900, gateHp: 200, rate: [3.6, 13], runnerFrom: 0.20, tankFrom: 0.35, tankRate: 0.09, tankHp: 4.5, cardEvery: [2.20, 1.59],
-            bosses: [ B(0.30, 'brute', 'none', 'BRUTE', 620, 1.05, { speed: 3.6, slam: 4, aoe: 0.18, aoeEvery: 7 }),
-                      B(0.65, 'screamer', 'none', 'SCREAMER', 780, 1.05, { speed: 4.0, slam: 4, aoe: 0.20, aoeEvery: 6.5, summon: { n: 6, every: 8 } }),
-                      B(1.00, 'butcher', 'axe', 'DOCK BUTCHER', 1400, 1.25, { speed: 3.8, slam: 6, aoe: 0.26, aoeEvery: 5.5 }) ] },
+            bosses: [ B(0.30, 'brute', 'none', 'BRUTE', 990, 1.05, { speed: 3.6, slam: 4, aoe: 0.18, aoeEvery: 5.5, shotEvery: 2.8 }),
+                      B(0.65, 'screamer', 'none', 'SCREAMER', 1245, 1.05, { speed: 4.0, slam: 4, aoe: 0.20, aoeEvery: 6.5, summon: { n: 6, every: 8 } }),
+                      B(1.00, 'butcher', 'axe', 'DOCK BUTCHER', 2234, 1.25, { speed: 3.8, slam: 6, aoe: 0.26, aoeEvery: 4.3, shotEvery: 2.8 }) ] },
     par: 210 },
 
   { n: 3, name: '고속도로 · 밤', phase: 'A', playable: true,
@@ -67,10 +71,10 @@ export const STAGES = [
     cards: { plus: 0.56, mul: 0.05, minus: 0.14, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 6, speed: 5.2 },
     flow: { quota: 1200, gateHp: 170, rate: [4.6, 20], runnerFrom: 0.14, tankFrom: 0.22, tankRate: 0.13, tankHp: 5.0, cardEvery: [2.15, 1.49],
-            bosses: [ B(0.24, 'brute', 'none', 'BRUTE', 700, 1.05, { speed: 3.8, slam: 5, aoe: 0.18, aoeEvery: 6.8 }),
-                      B(0.52, 'screamer', 'none', 'SCREAMER', 900, 1.10, { speed: 4.2, slam: 5, aoe: 0.22, aoeEvery: 6.2, summon: { n: 8, every: 7 } }),
-                      B(0.78, 'butcher', 'axe', 'ROAD CRUSHER', 1200, 1.25, { speed: 4.0, slam: 7, aoe: 0.24, aoeEvery: 5.8 }),
-                      B(1.00, 'reaper', 'twin', 'NIGHT ALPHA', 1800, 1.30, { speed: 4.6, slam: 8, aoe: 0.28, aoeEvery: 5.2, summon: { n: 10, every: 6 } }) ] },
+            bosses: [ B(0.24, 'brute', 'none', 'BRUTE', 1117, 1.05, { speed: 3.8, slam: 5, aoe: 0.18, aoeEvery: 5.3, shotEvery: 1.8 }),
+                      B(0.52, 'screamer', 'none', 'SCREAMER', 1436, 1.10, { speed: 4.2, slam: 5, aoe: 0.22, aoeEvery: 6.2, summon: { n: 8, every: 7 } }),
+                      B(0.78, 'butcher', 'axe', 'ROAD CRUSHER', 1915, 1.25, { speed: 4.0, slam: 7, aoe: 0.24, aoeEvery: 4.5, shotEvery: 1.8 }),
+                      B(1.00, 'reaper', 'twin', 'NIGHT ALPHA', 2873, 1.30, { speed: 4.6, slam: 8, aoe: 0.28, aoeEvery: 5.2, summon: { n: 10, every: 6 } }) ] },
     par: 260 },
 
   { n: 4, name: '붕괴 시가지', phase: 'A', playable: true,
@@ -79,16 +83,16 @@ export const STAGES = [
     cards: { plus: 0.54, mul: 0.05, minus: 0.16, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 6, speed: 5.6 },
     flow: { quota: 1600, gateHp: 210, rate: [5.4, 24], runnerFrom: 0.18, tankFrom: 0.30, tankRate: 0.13, tankHp: 5.0, cardEvery: [2.04, 1.43],
-            bosses: [ B(0.20, 'brute', 'none', 'BRUTE', 850, 1.10, { speed: 4.0, slam: 6, aoe: 0.20, aoeEvery: 6.5 }),
-                      B(0.42, 'screamer', 'none', 'SCREAMER', 1100, 1.15, { speed: 4.4, slam: 6, aoe: 0.24, aoeEvery: 6.0, summon: { n: 10, every: 6.5 } }),
-                      B(0.64, 'butcher', 'axe', 'WRECKER', 1400, 1.30, { speed: 4.2, slam: 8, aoe: 0.26, aoeEvery: 5.5 }),
-                      B(0.84, 'reaper', 'twin', 'WAILER', 1600, 1.30, { speed: 4.6, slam: 8, aoe: 0.28, aoeEvery: 5.2, summon: { n: 12, every: 6 } }),
-                      B(1.00, 'warlord', 'cleaver', 'CITY BREAKER', 2600, 1.50, { speed: 4.4, slam: 11, aoe: 0.32, aoeEvery: 4.8 }) ] },
+            bosses: [ B(0.20, 'brute', 'none', 'BRUTE', 1357, 1.10, { speed: 4.0, slam: 6, aoe: 0.20, aoeEvery: 5.1, shotEvery: 1.8 }),
+                      B(0.42, 'screamer', 'none', 'SCREAMER', 1756, 1.15, { speed: 4.4, slam: 6, aoe: 0.24, aoeEvery: 6.0, summon: { n: 10, every: 6.5 } }),
+                      B(0.64, 'butcher', 'axe', 'WRECKER', 2234, 1.30, { speed: 4.2, slam: 8, aoe: 0.26, aoeEvery: 4.3, shotEvery: 1.8 }),
+                      B(0.84, 'reaper', 'twin', 'WAILER', 2554, 1.30, { speed: 4.6, slam: 8, aoe: 0.28, aoeEvery: 5.2, summon: { n: 12, every: 6 } }),
+                      B(1.00, 'warlord', 'cleaver', 'CITY BREAKER', 4150, 1.50, { speed: 4.4, slam: 11, aoe: 0.32, aoeEvery: 3.7, shotEvery: 1.8 }) ] },
     par: 320 },
 
   // ── Phase B: 측면에서도 밀고 들어온다 ──────────────────────────────────
   { n: 5, name: '폐허 평야', phase: 'B', playable: true, field: true, flank: 0.22,
-    theme: { sky: 0x3a4450, fog: 0x515c68, sun: 0xd8dce4, deck: 0x6b6a4a, parapet: 0x585d4a, water: 0x22282c, hemi: 0x7f8f9e, ground: 0x33383c, time: 'day' },
+    theme: { sky: 0x8fa3b4, fog: 0x9fb2be, sun: 0xfff0d8, deck: 0x8f8d63, parapet: 0x7a7f66, water: 0x3a4248, hemi: 0xc4d6e2, ground: 0x6a6a52, time: 'day' },
     startTroops: 40, cardSpeed: 21, plusRange: [4, 8], wpnStart: 4, wpnMax: 7,
     cards: { plus: 0.53, mul: 0.05, minus: 0.17, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 7, speed: 5.8 },
@@ -101,7 +105,7 @@ export const STAGES = [
     par: 360 },
 
   { n: 6, name: '달빛 초원', phase: 'B', playable: true, field: true, flank: 0.30,
-    theme: { sky: 0x1a2438, fog: 0x2b3850, sun: 0x9fb4d8, deck: 0x4a5442, parapet: 0x555c50, water: 0x0d1524, hemi: 0x46608c, ground: 0x1c2432, time: 'night' },
+    theme: { sky: 0x27354e, fog: 0x3d4d68, sun: 0xc4d4f0, deck: 0x64715a, parapet: 0x6d7568, water: 0x16203a, hemi: 0x6f8cb8, ground: 0x2e3a4c, time: 'night' },
     startTroops: 46, cardSpeed: 22, plusRange: [4, 9], wpnStart: 5, wpnMax: 8,
     cards: { plus: 0.52, mul: 0.05, minus: 0.18, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 8, speed: 6.0 },
@@ -114,7 +118,7 @@ export const STAGES = [
     par: 400 },
 
   { n: 7, name: '협곡 분지', phase: 'B', playable: true, field: true, flank: 0.36,
-    theme: { sky: 0x14100e, fog: 0x241c18, sun: 0xffcf90, deck: 0x6a5a42, parapet: 0x554736, water: 0x0a0806, hemi: 0x5a4636, ground: 0x1a1512, time: 'night' },
+    theme: { sky: 0x2b211a, fog: 0x453629, sun: 0xffe0b0, deck: 0x8a7454, parapet: 0x6f5f47, water: 0x1a1410, hemi: 0x8a6f52, ground: 0x342a20, time: 'night' },
     startTroops: 52, cardSpeed: 23, plusRange: [5, 10], wpnStart: 6, wpnMax: 9,
     cards: { plus: 0.51, mul: 0.05, minus: 0.19, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 9, speed: 6.3 },
@@ -128,7 +132,7 @@ export const STAGES = [
 
   // ── Phase C: 장갑차(APC)가 함께 싸운다 ─────────────────────────────────
   { n: 8, name: '국도 평원', phase: 'C', playable: true, field: true, flank: 0.26, apc: { dps: 26, arc: 2.4, off: 5.6 },
-    theme: { sky: 0x7d92a8, fog: 0x8fa2b4, sun: 0xffe6c0, deck: 0x7d7a52, parapet: 0x6a6a4c, water: 0x35414a, hemi: 0xa8bccc, ground: 0x4a4a44, time: 'day' },
+    theme: { sky: 0x9ab0c6, fog: 0xa8bcca, sun: 0xfff0d4, deck: 0x97945f, parapet: 0x80805c, water: 0x46545e, hemi: 0xc8dcea, ground: 0x6a6a5a, time: 'day' },
     startTroops: 58, cardSpeed: 24, plusRange: [5, 11], wpnStart: 7, wpnMax: 10,
     cards: { plus: 0.50, mul: 0.05, minus: 0.20, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 10, speed: 6.4 },
@@ -141,7 +145,7 @@ export const STAGES = [
     par: 480 },
 
   { n: 9, name: '산악 고원', phase: 'C', playable: true, field: true, flank: 0.32, apc: { dps: 38, arc: 2.7, off: 5.8 },
-    theme: { sky: 0x2c3a4a, fog: 0x40525f, sun: 0xd0dcea, deck: 0x5e6a4e, parapet: 0x545c48, water: 0x1d2a30, hemi: 0x6d8898, ground: 0x2b3630, time: 'sunset' },
+    theme: { sky: 0x51687e, fog: 0x6b8494, sun: 0xffe4c8, deck: 0x7f8f66, parapet: 0x707a5e, water: 0x33454e, hemi: 0x9ab6c6, ground: 0x4a5a48, time: 'sunset' },
     startTroops: 64, cardSpeed: 25, plusRange: [6, 12], wpnStart: 8, wpnMax: 11,
     cards: { plus: 0.49, mul: 0.05, minus: 0.21, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 11, speed: 6.6 },
@@ -154,7 +158,7 @@ export const STAGES = [
     par: 520 },
 
   { n: 10, name: '최종 방어선', phase: 'C', playable: true, field: true, flank: 0.40, apc: { dps: 55, arc: 3.0, off: 6.0 },
-    theme: { sky: 0x2a1420, fog: 0x4a2430, sun: 0xffa070, deck: 0x6b5a48, parapet: 0x554a3e, water: 0x24101a, hemi: 0x8a4a50, ground: 0x2e1a20, time: 'sunset' },
+    theme: { sky: 0x4a2434, fog: 0x6e3a46, sun: 0xffb890, deck: 0x8c7a60, parapet: 0x6f6252, water: 0x3a1c2a, hemi: 0xb06a70, ground: 0x4a2e34, time: 'sunset' },
     startTroops: 72, cardSpeed: 26, plusRange: [6, 14], wpnStart: 9, wpnMax: 11,
     cards: { plus: 0.48, mul: 0.06, minus: 0.21, weapon: 0.15, shield: 0.10 },
     zombie: { hp: 12, speed: 6.8 },

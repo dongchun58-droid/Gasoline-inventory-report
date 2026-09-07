@@ -236,3 +236,36 @@ export function animateBoss(g, t, state) {
   if (P.throat) P.throat.scale.setScalar(1 + (state === 'scream' ? Math.abs(Math.sin(t * 11)) * 0.55 : Math.sin(t * 3) * 0.05));
   g.position.y = Math.abs(Math.sin(cyc)) * (state === 'walk' ? 0.10 : 0);
 }
+
+// ── 보스 투사체: 바닥의 빨간 원은 예고, 실제로 이것이 날아와 꽂힌다 ──────────
+export function buildProjectile(kind, scale = 1) {
+  const g = new THREE.Group();
+  const rock = M(0x6e6a60, { rough: 1 }), dark = M(0x3a3630, { rough: 1 });
+  const steel = M(0xb9c0c8, { rough: 0.3, metal: 0.9 });
+  const wood = M(0x4a3524, { rough: 0.9 });
+  const fire = new THREE.MeshBasicMaterial({ color: 0xffb03a });
+  const core = new THREE.MeshBasicMaterial({ color: 0xfff0c0 });
+  if (kind === 'fire') {                               // 불덩어리
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 12), fire); g.add(b);
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), core));
+    for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.95, 6), fire);
+      const a = (i / 7) * Math.PI * 2; f.position.set(Math.cos(a) * 0.44, Math.sin(a) * 0.44, -0.55);
+      f.rotation.x = -Math.PI / 2; g.add(f); }
+    g.userData.spin = 6;
+  } else if (kind === 'bolt') {                        // 대형 화살/작살
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 2.6, 8), wood);
+    shaft.rotation.x = Math.PI / 2; g.add(shaft);
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.9, 5), steel);
+    head.rotation.x = -Math.PI / 2; head.position.z = 1.6; g.add(head);
+    for (let i = 0; i < 3; i++) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.5, 0.55), steel);
+      fin.position.z = -1.1; fin.rotation.z = (i / 3) * Math.PI * 2; g.add(fin); }
+  } else {                                             // 암석
+    const b = new THREE.Mesh(new THREE.DodecahedronGeometry(0.78), rock); g.add(b);
+    for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.DodecahedronGeometry(0.26 + (i % 3) * 0.08), dark);
+      const a = (i / 5) * Math.PI * 2; c.position.set(Math.cos(a) * 0.6, Math.sin(a) * 0.5, (i % 2 ? 0.4 : -0.4)); g.add(c); }
+    g.userData.spin = 3.4;
+  }
+  g.scale.setScalar(scale);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}

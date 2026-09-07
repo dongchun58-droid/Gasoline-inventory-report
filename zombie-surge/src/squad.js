@@ -6,25 +6,31 @@ const MAX = 80;
 
 // ── 대형: N 키로 순환. 배치뿐 아니라 사격 부채각(fan)과 화력(dps)도 달라진다 ──
 export const FORMATIONS = [
-  { key: 'block',  name: '사각 대형', fan: 1.00, dps: 1.00, desc: '균형 잡힌 기본 대형' },
-  { key: 'wide',   name: '횡대 대형', fan: 1.45, dps: 0.88, desc: '좌우로 넓게 — 넓은 정면' },
-  { key: 'wedge',  name: '쐐기 대형', fan: 0.62, dps: 1.32, desc: '정면 집중 — 좁고 강하게' },
-  { key: 'circle', name: '원형 대형', fan: 2.30, dps: 0.80, desc: '전방위 — 사방에서 올 때' },
-  { key: 'cross',  name: '십자 대형', fan: 1.70, dps: 0.94, desc: '사방 대응 · 화력 유지' },
+  { key: 'front',  name: '정면 대형', fan: 0.75, roadFan: 1.00, dps: 1.12, desc: '정면 직진 — 앞을 두껍게',
+    pattern: { mode: 'fan', k: 0.55 } },
+  { key: 'block',  name: '사각 대형', fan: 0.90, roadFan: 0.85, dps: 1.00, desc: '동·서·남·북만 좁게',
+    pattern: { mode: 'cardinal', dirs: 4, per: 3, spread: 0.13 } },
+  { key: 'wedge',  name: '쐐기 대형', fan: 0.55, roadFan: 0.70, dps: 1.38, desc: '정면 집중 — 좁고 강하게',
+    pattern: { mode: 'fan', k: 0.32 } },
+  { key: 'circle', name: '원형 대형', fan: 2.30, roadFan: 1.45, dps: 0.82, desc: '전방위 · 듬성듬성',
+    pattern: { mode: 'sparse', rays: 10 } },
+  { key: 'cross',  name: '십자 대형', fan: 1.70, roadFan: 1.15, dps: 0.95, desc: '여덟 방향으로 갈라 쏜다',
+    pattern: { mode: 'cardinal', dirs: 8, per: 2, spread: 0.10 } },
 ];
 export const FORMATION_KEYS = FORMATIONS.map((f) => f.key);
 
 // 대형별 슬롯 좌표(정면 = -z). i 번째 병사의 자리
 function formationSlots(key, n) {
   const out = [];
-  const g = 0.52;                                    // 병사 간격
-  if (key === 'wide') {
-    const cols = Math.max(11, Math.min(26, Math.ceil(n / 3)));
+  const g = 0.52;
+  if (key === 'front') {
+    // 인원이 적을 땐 너무 넓게 퍼지지 않게(열마다 화력이 희석되므로)
+    const cols = Math.max(7, Math.min(24, Math.ceil(n / 3.2)));
     for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols;
       out.push({ x: (c - (cols - 1) / 2) * g + (r % 2) * g * 0.5, z: r * g * 0.9 }); }
   } else if (key === 'wedge') {
     let i = 0, row = 0;
-    while (i < n) { const w = row + 1;               // 1, 2, 3 … 앞이 뾰족한 삼각형
+    while (i < n) { const w = row + 1;
       for (let c = 0; c < w && i < n; c++, i++) out.push({ x: (c - (w - 1) / 2) * g, z: row * g * 0.86 });
       row++; }
   } else if (key === 'circle') {
@@ -35,22 +41,21 @@ function formationSlots(key, n) {
         out.push({ x: Math.cos(a) * r, z: Math.sin(a) * r }); }
       ring++; }
   } else if (key === 'cross') {
-    const arm = Math.ceil(n / 4);
     for (let i = 0; i < n; i++) { const a = i % 4, d = (Math.floor(i / 4) + 1) * g * 0.95;
-      const j = Math.floor(i / 4) % 3 - 1;           // 팔 두께 3
+      const j = Math.floor(i / 4) % 3 - 1;
       if (a === 0) out.push({ x: j * g, z: -d });
       else if (a === 1) out.push({ x: j * g, z: d });
       else if (a === 2) out.push({ x: -d, z: j * g });
       else out.push({ x: d, z: j * g });
-      if (d > arm * g) { /* 팔이 너무 길어지면 그대로 둔다 */ }
     }
-  } else {                                            // block
-    const cols = Math.max(7, Math.min(11, Math.ceil(n / 7)));
+  } else {                                            // block — 정사각에 가깝게
+    const cols = Math.max(6, Math.round(Math.sqrt(Math.max(1, n))));
     for (let i = 0; i < n; i++) { const r = Math.floor(i / cols), c = i % cols;
-      out.push({ x: (c - (cols - 1) / 2) * g + (r % 2) * g * 0.5, z: r * g * 0.88 }); }
+      out.push({ x: (c - (cols - 1) / 2) * g, z: (r - 0.5) * g * 0.9 }); }
   }
   return out;
 }
+
 const _m = new THREE.Matrix4(), _r = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1);
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.55, metalness: o.metal ?? 0.0, emissive: o.em ?? 0x000000, emissiveIntensity: o.ei ?? 0 });
 
@@ -197,7 +202,7 @@ export class Squad {
     // 총(인스턴스) — 무기 교체 시 지오메트리 스왑
     this.gunInst = null; this._setGunInstance('rifle');
     this.slots = []; this.colX = []; this._cols = 0; this._shape = null; this._shownFor = -1;
-    this.formation = 'block';
+    this.formation = 'front';
     this._layout();
     this.leader = buildHero(character); this.group.add(this.leader);
   }
@@ -218,7 +223,8 @@ export class Squad {
     const n = Math.max(1, Math.min(MAX, this.shown || this.count || 1));
     if (this._shape === this.formation && this._shownFor === n) return;
     this._shape = this.formation; this._shownFor = n;
-    this.slots = formationSlots(this.formation, MAX).map((p, i) => ({ x: p.x, z: p.z, ph: (i * 0.37) % 1 }));
+    // 현재 인원 기준으로 배치해야 열마다 화력이 제대로 모인다(MAX 기준으로 잡으면 소수 인원이 넓게 흩어진다)
+    this.slots = formationSlots(this.formation, n).map((p, i) => ({ x: p.x, z: p.z, ph: (i * 0.37) % 1 }));
     // 사격 열: 실제 배치된 병사들의 x를 버킷으로 묶는다(직선 사격 모드용)
     const xs = this.slots.slice(0, n).map((p) => p.x);
     const min = Math.min(...xs), max = Math.max(...xs);

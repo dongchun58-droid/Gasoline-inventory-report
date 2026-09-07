@@ -36,9 +36,18 @@ export class FX {
     this.marker.rotation.x = -Math.PI / 2; this.marker.visible = false; this.group.add(this.marker);
     this._c = new THREE.Color(); this._mt = 0;
   }
+  // 레이저·빔용: 경로 전체가 한 줄로 보인다
   tracer(from, to, color, w = 0.06) {
     if (this.tracers.length >= this.MAXT) this.tracers.shift();
-    this.tracers.push({ a: from.clone(), b: to.clone(), c: color, w, life: 0.075, max: 0.075 });
+    this.tracers.push({ a: from.clone(), b: to.clone(), c: color, w, life: 0.075, max: 0.075, dash: 0 });
+  }
+  // 실탄용: 경로를 따라 날아가는 짧은 탄환 대시(화면이 선으로 뒤덮이지 않는다)
+  bullet(from, to, color, w = 0.05, speed = 150) {
+    if (this.tracers.length >= this.MAXT) this.tracers.shift();
+    const len = from.distanceTo(to) || 1;
+    const life = Math.min(0.34, Math.max(0.06, len / speed));
+    const dash = Math.min(0.5, Math.max(0.06, 3.4 / len));   // 대시 길이(경로 대비 비율)
+    this.tracers.push({ a: from.clone(), b: to.clone(), c: color, w, life, max: life, dash });
   }
   flash(pos, size = 0.8, color = 0xffd070) {
     const f = this.flashes.find((x) => x.life <= 0); if (!f) return;
@@ -74,16 +83,24 @@ export class FX {
     let n = 0; const cam = camera ? camera.position : _a.set(0, 10, 20);
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i]; t.life -= dt; if (t.life <= 0) { this.tracers.splice(i, 1); continue; }
-      _d.subVectors(t.b, t.a); _b.copy(t.a).addScaledVector(_d, 0.5);
-      _side.subVectors(cam, _b).cross(_d).normalize().multiplyScalar(t.w);
       const f = t.life / t.max;
+      let sx, sy, sz, ex, ey, ez;
+      if (t.dash) {                                   // 경로를 따라 이동하는 짧은 탄환
+        const u = 1 - f, u0 = Math.max(0, u - t.dash), u1 = Math.min(1, u);
+        sx = t.a.x + (t.b.x - t.a.x) * u0; sy = t.a.y + (t.b.y - t.a.y) * u0; sz = t.a.z + (t.b.z - t.a.z) * u0;
+        ex = t.a.x + (t.b.x - t.a.x) * u1; ey = t.a.y + (t.b.y - t.a.y) * u1; ez = t.a.z + (t.b.z - t.a.z) * u1;
+      } else { sx = t.a.x; sy = t.a.y; sz = t.a.z; ex = t.b.x; ey = t.b.y; ez = t.b.z; }
+      _d.set(ex - sx, ey - sy, ez - sz);
+      _b.set((sx + ex) * 0.5, (sy + ey) * 0.5, (sz + ez) * 0.5);
+      _side.subVectors(cam, _b).cross(_d).normalize().multiplyScalar(t.w);
+      if (!isFinite(_side.x)) _side.set(t.w, 0, 0);
       const v = n * 4;
-      pos.setXYZ(v,     t.a.x + _side.x, t.a.y + _side.y, t.a.z + _side.z);
-      pos.setXYZ(v + 1, t.a.x - _side.x, t.a.y - _side.y, t.a.z - _side.z);
-      pos.setXYZ(v + 2, t.b.x - _side.x, t.b.y - _side.y, t.b.z - _side.z);
-      pos.setXYZ(v + 3, t.b.x + _side.x, t.b.y + _side.y, t.b.z + _side.z);
+      pos.setXYZ(v,     sx + _side.x, sy + _side.y, sz + _side.z);
+      pos.setXYZ(v + 1, sx - _side.x, sy - _side.y, sz - _side.z);
+      pos.setXYZ(v + 2, ex - _side.x, ey - _side.y, ez - _side.z);
+      pos.setXYZ(v + 3, ex + _side.x, ey + _side.y, ez + _side.z);
       this._c.setHex(t.c);
-      const hd = f, tl = f * 0.15;
+      const hd = t.dash ? Math.min(1, 0.55 + f * 0.7) : f, tl = t.dash ? hd * 0.45 : f * 0.15;
       col.setXYZ(v, this._c.r * tl, this._c.g * tl, this._c.b * tl);
       col.setXYZ(v + 1, this._c.r * tl, this._c.g * tl, this._c.b * tl);
       col.setXYZ(v + 2, this._c.r * hd, this._c.g * hd, this._c.b * hd);
