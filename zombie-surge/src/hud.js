@@ -25,7 +25,8 @@ export class HUD {
     if (this._wpn !== null && s.weapon !== this._wpn) { this.el.wpnPop.textContent = '▲ ' + s.weapon; this.el.wpnPop.style.opacity = 1; this._wpnT = 1.6; }
     this._wpn = s.weapon;
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
-    if (s.wipes) this.el.remain.textContent = `전멸 ${s.wipes}회  ·  최고 ×${s.best}`;
+    if (s.godzMode) { this.el.remain.textContent = `GODZILLA ${s.godz}초`; this.el.form.style.color = '#8affd0'; }
+    else if (s.wipes != null) { this.el.remain.textContent = `전멸 ${s.wipes}회  ·  최고 ×${s.best}`; this.el.form.style.color = ''; }
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
     this.el.wave.textContent = s.quota ? `처치 ${s.kills} / ${s.quota}`

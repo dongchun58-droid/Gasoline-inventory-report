@@ -8,9 +8,9 @@
 //   오른쪽: +병력 게이트. 값은 현재 배수와 같다(부술수록 커진다).
 // 중간중간 거인이 내려온다 — 체력이 있는 건 거인뿐이고, 나올수록 강해진다.
 import * as THREE from 'three';
-import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp, buildLaneBarrier } from './env.js';
+import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp, spinStatue, buildLaneBarrier, buildGodzillaSign } from './env.js';
 import { Squad, FORMATION_KEYS, buildGun } from './squad.js';
-import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
+import { ZombiePool, buildBoss, animateBoss, buildGodzilla, animateGodzilla } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
@@ -42,12 +42,13 @@ export class GauntletRun {
     this.tier = 0;                       // TIERS 인덱스
     this.statues = []; this.numberBlock = null; this.plus = []; this.giant = null;
     this.statueN = 0; this.numberN = 0; this.giantN = 0;
-    this.smashed = 0; this.missed = 0;   // 석상 격파 / 놓침
+    this.smashed = 0; this.missed = 0; this.escaped = 0;   // 석상 격파 / 놓침 / 지나쳐 간 좀비
     this._statueT = this.G.statueEvery[0]; this._numberT = 2.0; this._plusT = 1.0;
     this._giantT = this.G.giantEvery[0]; this._spawnAcc = 0; this._trAcc = 0; this._killAcc = 0;
     this.gate = buildNumberGate(); this.gate.position.set(LANE.mid, 0, NUM_Z); this.group.add(this.gate);
     this.group.add(buildLaneBarrier(BARRIER_X, -96, 3));   // 왼쪽 좀비 채널을 막는 방책
     this.best = 0; this.wipes = 0;
+    this.godz = null; this.sign = null; this._signDone = false;
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.msg = { text: '← 황금 석상 부수기  ·  가운데 숫자 = 보급 강화  ·  +병력 →', color: '#ffd23f', t: 4.5 };
     this._tips = [[10, '가운데 숫자를 부수면 오른쪽 +병력이 커진다', '#c9a8ff'],
@@ -70,7 +71,7 @@ export class GauntletRun {
       this.msg = { text: this.squad.form.name + ' — ' + this.squad.form.desc, color: '#8fd6ff', t: 1.6 };
     }
     this.firing = !!input.fire;
-    this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
+    this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.godz ? 0 : this.troops);
     this.squad.firing = this.firing && this.troops > 0;
     this.squad.setWeapon(this.weapon.key);
     this.squad.update(dt, this.camera);
@@ -80,6 +81,7 @@ export class GauntletRun {
     this._statues(dt);
     this._numbers(dt);
     this._plusGates(dt);
+    this._godzilla(dt);
     this._giant(dt);
     this._fire(dt);
     this.zombies.update(dt, this.t);
@@ -90,7 +92,53 @@ export class GauntletRun {
     }
     if (this.msg) { this.msg.t -= dt; if (this.msg.t <= 0) this.msg = null; }
     this.best = Math.max(this.best, this.mult);
-    if (this.troops <= 0) this._rally();
+    if (this.troops <= 0 && !this.godz) this._rally();
+  }
+
+  // ── 고질라: ×200 이후 표지판이 내려온다. 먹으면 변신하되 병력은 1로 초기화 ──
+  _godzilla(dt) {
+    // 변신 중
+    if (this.godz) {
+      const G = this.godz; G.t -= dt;
+      G.mesh.position.set(this.x, 0, SQ_Z - 1.0); G.mesh.rotation.y = Math.PI;
+      animateGodzilla(G.mesh, this.t, G.roar > 0);
+      G.roar -= dt;
+      if (G.t <= 0) {
+        this.group.remove(G.mesh); this.godz = null;
+        this.squad.group.visible = true;
+        this.troops = 1;                       // 변신이 끝나면 다시 한 명부터
+        this.msg = { text: '고질라 종료 — 병력 1부터 다시', color: '#8affd0', t: 2.4 };
+      }
+      return;
+    }
+    // 표지판 등장/이동
+    if (!this.sign) {
+      if (!this._signDone && this.mult >= 200) {
+        const mesh = buildGodzillaSign();
+        const x = LANE.right;
+        mesh.position.set(x, 0, SPAWN_Z); this.group.add(mesh);
+        this.sign = { mesh, x, z: SPAWN_Z };
+        this.msg = { text: 'GODZILLA 해금! 오른쪽에서 받아라', color: '#8affd0', t: 3.0 };
+        this.audio.roar && this.audio.roar();
+      }
+      return;
+    }
+    const S = this.sign;
+    S.z += this.G.plusSpeed * 0.62 * dt; S.mesh.position.z = S.z;
+    S.mesh.rotation.y = Math.sin(this.t * 1.4) * 0.16;
+    if (S.z >= SQ_Z - 1.0 && Math.abs(this.x - S.x) < 3.0) { this.group.remove(S.mesh); this.sign = null; this._transform(); }
+    else if (S.z > SQ_Z + 9) { this.group.remove(S.mesh); this.sign = null; this._signDone = false; }
+  }
+  _transform() {
+    this._signDone = true;
+    const mesh = buildGodzilla(1.0); mesh.rotation.y = Math.PI; this.group.add(mesh);   // 도로 위쪽(-z)을 본다
+    this.godz = { mesh, t: this.G.godzillaTime, roar: 1.2 };
+    this.squad.group.visible = false;
+    this.troops = 1;                            // 오직 하나 — 고질라
+    this.shake = 1.0;
+    this.fx.spark(_a.set(this.x, 3.0, SQ_Z), 90, 0x8affd0);
+    this.msg = { text: 'GODZILLA 변신!', color: '#8affd0', t: 2.6 };
+    this.audio.roar && this.audio.roar();
   }
 
   // 전멸해도 끝나지 않는다 — 1명으로 재편성하고 배수만 떨어진다
@@ -136,12 +184,9 @@ export class GauntletRun {
         } else zb.x += Math.sin(this.t * zb.swaySp + zb.swayPh) * zb.sway * dt;
         zb.x = Math.max(-ROAD_HALF + 0.6, Math.min(ZOMBIE_MAX_X, zb.x));
       } else {
-        zb.z = LINE_Z; zb.state = 'attack'; zb.atk -= dt;
-        if (zb.atk <= 0) { zb.atk = 0.8;
-          if (Math.abs(zb.x - this.x) < 3.4) {   // 장벽 너머에 있으면 물지 못한다
-            if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - 1); this.shake = Math.max(this.shake, 0.16); this.audio.hit && this.audio.hit(); }
-            this.fx.spark(_a.set(zb.x, 0.7, zb.z), 4, 0xff8a50);
-          } }
+        // 못 잡으면 그냥 지나쳐 간다 — 피해는 없고 점수만 놓친다
+        zb.state = 'walk'; zb.z += zb.speed * 1.25 * dt;
+        if (zb.z > SQ_Z + 16) { zb.state = 'dying'; zb.dieT = 0.45; this.escaped++; }
       }
     }
   }
@@ -163,7 +208,7 @@ export class GauntletRun {
       const s = this.statues[i];
       s.z += G.statueSpeed * dt; s.mesh.position.z = s.z;
       s.mesh.rotation.y = Math.sin(this.t * 0.6 + i) * 0.12;
-      setStatueHp(s.mesh, s.hp);
+      setStatueHp(s.mesh, s.hp); spinStatue(s.mesh, this.t);
       if (s.z >= LINE_Z - 0.4) {                     // 못 부수고 닿았다 → 병력 70% 손실
         this.group.remove(s.mesh); this.statues.splice(i, 1);
         this.missed++;
@@ -264,7 +309,7 @@ export class GauntletRun {
       const p = this.plus[i];
       p.z += G.plusSpeed * dt; p.mesh.position.z = p.z;
       if (p.taken) { p.tt += dt; p.mesh.position.y += dt * 6; p.mesh.scale.multiplyScalar(1 - dt * 3.0); }
-      else if (p.z >= SQ_Z - 1.0 && Math.abs(this.x - p.x) < 2.6) {
+      else if (!this.godz && p.z >= SQ_Z - 1.0 && Math.abs(this.x - p.x) < 2.6) {
         p.taken = true; p.tt = 0;
         this.troops = Math.min(this.cap, this.troops + p.val);
         this.peak = Math.max(this.peak, this.troops);
@@ -320,6 +365,7 @@ export class GauntletRun {
   }
   // ── 사격: 도로 모드와 같은 열 단위 직사. 표적 = 적 · 석상 · 숫자 · 거인 ──
   _fire(dt) {
+    if (this.godz) return this._breath(dt);
     const W = this.weapon;
     if (!this.firing || this.troops <= 0) { this.fx.hideBeam(); return; }
     const cols = this.squad.cols, colX = this.squad.colX;
@@ -392,6 +438,42 @@ export class GauntletRun {
       }
     }
   }
+  // 고질라의 원자 브레스 — 넓은 부채꼴을 통째로 태운다
+  _breath(dt) {
+    if (!this.firing) { this.fx.hideBeam(); return; }
+    const dmg = this.G.godzillaDps * dt;
+    const HALF = 9.0, REACH = 52;
+    // 부채꼴 안의 모든 것을 동시에 태운다
+    for (const zb of this.zombies.list) {
+      if (zb.state === 'dying') continue;
+      if (Math.abs(zb.x - this.x) > HALF || zb.z < SQ_Z - REACH || zb.z > SQ_Z + 2) continue;
+      zb.hp -= dmg; if (zb.hp <= 0) this._kill(zb);
+    }
+    for (let i = this.statues.length - 1; i >= 0; i--) { const s = this.statues[i];
+      if (Math.abs(s.x - this.x) > HALF + 2.5 || s.z < SQ_Z - REACH) continue;
+      s.hp -= dmg; if (s.hp <= 0) this._smashStatue(s, i);
+    }
+    const b = this.numberBlock;
+    if (b && Math.abs(b.x - this.x) < HALF + 2.5) { b.hp -= dmg; if (b.hp <= 0) this._breakNumber(); }
+    const G2 = this.giant;
+    if (G2 && !G2.dead && Math.abs(G2.x - this.x) < HALF + 3) { G2.hp -= dmg;
+      if (G2.hp <= 0) { G2.dead = true; G2.deadT = 0; this.coins += 60; this.shake = 0.8;
+        this.fx.ichor(_a.set(G2.x, 2.0, G2.z), 50); this.fx.ash(_a.set(G2.x, 1.6, G2.z), 70);
+        this.msg = { text: G2.def.name + ' 격파!', color: '#ffd23f', t: 2.0 };
+        this.audio.bossDie && this.audio.bossDie(); } }
+    // 이펙트: 굵은 청록 광선 다발
+    this.fx.hideBeam();
+    const src = _a.set(this.x, 4.6, SQ_Z - 1.6);
+    for (let k = 0; k < 7; k++) {
+      const off = (k / 6 - 0.5) * HALF * 1.7;
+      this.fx.tracer(src, _b.set(this.x + off, 1.0, SQ_Z - REACH), 0x6affc0, 0.26);
+    }
+    if (Math.random() < 0.8) this.fx.flash(_c.set(this.x, 4.6, SQ_Z - 2.2), 3.2, 0x8affd0);
+    if (Math.random() < 0.4) this.fx.spark(_b.set(this.x + (Math.random() - 0.5) * HALF * 2, 0.6, SQ_Z - 8 - Math.random() * 30), 5, 0x8affd0);
+    this._trAcc += 20 * dt;
+    while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot('plasma'); }
+  }
+
   // 근접(9.5m) 전방위 대응 — 3개 레인을 동시에 볼 수 없으므로 넉넉하게
   _pointBlank(budget) {
     let left = budget, guard = 0;
@@ -419,11 +501,13 @@ export class GauntletRun {
   status() {
     const B = this.giant && !this.giant.dead ? { name: this.giant.def.name, frac: this.giant.hp / this.giant.hpMax } : null;
     const s = this.statues[0];
-    return { troops: this.troops, cap: this.cap, formation: this.squad.form.name, weapon: this.weapon.name,
+    return { troops: this.godz ? 1 : this.troops, cap: this.godz ? 1 : this.cap,
+      formation: this.godz ? 'GODZILLA' : this.squad.form.name, weapon: this.godz ? 'ATOMIC BREATH' : this.weapon.name,
       kills: this.kills, quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
       statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,
-      endless: true, survived: this.time, wipes: this.wipes, best: this.best };
+      endless: true, survived: this.time, wipes: this.wipes, best: this.best, godzMode: !!this.godz,
+      escaped: this.escaped, godz: this.godz ? Math.ceil(this.godz.t) : 0 };
   }
   dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry) o.geometry.dispose?.(); }); }
 }

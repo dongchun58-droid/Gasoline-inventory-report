@@ -264,10 +264,34 @@ export function buildNumberBlock(text) {
 // 왼쪽 레인의 황금 석상 — 받침대 + 금빛 거인. 부수면 보상, 못 부수면 큰 손실.
 export function buildStatue(inner, scale = 1) {
   const g = new THREE.Group(); g.userData = {};
-  const gold = new THREE.MeshStandardMaterial({ color: 0xe8b032, roughness: 0.24, metalness: 0.95, emissive: 0x6a4a08, emissiveIntensity: 0.25 });
-  const base = new THREE.MeshStandardMaterial({ color: 0xc99a2a, roughness: 0.35, metalness: 0.85 });
+  const gold = new THREE.MeshStandardMaterial({ color: 0xffc93c, roughness: 0.12, metalness: 1.0, emissive: 0x8a5c08, emissiveIntensity: 0.55 });
+  const base = new THREE.MeshStandardMaterial({ color: 0xd8a828, roughness: 0.22, metalness: 0.95, emissive: 0x5a3c06, emissiveIntensity: 0.35 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0xfff0b0, roughness: 0.1, metalness: 1.0, emissive: 0xa87a10, emissiveIntensity: 0.7 });
+  const gem = new THREE.MeshStandardMaterial({ color: 0x8a5cf6, roughness: 0.05, metalness: 0.3, emissive: 0x6a2ad0, emissiveIntensity: 1.6 });
+  // 층진 받침대 + 금테 + 모서리 보석
   const ped = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.1, 4.0), base); ped.position.y = 0.55; g.add(ped);
   const ped2 = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.34, 4.5), base); ped2.position.y = 1.22; g.add(ped2);
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(5.5, 0.26, 4.9), trim); skirt.position.y = 0.13; g.add(skirt);
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.14, 4.3), trim); belt.position.y = 0.98; g.add(belt);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.24, 1.5, 8), trim);
+    col.position.set(sx * 2.15, 0.75, sz * 1.85); g.add(col);
+    const j = new THREE.Mesh(new THREE.OctahedronGeometry(0.26), gem);
+    j.position.set(sx * 2.15, 1.62, sz * 1.85); g.add(j);
+  }
+  // 회전하는 발광 링 + 바닥 빛무리
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.09, 8, 40),
+    new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0.85, toneMapped: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 1.5; g.add(ring); g.userData.ring = ring;
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(4.4, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.17, toneMapped: false, depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; g.add(halo);
+  // 뒤쪽 빛기둥
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2;
+    const bm = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 9),
+      new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.12, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }));
+    bm.position.set(Math.cos(a) * 1.9, 5.0, Math.sin(a) * 1.9); bm.rotation.y = -a; g.add(bm);
+  }
   inner.position.y = 1.4; inner.traverse((o) => { if (o.isMesh) o.material = gold; });
   g.add(inner);
   // 받침대 앞면의 체력 숫자(광고처럼 큼직하게)
@@ -284,6 +308,10 @@ export function setBarFrac(mesh, frac, w) {
   b.position.x = -(1 - Math.max(0, frac)) * (w / 2);
 }
 // 석상 받침대의 체력 숫자 갱신(값이 바뀔 때만 다시 그린다)
+export function spinStatue(mesh, t) {
+  if (mesh.userData.ring) { mesh.userData.ring.rotation.z = t * 1.1;
+    mesh.userData.ring.position.y = 1.5 + Math.sin(t * 2) * 0.12; }
+}
 export function setStatueHp(mesh, hp) {
   const n = Math.max(0, Math.ceil(hp));
   if (mesh.userData.shown === n) return;
@@ -350,4 +378,38 @@ export function buildLaneBarrier(x, z0, z1) {
     rail.position.set(x, y, midZ); g.add(rail);
   }
   return g;
+}
+
+// ── 고질라 해금 표지판 (×200 이후 등장) ─────────────────────────────────
+export function buildGodzillaSign() {
+  const g = new THREE.Group(); g.userData = {};
+  const frame = new THREE.MeshStandardMaterial({ color: 0x2a4a38, roughness: 0.4, metalness: 0.6, emissive: 0x0e2a1c, emissiveIntensity: 0.6 });
+  const glow = new THREE.MeshBasicMaterial({ map: signTexture('GODZILLA'), transparent: true, toneMapped: false });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 2.7), glow); face.position.y = 3.0; g.add(face);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.9, 0.3), frame); plate.position.y = 3.0; g.add(plate);
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.2, 0.3), frame);
+    p.position.set(sx * 2.5, 1.6, 0); g.add(p); }
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(3.4, 28),
+    new THREE.MeshBasicMaterial({ color: 0x6affc0, transparent: true, opacity: 0.22, toneMapped: false, depthWrite: false }));
+  halo.rotation.x = -Math.PI / 2; halo.position.y = 0.05; g.add(halo);
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2;
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.7, 5),
+      new THREE.MeshBasicMaterial({ color: 0x8affd0, toneMapped: false }));
+    sp.position.set(Math.cos(a) * 2.9, 3.0, Math.sin(a) * 0.2); g.add(sp); }
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+function signTexture(text) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256; const g = cv.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, '#0f2a1e'); grd.addColorStop(0.5, '#1c5a3c'); grd.addColorStop(1, '#0f2a1e');
+  g.fillStyle = grd; g.fillRect(0, 0, 512, 256);
+  g.strokeStyle = '#7affc8'; g.lineWidth = 8; g.strokeRect(10, 10, 492, 236);
+  g.font = 'bold 72px Barlow Condensed, Arial Narrow, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 12; g.strokeStyle = '#04120c'; g.strokeText(text, 256, 100);
+  g.fillStyle = '#a8ffd8'; g.fillText(text, 256, 100);
+  g.font = 'bold 40px Noto Sans KR, sans-serif';
+  g.fillStyle = '#ffd23f'; g.fillText('변신! 병력 1로', 256, 178);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }

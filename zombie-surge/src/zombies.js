@@ -2,7 +2,7 @@
 // 폭력 수위: 짙은 체액 + 재 소멸. 절단/붉은 피 없음.
 import * as THREE from 'three';
 
-const MAX = 460;
+const MAX = 900;
 const _m = new THREE.Matrix4(), _r = new THREE.Matrix4(), _q = new THREE.Quaternion(), _v = new THREE.Vector3(), _s = new THREE.Vector3();
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.rough ?? 0.8, metalness: o.metal ?? 0, emissive: o.em ?? 0x000000, emissiveIntensity: o.ei ?? 0 });
 
@@ -289,4 +289,80 @@ export function buildProjectile(kind, scale = 1) {
   g.scale.setScalar(scale);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
+}
+
+// ── 고질라: ×200 이후 해금되는 초월 유닛 ────────────────────────────────
+export function buildGodzilla(scale = 1) {
+  const g = new THREE.Group(); const P = g.userData.parts = {};
+  const hide = M(0x5a7a5e, { rough: 0.75, em: 0x1e3326, ei: 0.55 }), belly = M(0xa8b48c, { rough: 0.7, em: 0x3a4a30, ei: 0.4 });
+  const dark = M(0x33463a, { rough: 0.85, em: 0x16241a, ei: 0.4 }), claw = M(0xf0f4e8, { rough: 0.3, em: 0x8a9a80, ei: 0.5 });
+  const spine = M(0xd8f8ff, { rough: 0.15, em: 0x6affe0, ei: 2.6 });
+  const eye = new THREE.MeshBasicMaterial({ color: 0xfff0a0 });
+  const add = (m, n) => { g.add(m); if (n) P[n] = m; return m; };
+  const pv = (m, x, y, z) => { const p = new THREE.Group(); p.position.set(x, y, z); p.add(m); return p; };
+  // 다리
+  for (const sx of [-1, 1]) {
+    const leg = new THREE.Group();
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.52, 0.9, 6, 12), hide); thigh.position.y = -0.55; leg.add(thigh);
+    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.40, 0.8, 6, 12), hide); calf.position.y = -1.6; leg.add(calf);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.36, 1.35), dark); foot.position.set(0, -2.15, 0.32); leg.add(foot);
+    for (let i = 0; i < 3; i++) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.4, 5), claw);
+      t.rotation.x = -Math.PI / 2; t.position.set((i - 1) * 0.26, -2.15, 1.12); leg.add(t); }
+    add(pv(leg, sx * 0.72, 3.1, 0), sx < 0 ? 'legL' : 'legR');
+  }
+  // 몸통 + 배
+  const torso = new THREE.Group(); torso.position.y = 3.9;
+  const trunk = new THREE.Mesh(new THREE.CapsuleGeometry(1.05, 1.5, 8, 18), hide); trunk.scale.set(1.05, 1, 0.85); torso.add(trunk);
+  const bel = new THREE.Mesh(new THREE.CapsuleGeometry(0.78, 1.2, 8, 16), belly); bel.scale.set(0.9, 1, 0.5); bel.position.z = 0.62; torso.add(bel);
+  for (let i = 0; i < 5; i++) { const rib = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.16), belly);
+    rib.position.set(0, 0.7 - i * 0.34, 0.86); torso.add(rib); }
+  add(torso, 'torso');
+  // 등 지느러미(발광)
+  for (let i = 0; i < 9; i++) {
+    const h = 0.85 - Math.abs(i - 3) * 0.11;
+    const f = new THREE.Mesh(new THREE.ConeGeometry(0.30, h * 1.9, 4), spine);
+    f.position.set(0, 4.9 - i * 0.42, -0.85 - i * 0.30); f.rotation.x = -0.22 - i * 0.06; g.add(f);
+  }
+  // 꼬리
+  const tail = new THREE.Group(); tail.position.set(0, 3.3, -1.1);
+  for (let i = 0; i < 7; i++) { const seg = new THREE.Mesh(new THREE.CapsuleGeometry(0.52 - i * 0.06, 0.5, 5, 10), hide);
+    seg.rotation.x = Math.PI / 2; seg.position.set(0, -i * 0.18, -0.55 - i * 0.72); tail.add(seg); }
+  add(tail, 'tail');
+  // 팔
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Group();
+    const up = new THREE.Mesh(new THREE.CapsuleGeometry(0.30, 0.55, 6, 12), hide); up.position.y = -0.4; arm.add(up);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.5, 6, 12), hide); fore.position.y = -1.1; arm.add(fore);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.30, 12, 10), hide); hand.position.y = -1.5; arm.add(hand);
+    for (let i = 0; i < 3; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.34, 5), claw);
+      c.position.set((i - 1) * 0.19, -1.72, 0.14); c.rotation.x = 2.9; arm.add(c); }
+    add(pv(arm, sx * 1.22, 4.6, 0.1), sx < 0 ? 'armL' : 'armR').rotation.set(-0.35, 0, sx * 0.35);
+  }
+  // 머리
+  const head = new THREE.Group(); head.position.set(0, 5.9, 0.25);
+  const skull = new THREE.Mesh(new THREE.CapsuleGeometry(0.62, 0.5, 8, 14), hide); skull.rotation.x = Math.PI / 2; skull.scale.set(1, 0.85, 1); head.add(skull);
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.62, 1.15), hide); snout.position.set(0, -0.1, 0.85); head.add(snout);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.28, 1.05), dark); jaw.position.set(0, -0.42, 0.86); add(jaw, 'jaw'); head.add(jaw);
+  for (let i = 0; i < 6; i++) { for (const sy of [1, -1]) {
+    const th = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.26, 4), claw);
+    th.position.set((i - 2.5) * 0.13, sy > 0 ? -0.26 : -0.34, 1.28); th.rotation.x = sy > 0 ? Math.PI : 0; head.add(th); } }
+  for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), eye);
+    e.position.set(sx * 0.32, 0.16, 0.62); head.add(e);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 0.3), hide); brow.position.set(sx * 0.34, 0.34, 0.55); head.add(brow); }
+  for (let i = 0; i < 4; i++) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.4, 4), spine);
+    const a = (i / 4) * Math.PI - 0.4; h.position.set(Math.cos(a) * 0.5, 0.5, -0.2 + Math.sin(a) * 0.2); h.rotation.z = -Math.cos(a) * 0.5; head.add(h); }
+  add(head, 'head');
+  g.scale.setScalar(scale);
+  g.userData.height = 7.2 * scale;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+export function animateGodzilla(g, t, roar) {
+  const P = g.userData.parts, cyc = t * 3.2, sw = Math.sin(cyc);
+  P.legL.rotation.x = sw * 0.35; P.legR.rotation.x = -sw * 0.35;
+  P.torso.rotation.y = sw * 0.09; P.torso.rotation.x = 0.06;
+  P.tail.rotation.y = Math.sin(t * 1.8) * 0.42; P.tail.rotation.x = 0.18 + Math.sin(t * 2.2) * 0.08;
+  P.armL.rotation.x = -0.35 + Math.sin(t * 2.1) * 0.16; P.armR.rotation.x = -0.35 + Math.sin(t * 2.4) * 0.16;
+  P.head.rotation.x = roar ? -0.35 : Math.sin(t * 1.3) * 0.08;
+  P.jaw.position.y = -0.42 - (roar ? 0.34 : 0) - Math.abs(Math.sin(t * 2)) * 0.03;
 }
