@@ -33,7 +33,8 @@ export class GauntletRun {
     this.squad = new Squad(character); this.group.add(this.squad.group);
     this.zombies = new ZombiePool(); this.group.add(this.zombies.group);
     this.x = 0; this.limit = ROAD_HALF - 1.0;
-    this.troops = Math.max(4, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
+    this.cap = stage.troopCap || TROOP_CAP;
+    this.troops = Math.max(1, stage.startTroops + (this.C.bonus.troops || 0)); this.peak = this.troops;
     this.weaponIdx = stage.wpnStart || 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false; this.formIdx = 0;
     this.tier = 0;                       // TIERS 인덱스
@@ -175,7 +176,7 @@ export class GauntletRun {
     const cap = this.stage.wpnMax != null ? this.stage.wpnMax : WEAPON_ORDER.length - 1;
     if (this.weaponIdx < cap) { this.weaponIdx++; this.msg = { text: '석상 격파! ▲ ' + this.weapon.name, color: '#ffd23f', t: 2.0 }; }
     else { const g = Math.max(10, Math.round(this.troops * 0.25));
-      this.troops = Math.min(TROOP_CAP, this.troops + g);
+      this.troops = Math.min(this.cap, this.troops + g);
       this.msg = { text: '석상 격파! 병력 +' + g, color: '#ffd23f', t: 2.0 }; }
     this.audio.bossDie && this.audio.bossDie();
   }
@@ -225,7 +226,7 @@ export class GauntletRun {
       if (p.taken) { p.tt += dt; p.mesh.position.y += dt * 6; p.mesh.scale.multiplyScalar(1 - dt * 3.0); }
       else if (p.z >= SQ_Z - 1.0 && Math.abs(this.x - p.x) < 2.6) {
         p.taken = true; p.tt = 0;
-        this.troops = Math.min(TROOP_CAP, this.troops + p.val);
+        this.troops = Math.min(this.cap, this.troops + p.val);
         this.peak = Math.max(this.peak, this.troops);
         this.fx.spark(_a.set(p.x, 1.6, p.z), 18, 0xffd23f);
         this.audio.card && this.audio.card(false);
@@ -378,7 +379,7 @@ export class GauntletRun {
   status() {
     const B = this.giant && !this.giant.dead ? { name: this.giant.def.name, frac: this.giant.hp / this.giant.hpMax } : null;
     const s = this.statues[0];
-    return { troops: this.troops, cap: TROOP_CAP, formation: this.squad.form.name, weapon: this.weapon.name,
+    return { troops: this.troops, cap: this.cap, formation: this.squad.form.name, weapon: this.weapon.name,
       kills: this.kills, quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
       statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,

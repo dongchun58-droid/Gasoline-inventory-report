@@ -173,13 +173,13 @@ export const STAGES = [
 
   // ── 보너스: 3개 레인 황금 관문 (Last War 광고 스타일) ──────────────────
   { n: 11, name: '황금 관문 · 무한', phase: 'BONUS', playable: true, bonus: true, endless: true, gauntlet: {
-      enemyRate: [3.0, 30], enemySpeed: 5.2, laneWidth: 6.4,
-      statueEvery: [20, 11], statueSpeed: 5.5, statueHp: 180, statueGrow: 1.62,
-      numberHp: 260, numberGrow: 2.35, numberDelay: 2.2,
-      plusEvery: 0.85, plusSpeed: 15,
-      giantEvery: [28, 15], giantHp: 800, giantGrow: 1.55 },
+      enemyRate: [0.8, 13], enemySpeed: 5.2, laneWidth: 6.4,
+      statueEvery: [22, 12], statueSpeed: 5.2, statueHp: 70, statueGrow: 1.52,
+      numberHp: 110, numberGrow: 2.15, numberDelay: 2.0,
+      plusEvery: 0.30, plusSpeed: 16,
+      giantEvery: [30, 16], giantHp: 260, giantGrow: 1.5 },
     theme: { sky: 0x1a1030, fog: 0x2c1c48, sun: 0xffd8a0, deck: 0xd8d2c4, parapet: 0x8a5cf6, water: 0x120a24, hemi: 0x7a5ab8, ground: 0x241640, time: 'night' },
-    startTroops: 45, cardSpeed: 18, plusRange: [1, 1], wpnStart: 2, wpnMax: 11,
+    startTroops: 1, troopCap: 100, cardSpeed: 18, plusRange: [1, 1], wpnStart: 1, wpnMax: 11,
     cards: { plus: 1, mul: 0, minus: 0, weapon: 0, shield: 0 },
     zombie: { hp: 1, speed: 5.2 },
     par: 240 },
