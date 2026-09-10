@@ -106,6 +106,27 @@ function bossWeapon(kind) {
     for (let i = 0; i < 10; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.34, 5), edge);
       const a = (i / 10) * Math.PI * 2; sp.position.set(Math.cos(a) * 0.44, 0.42, Math.sin(a) * 0.44);
       sp.rotation.z = -Math.cos(a) * 1.57; sp.rotation.x = Math.sin(a) * 1.57; g.add(sp); }
+  } else if (kind === 'minigun') {                                // 거대 미니건
+    const barrels = new THREE.Group();
+    for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2;
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 2.3, 8), steel);
+      br.rotation.x = Math.PI / 2; br.position.set(Math.cos(ang) * 0.30, Math.sin(ang) * 0.30, 1.0); barrels.add(br); }
+    g.add(barrels);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.9, 14), steel);
+    drum.rotation.x = Math.PI / 2; drum.position.z = -0.3; g.add(drum);
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.62, 0.9), rust); box.position.set(0.5, -0.5, -0.7); g.add(box);
+    const belt = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.09, 6, 14), rust); belt.position.set(0.3, -0.2, -0.5); g.add(belt);
+    g.rotation.x = -Math.PI / 2;
+  } else if (kind === 'cannon') {                                 // 4연장 로켓포
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 1.5), steel); g.add(body);
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.7, 10), rust);
+      tube.rotation.x = Math.PI / 2; tube.position.set(sx * 0.26, sy * 0.26, 0.9); g.add(tube);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.20, 10, 8), edge);
+      cap.position.set(sx * 0.26, sy * 0.26, 1.72); g.add(cap);
+    }
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.7, 0.3), rust); grip.position.set(0, -0.75, -0.2); g.add(grip);
+    g.rotation.x = -Math.PI / 2;
   } else return null;
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;

@@ -28,7 +28,7 @@ export class HUD {
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
     this.el.wave.textContent = s.quota ? `처치 ${s.kills} / ${s.quota}`
-      : `배수 ×${s.tier}  ·  석상 ${s.smashed}격파 / ${s.missed}실패`;
+      : `×${s.tier}  ·  ${Math.floor(s.survived / 60)}:${String(Math.floor(s.survived % 60)).padStart(2, '0')} 생존  ·  석상 ${s.smashed}격파/${s.missed}실패`;
     this.el.remain.textContent = s.statue ? `황금 석상 내구도 ${Math.round(s.statue.frac * 100)}%`
       : (s.remain > 0 ? `접근 중 ${s.remain}` : '');
     if (s.boss) { this.el.bossBar.style.display = 'block'; this.el.bossName.textContent = s.boss.name; this.el.bossFill.style.width = (Math.max(0, s.boss.frac) * 100) + '%'; }
@@ -72,12 +72,13 @@ export class HUD {
   hideMenu() { this.el.menu.classList.add('hidden'); this.showGame(true); }
   showCredits(html) { $('creditsBody').innerHTML = html; this.el.credits.classList.remove('hidden'); }
   showResult(r, onNext, onRetry, onMenu) {
-    $('resTitle').textContent = r.clear ? 'MISSION CLEAR' : 'MISSION FAILED';
-    $('resTitle').style.background = r.clear ? '' : 'linear-gradient(180deg,#fff,#ff9a7a 60%,#e0503a)';
+    $('resTitle').textContent = r.endless ? ('최고 ×' + r.best) : (r.clear ? 'MISSION CLEAR' : 'MISSION FAILED');
+    $('resTitle').style.background = r.endless ? 'linear-gradient(180deg,#fff,#ffd23f 60%,#e0a02a)'
+      : (r.clear ? '' : 'linear-gradient(180deg,#fff,#ff9a7a 60%,#e0503a)');
     $('resStars').textContent = r.clear ? '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars) : '';
     $('rTroops').textContent = r.troops; $('rPeak').textContent = r.peak; $('rKills').textContent = r.kills;
     $('rTime').textContent = r.time.toFixed(0) + 's'; $('rCoins').textContent = '+' + r.coins;
-    $('nextBtn').style.display = r.clear && r.hasNext ? '' : 'none';
+    $('nextBtn').style.display = (!r.endless && r.clear && r.hasNext) ? '' : 'none';
     $('nextBtn').onclick = onNext; $('retryBtn').onclick = onRetry; $('menuBtn').onclick = onMenu;
     this.el.result.classList.remove('hidden'); this.showGame(false);
   }

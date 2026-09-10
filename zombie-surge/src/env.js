@@ -270,10 +270,10 @@ export function buildStatue(inner, scale = 1) {
   const ped2 = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.34, 4.5), base); ped2.position.y = 1.22; g.add(ped2);
   inner.position.y = 1.4; inner.traverse((o) => { if (o.isMesh) o.material = gold; });
   g.add(inner);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 0.5), new THREE.MeshBasicMaterial({ color: 0x3a2408, toneMapped: false }));
-  const bar = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.34), new THREE.MeshBasicMaterial({ color: 0xffd23f, toneMapped: false }));
-  const hy = 1.4 + (inner.userData.height || 4) + 0.9;
-  back.position.set(0, hy, 0.4); bar.position.set(0, hy, 0.43); g.add(back, bar); g.userData.bar = bar;
+  // 받침대 앞면의 체력 숫자(광고처럼 큼직하게)
+  const numMat = new THREE.MeshBasicMaterial({ map: hpNumberTexture(0), transparent: true, toneMapped: false });
+  const num = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 1.7), numMat);
+  num.position.set(0, 0.62, 2.06); g.add(num); g.userData.num = num; g.userData.shown = -1;
   g.scale.setScalar(scale);
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return g;
@@ -282,6 +282,38 @@ export function setBarFrac(mesh, frac, w) {
   const b = mesh.userData.bar; if (!b) return;
   b.scale.x = Math.max(0.001, frac);
   b.position.x = -(1 - Math.max(0, frac)) * (w / 2);
+}
+// 석상 받침대의 체력 숫자 갱신(값이 바뀔 때만 다시 그린다)
+export function setStatueHp(mesh, hp) {
+  const n = Math.max(0, Math.ceil(hp));
+  if (mesh.userData.shown === n) return;
+  mesh.userData.shown = n;
+  const m = mesh.userData.num; if (!m) return;
+  if (m.material.map) m.material.map.dispose();
+  m.material.map = hpNumberTexture(n); m.material.needsUpdate = true;
+}
+function hpNumberTexture(n) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 224; const g = cv.getContext('2d');
+  g.clearRect(0, 0, 512, 224);
+  const text = String(n);
+  g.font = 'bold ' + (text.length > 4 ? 108 : text.length > 3 ? 130 : 160) + 'px Barlow Condensed, Arial Narrow, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 20; g.strokeStyle = '#2a1a04'; g.strokeText(text, 256, 118);
+  g.fillStyle = '#ffffff'; g.fillText(text, 256, 118);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+// 가운데 레인의 '고정 숫자 관문' — 블록만 갈아 끼운다
+export function buildNumberGate() {
+  const g = new THREE.Group(); g.userData = {};
+  const steel = new THREE.MeshStandardMaterial({ color: 0xb9c2cf, roughness: 0.3, metalness: 0.8, emissive: 0x3a4250, emissiveIntensity: 0.5 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x8a5cf6, roughness: 0.4, metalness: 0.5, emissive: 0x5a2a9a, emissiveIntensity: 0.7 });
+  for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.9, 8.4, 1.6), steel);
+    p.position.set(sx * 3.6, 4.2, 0); g.add(p);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2.6), dark); foot.position.set(sx * 3.6, 0.25, 0); g.add(foot); }
+  const top = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.85, 1.7), steel); top.position.y = 8.6; g.add(top);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.4, 2.4), dark); rail.position.y = 0.2; g.add(rail);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return g;
 }
 function numberTexture(text) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');

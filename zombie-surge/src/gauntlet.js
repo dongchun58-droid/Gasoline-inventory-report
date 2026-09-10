@@ -8,7 +8,7 @@
 //   오른쪽: +병력 게이트. 값은 현재 배수와 같다(부술수록 커진다).
 // 중간중간 거인이 내려온다 — 체력이 있는 건 거인뿐이고, 나올수록 강해진다.
 import * as THREE from 'three';
-import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildStatue, setBarFrac } from './env.js';
+import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp } from './env.js';
 import { Squad, FORMATION_KEYS } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
@@ -17,7 +17,9 @@ const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3
 const SQ_Z = 0, SPAWN_Z = -72, LINE_Z = SQ_Z - 1.0;
 const RANGE = 58, FALL = 26, FAR_MIN = 0.22;
 const LANE = { left: -7.2, mid: 0, right: 7.2 };
-const TIERS = [1, 2, 5, 10, 20, 50];
+const NUM_Z = -26;                       // 가운데 숫자 관문이 고정된 자리
+// 배수는 끝없이 이어진다: 1 · 2 · 5 · 10 · 20 · 50 · 100 · 200 · 500 …
+function tierValue(i) { const base = [1, 2, 5][i % 3]; return base * Math.pow(10, Math.floor(i / 3)); }
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
 export class GauntletRun {
@@ -35,20 +37,21 @@ export class GauntletRun {
     this.weaponIdx = stage.wpnStart || 0; this.shieldT = 0; this.kills = 0; this.coins = 0; this.time = 0; this.t = 0;
     this.done = null; this.msg = null; this.shake = 0; this.firing = false; this.formIdx = 0;
     this.tier = 0;                       // TIERS 인덱스
-    this.statues = []; this.numbers = []; this.plus = []; this.giant = null;
+    this.statues = []; this.numberBlock = null; this.plus = []; this.giant = null;
     this.statueN = 0; this.numberN = 0; this.giantN = 0;
     this.smashed = 0; this.missed = 0;   // 석상 격파 / 놓침
     this._statueT = this.G.statueEvery[0]; this._numberT = 2.0; this._plusT = 1.0;
     this._giantT = this.G.giantEvery[0]; this._spawnAcc = 0; this._trAcc = 0; this._killAcc = 0;
-    this.finalPhase = false; this.finalT = 0;
+    this.gate = buildNumberGate(); this.gate.position.set(LANE.mid, 0, NUM_Z); this.group.add(this.gate);
+    this.best = 0;
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.msg = { text: '← 황금 석상 부수기  ·  가운데 숫자 = 보급 강화  ·  +병력 →', color: '#ffd23f', t: 4.5 };
     this._tips = [[10, '가운데 숫자를 부수면 오른쪽 +병력이 커진다', '#c9a8ff'],
                   [21, '왼쪽 석상이 닿으면 병력 70%를 잃는다 — 반드시 부숴라', '#ff8a70']];
   }
   get weapon() { return WEAPONS[WEAPON_ORDER[this.weaponIdx]]; }
-  get mult() { return TIERS[this.tier]; }
-  get prog() { return this.tier / (TIERS.length - 1); }
+  get mult() { return tierValue(this.tier); }
+  get prog() { return Math.min(1, this.tier / 5); }
 
   update(dt, input) {
     if (this.done) return;
@@ -73,7 +76,6 @@ export class GauntletRun {
     this._statues(dt);
     this._numbers(dt);
     this._plusGates(dt);
-    if (this.finalT > 0) { this.finalT -= dt; if (this.finalT <= 0 && !this.giant) this._spawnGiant(true); }
     this._giant(dt);
     this._fire(dt);
     this.zombies.update(dt, this.t);
@@ -83,6 +85,7 @@ export class GauntletRun {
       const [, text, color] = this._tips.shift(); this.msg = { text, color, t: 3.0 };
     }
     if (this.msg) { this.msg.t -= dt; if (this.msg.t <= 0) this.msg = null; }
+    this.best = Math.max(this.best, this.mult);
     if (this.troops <= 0) { this.troops = 0; this.done = 'fail'; }
   }
 
@@ -95,16 +98,17 @@ export class GauntletRun {
     this._spawnAcc += rate * Math.min(1, 0.35 + this.time / 16) * dt;
     while (this._spawnAcc >= 1) {
       this._spawnAcc -= 1;
-      const lane = this.R() < 0.62 ? LANE.left : (this.R() < 0.5 ? LANE.mid : LANE.right);
-      const zb = this.zombies.spawn(lane + (this.R() - 0.5) * 4.6, SPAWN_Z - this.R() * 8,
+      // 왼쪽 레인에만, 레인을 꽉 채우듯 촘촘하게 (광고처럼 붉은 무리가 밀려온다)
+      const x = LANE.left + (this.R() - 0.5) * G.laneWidth;
+      const zb = this.zombies.spawn(x, SPAWN_Z - this.R() * 5,
         this.R() < 0.3 ? 'runner' : 'walker', 1, G.enemySpeed);   // 체력 1 — 스치면 쓰러진다
-      if (zb) { zb.sway = 0.4 + this.R() * 1.2; zb.swayPh = this.R() * 6.28; zb.swaySp = 0.5 + this.R() * 0.8; }
+      if (zb) { zb.sway = 0.2 + this.R() * 0.5; zb.swayPh = this.R() * 6.28; zb.swaySp = 0.5 + this.R() * 0.8; }
     }
     for (const zb of this.zombies.list) {
       if (zb.state === 'dying') continue;
       if (zb.z < LINE_Z) {
         zb.state = 'walk'; zb.z += zb.speed * dt;
-        if (zb.z > -22) {                       // 가까워지면 분대 쪽으로 모여든다
+        if (zb.z > -18) {                       // 가까워지면 분대 쪽으로 모여든다
           const dx = this.x - zb.x;
           zb.x += Math.sign(dx) * Math.min(Math.abs(dx), zb.speed * 0.85 * dt);
         } else zb.x += Math.sin(this.t * zb.swaySp + zb.swayPh) * zb.sway * dt;
@@ -127,7 +131,7 @@ export class GauntletRun {
   _statues(dt) {
     const G = this.G;
     this._statueT -= dt;
-    if (this._statueT <= 0 && !this.finalPhase) {
+    if (this._statueT <= 0) {
       this._statueT = G.statueEvery[0] + (G.statueEvery[1] - G.statueEvery[0]) * this.prog;
       this._spawnStatue();
     }
@@ -135,7 +139,7 @@ export class GauntletRun {
       const s = this.statues[i];
       s.z += G.statueSpeed * dt; s.mesh.position.z = s.z;
       s.mesh.rotation.y = Math.sin(this.t * 0.6 + i) * 0.12;
-      setBarFrac(s.mesh, s.hp / s.maxHp, 4.6);
+      setStatueHp(s.mesh, s.hp);
       if (s.z >= LINE_Z - 0.4) {                     // 못 부수고 닿았다 → 병력 70% 손실
         this.group.remove(s.mesh); this.statues.splice(i, 1);
         this.missed++;
@@ -150,14 +154,17 @@ export class GauntletRun {
   }
   _spawnStatue() {
     const G = this.G, n = this.statueN++;
-    const kinds = ['brute', 'butcher', 'warlord', 'reaper'];
-    const inner = buildBoss({ kind: kinds[n % kinds.length], weapon: n > 1 ? 'axe' : 'none', scale: 0.85 });
+    // 석상마다 다른 캐릭터 · 다른 무기(광고처럼)
+    const KIT = [['brute', 'minigun'], ['butcher', 'axe'], ['warlord', 'cannon'], ['reaper', 'twin'],
+                 ['warlord', 'maul'], ['butcher', 'cleaver'], ['brute', 'cannon'], ['reaper', 'minigun']];
+    const [kind, weapon] = KIT[n % KIT.length];
+    const inner = buildBoss({ kind, weapon, scale: 0.85 });
     const mesh = buildStatue(inner, 1 + Math.min(0.5, n * 0.08));
     const x = LANE.left;
     mesh.position.set(x, 0, SPAWN_Z); this.group.add(mesh);
     const hp = Math.round(G.statueHp * Math.pow(G.statueGrow, n));
     this.statues.push({ mesh, x, z: SPAWN_Z, hp, maxHp: hp });
-    this.msg = { text: '황금 석상 접근! 부숴라', color: '#ffd23f', t: 1.6 };
+    this.msg = { text: '황금 석상 접근! 부숴라 (체력 ' + hp + ')', color: '#ffd23f', t: 1.6 };
     this.audio.roar && this.audio.roar();
   }
   _smashStatue(s, i) {
@@ -173,38 +180,33 @@ export class GauntletRun {
     this.audio.bossDie && this.audio.bossDie();
   }
 
-  // ── 가운데 레인: 숫자 블록 ──────────────────────────────────────────────
+  // ── 가운데 레인: 고정된 숫자 관문. 움직이지 않으니 계속 쏴서 깨야 한다 ──
   _numbers(dt) {
-    const G = this.G;
-    this._numberT -= dt;
-    if (this._numberT <= 0 && this.numbers.length === 0 && !this.finalPhase && this.tier < TIERS.length - 1) {
-      this._numberT = G.numberEvery; this._spawnNumber();
-    }
-    for (let i = this.numbers.length - 1; i >= 0; i--) {
-      const b = this.numbers[i];
-      b.z += G.numberSpeed * dt; b.mesh.position.z = b.z;
-      setBarFrac(b.mesh, b.hp / b.maxHp, 5.0);
-      if (b.z >= SQ_Z + 3) {                        // 놓쳤다 — 벌점은 없고 다시 온다
-        this.group.remove(b.mesh); this.numbers.splice(i, 1); this._numberT = 1.6;
-      }
-    }
+    const b = this.numberBlock;
+    if (!b) { this._numberT -= dt; if (this._numberT <= 0) this._spawnNumber(); return; }
+    b.mesh.rotation.y = Math.sin(this.t * 1.1) * 0.06;
+    b.mesh.position.y = Math.sin(this.t * 1.6) * 0.10;
+    const f = b.hp / b.maxHp;
+    const bar = b.mesh.userData.bar;
+    if (bar) { bar.scale.x = Math.max(0.001, f); bar.position.x = -(1 - Math.max(0, f)) * 2.5; }
   }
   _spawnNumber() {
-    const G = this.G, next = TIERS[Math.min(TIERS.length - 1, this.tier + 1)];
+    const G = this.G, next = tierValue(this.tier + 1);
     const mesh = buildNumberBlock(String(next));
-    mesh.position.set(LANE.mid, 0, SPAWN_Z); this.group.add(mesh);
+    mesh.position.set(LANE.mid, 0, NUM_Z); this.group.add(mesh);
     const hp = Math.round(G.numberHp * Math.pow(G.numberGrow, this.numberN++));
-    this.numbers.push({ mesh, x: LANE.mid, z: SPAWN_Z, hp, maxHp: hp, val: next });
+    this.numberBlock = { mesh, x: LANE.mid, z: NUM_Z, hp, maxHp: hp, val: next };
   }
-  _breakNumber(b, i) {
-    this.group.remove(b.mesh); this.numbers.splice(i, 1);
-    this.tier = Math.min(TIERS.length - 1, this.tier + 1);
-    this.coins += 25; this.shake = 0.4;
-    this.fx.spark(_a.set(b.x, 2.6, b.z), 50, 0xc98aff);
+  _breakNumber() {
+    const b = this.numberBlock;
+    this.group.remove(b.mesh); this.numberBlock = null;
+    this.tier++;
+    this.coins += 25; this.shake = 0.45;
+    this.fx.spark(_a.set(b.x, 2.9, b.z), 60, 0xc98aff);
+    this.fx.ash(_a.set(b.x, 2.4, b.z), 26);
     this.msg = { text: '×' + this.mult + ' 보급 강화!', color: '#c9a8ff', t: 1.8 };
     this.audio.card && this.audio.card(false);
-    this._numberT = 2.2;
-    if (this.tier >= TIERS.length - 1) this._startFinal();
+    this._numberT = this.G.numberDelay;
   }
 
   // ── 오른쪽 레인: +병력 게이트 ───────────────────────────────────────────
@@ -237,17 +239,16 @@ export class GauntletRun {
     const G = this.G;
     if (!this.giant) {
       this._giantT -= dt;
-      if (this._giantT <= 0 && !this.finalPhase) {
+      if (this._giantT <= 0) {
         this._giantT = G.giantEvery[0] + (G.giantEvery[1] - G.giantEvery[0]) * this.prog;
-        this._spawnGiant(false);
+        this._spawnGiant();
       }
       return;
     }
     const B = this.giant;
     if (B.dead) { B.deadT += dt; B.mesh.position.y = -B.deadT * 1.5; B.mesh.rotation.z += dt * 0.6;
       B.mesh.scale.multiplyScalar(Math.max(0.02, 1 - dt * 1.2));
-      if (B.deadT > 1.4) { this.group.remove(B.mesh); this.giant = null;
-        if (B.final) this.done = 'clear'; }
+      if (B.deadT > 1.4) { this.group.remove(B.mesh); this.giant = null; }
       return; }
     const dx = this.x - B.x, dz = SQ_Z - B.z, d = Math.hypot(dx, dz) || 1;
     B.stompCd -= dt;
@@ -260,30 +261,22 @@ export class GauntletRun {
     B.mesh.rotation.y = Math.atan2(dx, dz);
     animateBoss(B.mesh, this.t, B.state);
   }
-  _spawnGiant(final) {
+  _spawnGiant() {
     const G = this.G, n = this.giantN++;
     const kinds = ['brute', 'butcher', 'reaper', 'warlord'];
-    const scale = final ? 2.5 : 1.15 + Math.min(0.9, n * 0.18);
-    const def = { kind: final ? 'warlord' : kinds[n % kinds.length], weapon: final ? 'maul' : (n % 2 ? 'axe' : 'none'),
-      scale, name: final ? '황금 거인' : '거인 ' + (n + 1) };
+    const arms = ['maul', 'axe', 'twin', 'cleaver', 'cannon', 'minigun'];
+    const scale = 1.15 + Math.min(1.35, n * 0.16);
+    const def = { kind: kinds[n % kinds.length], weapon: arms[n % arms.length],
+      scale, name: '거인 ' + (n + 1) };
     const mesh = buildBoss(def); this.group.add(mesh);
     const x = [LANE.left, LANE.mid, LANE.right][n % 3];
     mesh.position.set(x, 0, SPAWN_Z + 4);
-    const hp = Math.round((final ? G.finalHp : G.giantHp * Math.pow(G.giantGrow, n)) * (1 + this.troops / 90));
+    const hp = Math.round(G.giantHp * Math.pow(G.giantGrow, n) * (1 + this.troops / 90));
     this.giant = { def, mesh, x, z: SPAWN_Z + 4, hp, hpMax: hp, state: 'walk', dead: false, deadT: 0,
-      speed: final ? 3.4 : 3.0 + n * 0.2, stomp: final ? 24 : 6 + n * 2, stompCd: 1.6, final };
+      speed: 3.0 + Math.min(2.4, n * 0.18), stomp: 6 + n * 2, stompCd: 1.6 };
     this.msg = { text: def.name + ' 등장!', color: '#ff8a70', t: 2.0 };
     this.audio.roar && this.audio.roar();
   }
-  _startFinal() {
-    this.finalPhase = true;
-    for (const s of this.statues) this.group.remove(s.mesh); this.statues.length = 0;
-    for (const b of this.numbers) this.group.remove(b.mesh); this.numbers.length = 0;
-    if (this.giant && !this.giant.dead) { this.giant.dead = true; this.giant.deadT = 0; }
-    this.msg = { text: '×50 달성! 황금 거인이 온다', color: '#ffd23f', t: 2.4 };
-    this.finalT = 1.4;                       // 게임 루프에서 카운트다운(타이머 의존 금지)
-  }
-
   // ── 사격: 도로 모드와 같은 열 단위 직사. 표적 = 적 · 석상 · 숫자 · 거인 ──
   _fire(dt) {
     const W = this.weapon;
@@ -301,7 +294,7 @@ export class GauntletRun {
       // 큰 구조물(석상 · 숫자 블록 · 거인)은 폭이 넓어 정면이면 맞는다
       const big = [];
       for (let i = 0; i < this.statues.length; i++) big.push({ o: this.statues[i], i, half: 2.4, kind: 's' });
-      for (let i = 0; i < this.numbers.length; i++) big.push({ o: this.numbers[i], i, half: 2.7, kind: 'n' });
+      if (this.numberBlock) big.push({ o: this.numberBlock, i: -1, half: 2.7, kind: 'n' });
       if (this.giant && !this.giant.dead) big.push({ o: this.giant, i: -1, half: 1.9 * (this.giant.def.scale || 1), kind: 'g' });
       while (left > 0 && guard++ < 10) {
         let tgt = null, best = -1e9, hitBig = null;
@@ -325,7 +318,7 @@ export class GauntletRun {
         if (obj.hp <= 0) {
           if (!hitBig) this._kill(tgt);
           else if (hitBig.kind === 's') { this._smashStatue(hitBig.o, hitBig.i); break; }
-          else if (hitBig.kind === 'n') { this._breakNumber(hitBig.o, hitBig.i); break; }
+          else if (hitBig.kind === 'n') { this._breakNumber(); break; }
           else { const B = this.giant; B.dead = true; B.deadT = 0; this.coins += 60; this.shake = 0.8;
             this.fx.ichor(_a.set(B.x, 2.0, B.z), 50); this.fx.ash(_a.set(B.x, 1.6, B.z), 70);
             this.msg = { text: B.def.name + ' 격파!', color: '#ffd23f', t: 2.0 };
@@ -388,7 +381,8 @@ export class GauntletRun {
     return { troops: this.troops, cap: TROOP_CAP, formation: this.squad.form.name, weapon: this.weapon.name,
       kills: this.kills, quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
-      statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed };
+      statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,
+      endless: true, survived: this.time };
   }
   dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry) o.geometry.dispose?.(); }); }
 }

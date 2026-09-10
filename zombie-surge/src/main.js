@@ -73,13 +73,16 @@ function showCredits() {
 }
 function finish(kind) {
   const st = state.stage, r = state.run, clear = kind === 'clear';
-  let stars = 0; if (clear) { stars = 1; if (r.troops >= Math.max(15, r.peak * 0.35)) stars++; if (r.time <= st.par) stars++; }
+  let stars = 0;
+  if (st.endless) { stars = r.best >= 500 ? 3 : r.best >= 50 ? 2 : r.best >= 5 ? 1 : 0; }
+  else if (clear) { stars = 1; if (r.troops >= Math.max(15, r.peak * 0.35)) stars++; if (r.time <= st.par) stars++; }
   state.data.coins += r.coins;
   if (clear) { state.data.stars[st.n] = Math.max(state.data.stars[st.n] || 0, stars); state.data.unlocked = Math.max(state.data.unlocked, st.n + 1); }
   save(state.data);
   const hasNext = STAGES.some((s) => s.n === st.n + 1 && s.playable);
   audio.setScene('result'); clear ? audio.clear() : audio.fail();
-  hud.showResult({ clear, stars, troops: r.troops, peak: r.peak, kills: r.kills, time: r.time, coins: r.coins, hasNext },
+  hud.showResult({ clear: st.endless ? true : clear, stars, troops: r.troops, peak: r.peak, kills: r.kills,
+      time: r.time, coins: r.coins, hasNext, endless: st.endless, best: r.best, title: st.endless ? `최고 ×${r.best}` : null },
     () => startStage(st.n + 1, state.character), () => startStage(st.n, state.character), showMenu);
   state.mode = 'result';
 }
