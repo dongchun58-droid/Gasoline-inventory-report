@@ -9,9 +9,9 @@
 // 중간중간 거인이 내려온다 — 체력이 있는 건 거인뿐이고, 나올수록 강해진다.
 import * as THREE from 'three';
 import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp, spinStatue, buildLaneBarrier, buildGodzillaSign } from './env.js';
-import { Squad, FORMATION_KEYS, buildGun } from './squad.js';
+import { Squad, FORMATION_KEYS, buildGun, buildHero } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss, buildGodzilla, animateGodzilla } from './zombies.js';
-import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
+import { WEAPONS, WEAPON_ORDER, CHARACTERS, CHARACTER_ORDER, TROOP_CAP } from './stages.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
 const SQ_Z = 0, SPAWN_Z = -72, LINE_Z = SQ_Z - 1.0;
@@ -49,6 +49,7 @@ export class GauntletRun {
     this.group.add(buildLaneBarrier(BARRIER_X, -96, 3));   // 왼쪽 좀비 채널을 막는 방책
     this.best = 0; this.wipes = 0;
     this.godz = null; this.sign = null; this._signDone = false;
+    this.flyer = null; this._charIdx = CHARACTER_ORDER.indexOf(character);
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.msg = { text: '← 황금 석상 부수기  ·  가운데 숫자 = 보급 강화  ·  +병력 →', color: '#ffd23f', t: 4.5 };
     this._tips = [[10, '가운데 숫자를 부수면 오른쪽 +병력이 커진다', '#c9a8ff'],
@@ -82,6 +83,7 @@ export class GauntletRun {
     this._numbers(dt);
     this._plusGates(dt);
     this._godzilla(dt);
+    this._flyer(dt);
     this._giant(dt);
     this._fire(dt);
     this.zombies.update(dt, this.t);
@@ -227,7 +229,7 @@ export class GauntletRun {
     //   · 무기 석상(황금 총) — 부수면 무기가 한 단계 올라간다
     //   · 캐릭터 석상(황금 전사) — 부수면 병력을 크게 얻는다
     const isGun = n % 2 === 0;
-    let inner;
+    let inner, charKey = null;
     if (isGun) {
       const key = WEAPON_ORDER[Math.min(WEAPON_ORDER.length - 1, this.weaponIdx + 1)];
       const g0 = buildGun(key, 9.5);                 // 받침대 위에 올린 거대한 황금 총
@@ -235,19 +237,19 @@ export class GauntletRun {
       const holder = new THREE.Group(); holder.add(g0);
       holder.userData.height = 4.2; inner = holder;
     } else {
-      const KIT = [['brute', 'minigun'], ['butcher', 'axe'], ['warlord', 'cannon'], ['reaper', 'twin'],
-                   ['warlord', 'maul'], ['butcher', 'cleaver'], ['brute', 'cannon'], ['reaper', 'minigun']];
-      const [kind, weapon] = KIT[(n >> 1) % KIT.length];
-      inner = buildBoss({ kind, weapon, scale: 0.85 });
+      // 다음에 얻을 캐릭터를 황금상으로 세운다 — 부수면 분대 전원이 이 캐릭터가 된다
+      charKey = CHARACTER_ORDER[(this._charIdx + 1) % CHARACTER_ORDER.length];
+      const h = buildHero(charKey); h.scale.setScalar(2.05); h.rotation.y = Math.PI + 0.3; h.position.y = 0.2;
+      const holder = new THREE.Group(); holder.add(h); holder.userData.height = 3.6; inner = holder;
     }
     const mesh = buildStatue(inner, 1 + Math.min(0.5, n * 0.08));
     const x = LANE.left;
     mesh.position.set(x, 0, SPAWN_Z); this.group.add(mesh);
     // 병력 상한이 있으므로 석상 체력에도 상한을 둔다 — 언젠가 반드시 못 깨는 일이 없도록
     const hp = Math.round(Math.min(G.statueHpMax, G.statueHp * Math.pow(G.statueGrow, n)));
-    this.statues.push({ mesh, x, z: SPAWN_Z, hp, maxHp: hp, gun: isGun });
-    this.msg = { text: (isGun ? '황금 무기 석상! 부수면 무기 강화' : '황금 전사 석상! 부수면 병력 대량 획득'),
-      color: '#ffd23f', t: 1.8 };
+    this.statues.push({ mesh, x, z: SPAWN_Z, hp, maxHp: hp, gun: isGun, charKey });
+    this.msg = { text: isGun ? '황금 무기 석상! 부수면 무기 강화'
+      : ('황금 ' + CHARACTERS[charKey].name + ' 석상! 부수면 분대 전원 변신'), color: '#ffd23f', t: 1.8 };
     this.audio.roar && this.audio.roar();
   }
   _smashStatue(s, i) {
@@ -258,12 +260,46 @@ export class GauntletRun {
     const wcap = this.stage.wpnMax != null ? this.stage.wpnMax : WEAPON_ORDER.length - 1;
     if (s.gun && this.weaponIdx < wcap) {
       this.weaponIdx++; this.msg = { text: '무기 석상 격파! ▲ ' + this.weapon.name, color: '#ffd23f', t: 2.2 };
+    } else if (s.charKey) {
+      this._launchHero(s, s.charKey);
     } else {
       const g = Math.max(12, Math.round(this.cap * 0.35));
       this.troops = Math.min(this.cap, this.troops + g);
       this.msg = { text: '석상 격파! 병력 +' + g, color: '#ffd23f', t: 2.0 };
     }
     this.audio.bossDie && this.audio.bossDie();
+  }
+
+  // 석상에서 튀어나온 새 캐릭터가 분대로 날아온다 → 착지하면 전원 변신
+  _launchHero(s, key) {
+    if (this.flyer) this.group.remove(this.flyer.mesh);
+    const mesh = buildHero(key); mesh.scale.setScalar(1.9);
+    mesh.position.set(s.x, 2.6, s.z); this.group.add(mesh);
+    this.flyer = { mesh, key, sx: s.x, sy: 2.6, sz: s.z, t: 0, dur: 0.95 };
+    this.msg = { text: CHARACTERS[key].name + ' 합류!', color: '#ffd23f', t: 1.6 };
+  }
+  _flyer(dt) {
+    const F = this.flyer; if (!F) return;
+    F.t += dt;
+    const u = Math.min(1, F.t / F.dur);
+    const tx = this.x, tz = SQ_Z - 0.6;
+    const x = F.sx + (tx - F.sx) * u, z = F.sz + (tz - F.sz) * u;
+    const y = F.sy + (0.0 - F.sy) * u + Math.sin(u * Math.PI) * 7.0;      // 크게 도약
+    F.mesh.position.set(x, y, z);
+    F.mesh.rotation.y = Math.PI + u * Math.PI * 3;                        // 공중제비
+    F.mesh.scale.setScalar(1.9 - u * 0.75);
+    if (Math.random() < 0.8) this.fx.spark(_a.set(x, y + 0.6, z), 3, 0xffd23f);
+    if (u >= 1) {
+      this.group.remove(F.mesh); this.flyer = null;
+      this._charIdx = CHARACTER_ORDER.indexOf(F.key);
+      this.squad.setCharacter(F.key);
+      this.C = CHARACTERS[F.key];                                          // 보너스도 함께 바뀐다
+      this.shake = 0.6;
+      this.fx.spark(_a.set(this.x, 1.2, SQ_Z), 70, 0xffd23f);
+      this.fx.ash(_a.set(this.x, 0.8, SQ_Z), 30);
+      this.msg = { text: '분대 전원 ' + CHARACTERS[F.key].name + ' 으로 변신!', color: '#ffd23f', t: 2.4 };
+      this.audio.bossDie && this.audio.bossDie();
+    }
   }
 
   // ── 가운데 레인: 고정된 숫자 관문. 움직이지 않으니 계속 쏴서 깨야 한다 ──

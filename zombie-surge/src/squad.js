@@ -192,6 +192,7 @@ export class Squad {
     this.group = new THREE.Group();
     this.C = CHARACTERS[character] || CHARACTERS.cool;
     this.count = 0; this.shown = 0; this.t = 0; this.firing = false; this.weapon = 'rifle'; this.heading = 0;
+    this.charKey = character;
     this.pos = new THREE.Vector3();
     this.parts = makeParts(this.C);
     this.inst = this.parts.map((p) => { const im = new THREE.InstancedMesh(p.geo, p.mat, MAX); im.count = 0; im.castShadow = true; im.frustumCulled = false; this.group.add(im); return im; });
@@ -233,6 +234,21 @@ export class Squad {
     this._cols = cols;
   }
   setFormation(key) { if (key === this.formation) return; this.formation = key; this._layout(); }
+  // 분대 전체를 다른 캐릭터로 교체(석상 격파 보상)
+  setCharacter(key) {
+    const C = CHARACTERS[key]; if (!C || key === this.charKey) return;
+    this.charKey = key; this.C = C;
+    for (const im of this.inst) { this.group.remove(im); im.geometry.dispose(); }
+    this.parts = makeParts(C);
+    this.inst = this.parts.map((p) => { const im = new THREE.InstancedMesh(p.geo, p.mat, MAX);
+      im.count = 0; im.castShadow = true; im.frustumCulled = false; this.group.add(im); return im; });
+    if (this.faceMat.map) this.faceMat.map.dispose();
+    this.faceMat.map = faceTex(C); this.faceMat.needsUpdate = true;
+    this.group.remove(this.leader);
+    this.leader = buildHero(key); this.group.add(this.leader);
+    const w = this.weapon; this.weapon = null; this.setWeapon(w);
+    this._shape = null; this._shownFor = -1; this._layout();
+  }
   get form() { return FORMATIONS.find((f) => f.key === this.formation) || FORMATIONS[0]; }
   setWeapon(key) { if (key === this.weapon) return; this.weapon = key; this._setGunInstance(key);
     const L = this.leader.userData.parts; if (L.gun) { L.gunHolder.remove(L.gun); L.gun = buildGun(key, (WEAPONS[key] || WEAPONS.rifle).gunScale || 1.3); L.gunHolder.add(L.gun); } }

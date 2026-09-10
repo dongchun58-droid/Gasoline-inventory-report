@@ -60,7 +60,7 @@ function launch(n, character) {
   applyTheme(st.theme);
   const Run = st.bonus ? GauntletRun : st.field ? FieldRun : WaveDefense;
   state.run = new Run(scene, camera, st, character, fx, audio);
-  hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits);
+  hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits); state.badge = character;
   audio.start(); audio.setScene('wave');
   state.mode = 'play';
 }
@@ -102,6 +102,8 @@ function frame(now) {
     const rz = r.z || 0;
     sun.target.position.set(r.x, 0, rz - 20); sun.position.set(r.x + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, rz - 38);
     if (r.status().boss) audio.setScene('boss');
+    // 분대 캐릭터가 바뀌면 좌상단 뱃지도 같이 갱신
+    if (r.squad && r.squad.charKey !== state.badge) { state.badge = r.squad.charKey; hud.setHero(r.squad.charKey, portraits); }
     if (r.done) { state.mode = 'ending'; state.endT = 0; state.endKind = r.done; }
   } else if (state.mode === 'ending' && r) {
     state.endT += dt; r.update(dt * 0.35, { steer: null, steerZ: null, axis: 0, axisZ: 0, fire: false, consumeForm: () => false });
