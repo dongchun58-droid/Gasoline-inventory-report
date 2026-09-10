@@ -7,7 +7,7 @@ export class HUD {
       bossBar: $('bossBar'), bossName: $('bossName'), bossFill: $('bossHpFill'), msg: $('msg'), hint: $('hint'),
       menu: $('menu'), result: $('result'), credits: $('credits'), wave: $('waveLbl'), remain: $('remain'),
       fire: $('fireBtn'), tut: $('tut'), badge: $('heroBadge'), face: $('heroFace'), hname: $('heroName'), hrole: $('heroRole'),
-      wpnPop: $('wpnPop'), cap: $('troopCap'), form: $('formLbl') };
+      wpnPop: $('wpnPop'), cap: $('troopCap'), form: $('formLbl'), quit: $('quitBtn') };
     this._msgT = 0; this._last = null; this._wpnT = 0; this._wpn = null;
   }
   setStage(st) { this.el.stage.textContent = `STAGE ${st.n} · ${st.name}`; }
@@ -25,6 +25,7 @@ export class HUD {
     if (this._wpn !== null && s.weapon !== this._wpn) { this.el.wpnPop.textContent = '▲ ' + s.weapon; this.el.wpnPop.style.opacity = 1; this._wpnT = 1.6; }
     this._wpn = s.weapon;
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
+    if (s.wipes) this.el.remain.textContent = `전멸 ${s.wipes}회  ·  최고 ×${s.best}`;
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
     this.el.wave.textContent = s.quota ? `처치 ${s.kills} / ${s.quota}`
@@ -36,7 +37,7 @@ export class HUD {
     if (s.msg && s.msg !== this._last) { this._last = s.msg; this.el.msg.textContent = s.msg.text; this.el.msg.style.color = s.msg.color; this.el.msg.style.opacity = 1; this._msgT = s.msg.t; }
     if (this._msgT > 0) { this._msgT -= 1 / 60; if (this._msgT <= 0) this.el.msg.style.opacity = 0; }
   }
-  showGame(v) { this.el.badge.style.display = v ? 'flex' : 'none'; this.el.fire.style.display = v ? 'block' : 'none'; this.el.wave.style.display = v ? 'block' : 'none';
+  showGame(v) { this.el.quit.style.display = v ? 'block' : 'none'; this.el.badge.style.display = v ? 'flex' : 'none'; this.el.fire.style.display = v ? 'block' : 'none'; this.el.wave.style.display = v ? 'block' : 'none';
     this.el.remain.style.display = v ? 'block' : 'none'; this.el.hint.style.display = v ? 'block' : 'none';
     this.el.troops.parentElement.style.display = v ? 'block' : 'none'; this.el.prog.parentElement.style.display = v ? 'block' : 'none';
     this.el.stage.style.display = v ? 'block' : 'none'; this.el.coins.style.display = v ? 'block' : 'none'; }

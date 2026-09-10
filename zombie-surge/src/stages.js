@@ -174,7 +174,7 @@ export const STAGES = [
   // ── 보너스: 3개 레인 황금 관문 (Last War 광고 스타일) ──────────────────
   { n: 11, name: '황금 관문 · 무한', phase: 'BONUS', playable: true, bonus: true, endless: true, gauntlet: {
       enemyRate: [0.8, 13], enemySpeed: 5.2, laneWidth: 6.4,
-      statueEvery: [22, 12], statueSpeed: 5.2, statueHp: 70, statueGrow: 1.52,
+      statueEvery: [22, 13], statueSpeed: 5.0, statueHp: 60, statueGrow: 1.34, statueHpMax: 5200,
       numberHp: 110, numberGrow: 2.15, numberDelay: 2.0,
       plusEvery: 0.30, plusSpeed: 16,
       giantEvery: [30, 16], giantHp: 260, giantGrow: 1.5 },

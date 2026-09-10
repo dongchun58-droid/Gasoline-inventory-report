@@ -37,6 +37,11 @@ input.onFirstInput(() => { audio.start(); audio.setScene(state.mode === 'play' ?
 const state = { mode: 'menu', run: null, stage: null, character: 'cool', data: load() };
 const portraits = renderPortraits(CHARACTER_ORDER);
 
+document.getElementById('quitBtn').onclick = () => {
+  if (!state.run) return;
+  if (state.stage && state.stage.endless) { state.mode = 'ending'; state.endT = 1.5; state.endKind = 'clear'; }
+  else { state.mode = 'ending'; state.endT = 1.5; state.endKind = 'fail'; }
+};
 document.getElementById('muteBtn').onclick = () => {
   audio.start(); audio.muted = !audio.muted; audio.setMuted(audio.muted);
   document.getElementById('muteBtn').textContent = audio.muted ? '🔈' : '🔊';

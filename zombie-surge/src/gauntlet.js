@@ -9,7 +9,7 @@
 // 중간중간 거인이 내려온다 — 체력이 있는 건 거인뿐이고, 나올수록 강해진다.
 import * as THREE from 'three';
 import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp, buildLaneBarrier } from './env.js';
-import { Squad, FORMATION_KEYS } from './squad.js';
+import { Squad, FORMATION_KEYS, buildGun } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
 
@@ -47,7 +47,7 @@ export class GauntletRun {
     this._giantT = this.G.giantEvery[0]; this._spawnAcc = 0; this._trAcc = 0; this._killAcc = 0;
     this.gate = buildNumberGate(); this.gate.position.set(LANE.mid, 0, NUM_Z); this.group.add(this.gate);
     this.group.add(buildLaneBarrier(BARRIER_X, -96, 3));   // 왼쪽 좀비 채널을 막는 방책
-    this.best = 0;
+    this.best = 0; this.wipes = 0;
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.msg = { text: '← 황금 석상 부수기  ·  가운데 숫자 = 보급 강화  ·  +병력 →', color: '#ffd23f', t: 4.5 };
     this._tips = [[10, '가운데 숫자를 부수면 오른쪽 +병력이 커진다', '#c9a8ff'],
@@ -90,7 +90,24 @@ export class GauntletRun {
     }
     if (this.msg) { this.msg.t -= dt; if (this.msg.t <= 0) this.msg = null; }
     this.best = Math.max(this.best, this.mult);
-    if (this.troops <= 0) { this.troops = 0; this.done = 'fail'; }
+    if (this.troops <= 0) this._rally();
+  }
+
+  // 전멸해도 끝나지 않는다 — 1명으로 재편성하고 배수만 떨어진다
+  _rally() {
+    this.wipes = (this.wipes || 0) + 1;
+    this.troops = 1;
+    this.tier = Math.max(0, this.tier - 2);
+    this.weaponIdx = Math.max(this.stage.wpnStart || 0, this.weaponIdx - 1);
+    this.shieldT = 5;                                   // 재편성 직후 잠깐 무적
+    for (const zb of this.zombies.list) if (zb.state !== 'dying') { zb.state = 'dying'; zb.dieT = 0; }
+    for (let i = this.statues.length - 1; i >= 0; i--) { this.group.remove(this.statues[i].mesh); }
+    this.statues.length = 0; this._statueT = this.G.statueEvery[0] * 0.6;
+    if (this.giant && !this.giant.dead) { this.giant.dead = true; this.giant.deadT = 0; }
+    this.shake = 0.9;
+    this.fx.ash(_a.set(this.x, 1.0, SQ_Z), 60);
+    this.msg = { text: '전멸! 1명으로 재편성 — ×' + this.mult + ' 로 후퇴', color: '#ff8a70', t: 2.6 };
+    this.audio.fail && this.audio.fail();
   }
 
   // ── 왼쪽 레인: 적 무리(한 방에 쓰러진다) ────────────────────────────────
@@ -161,17 +178,31 @@ export class GauntletRun {
   }
   _spawnStatue() {
     const G = this.G, n = this.statueN++;
-    // 석상마다 다른 캐릭터 · 다른 무기(광고처럼)
-    const KIT = [['brute', 'minigun'], ['butcher', 'axe'], ['warlord', 'cannon'], ['reaper', 'twin'],
-                 ['warlord', 'maul'], ['butcher', 'cleaver'], ['brute', 'cannon'], ['reaper', 'minigun']];
-    const [kind, weapon] = KIT[n % KIT.length];
-    const inner = buildBoss({ kind, weapon, scale: 0.85 });
+    // 두 종류가 번갈아 내려온다
+    //   · 무기 석상(황금 총) — 부수면 무기가 한 단계 올라간다
+    //   · 캐릭터 석상(황금 전사) — 부수면 병력을 크게 얻는다
+    const isGun = n % 2 === 0;
+    let inner;
+    if (isGun) {
+      const key = WEAPON_ORDER[Math.min(WEAPON_ORDER.length - 1, this.weaponIdx + 1)];
+      const g0 = buildGun(key, 9.5);                 // 받침대 위에 올린 거대한 황금 총
+      g0.rotation.set(-0.12, 0.55, 0.10); g0.position.y = 2.2;
+      const holder = new THREE.Group(); holder.add(g0);
+      holder.userData.height = 4.2; inner = holder;
+    } else {
+      const KIT = [['brute', 'minigun'], ['butcher', 'axe'], ['warlord', 'cannon'], ['reaper', 'twin'],
+                   ['warlord', 'maul'], ['butcher', 'cleaver'], ['brute', 'cannon'], ['reaper', 'minigun']];
+      const [kind, weapon] = KIT[(n >> 1) % KIT.length];
+      inner = buildBoss({ kind, weapon, scale: 0.85 });
+    }
     const mesh = buildStatue(inner, 1 + Math.min(0.5, n * 0.08));
     const x = LANE.left;
     mesh.position.set(x, 0, SPAWN_Z); this.group.add(mesh);
-    const hp = Math.round(G.statueHp * Math.pow(G.statueGrow, n));
-    this.statues.push({ mesh, x, z: SPAWN_Z, hp, maxHp: hp });
-    this.msg = { text: '황금 석상 접근! 부숴라 (체력 ' + hp + ')', color: '#ffd23f', t: 1.6 };
+    // 병력 상한이 있으므로 석상 체력에도 상한을 둔다 — 언젠가 반드시 못 깨는 일이 없도록
+    const hp = Math.round(Math.min(G.statueHpMax, G.statueHp * Math.pow(G.statueGrow, n)));
+    this.statues.push({ mesh, x, z: SPAWN_Z, hp, maxHp: hp, gun: isGun });
+    this.msg = { text: (isGun ? '황금 무기 석상! 부수면 무기 강화' : '황금 전사 석상! 부수면 병력 대량 획득'),
+      color: '#ffd23f', t: 1.8 };
     this.audio.roar && this.audio.roar();
   }
   _smashStatue(s, i) {
@@ -179,11 +210,14 @@ export class GauntletRun {
     this.smashed++; this.coins += 40; this.shake = 0.55;
     this.fx.spark(_a.set(s.x, 2.0, s.z), 70, 0xffd23f);
     this.fx.ash(_a.set(s.x, 1.6, s.z), 40);
-    const cap = this.stage.wpnMax != null ? this.stage.wpnMax : WEAPON_ORDER.length - 1;
-    if (this.weaponIdx < cap) { this.weaponIdx++; this.msg = { text: '석상 격파! ▲ ' + this.weapon.name, color: '#ffd23f', t: 2.0 }; }
-    else { const g = Math.max(10, Math.round(this.troops * 0.25));
+    const wcap = this.stage.wpnMax != null ? this.stage.wpnMax : WEAPON_ORDER.length - 1;
+    if (s.gun && this.weaponIdx < wcap) {
+      this.weaponIdx++; this.msg = { text: '무기 석상 격파! ▲ ' + this.weapon.name, color: '#ffd23f', t: 2.2 };
+    } else {
+      const g = Math.max(12, Math.round(this.cap * 0.35));
       this.troops = Math.min(this.cap, this.troops + g);
-      this.msg = { text: '석상 격파! 병력 +' + g, color: '#ffd23f', t: 2.0 }; }
+      this.msg = { text: '석상 격파! 병력 +' + g, color: '#ffd23f', t: 2.0 };
+    }
     this.audio.bossDie && this.audio.bossDie();
   }
 
@@ -389,7 +423,7 @@ export class GauntletRun {
       kills: this.kills, quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
       statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,
-      endless: true, survived: this.time };
+      endless: true, survived: this.time, wipes: this.wipes, best: this.best };
   }
   dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry) o.geometry.dispose?.(); }); }
 }
