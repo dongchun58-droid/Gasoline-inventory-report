@@ -326,3 +326,28 @@ function numberTexture(text) {
   g.fillStyle = grd; g.fillText(text, 128, 138);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+
+// ── 레인 장벽: 좀비가 오른쪽으로 넘어오지 못하게 막는 방책 ────────────────
+export function buildLaneBarrier(x, z0, z1) {
+  const g = new THREE.Group();
+  const len = Math.abs(z1 - z0), midZ = (z0 + z1) / 2;
+  const conc = new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.9 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x6a7280, roughness: 0.4, metalness: 0.75 });
+  const warn = new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.5, emissive: 0x7a5a10, emissiveIntensity: 0.5 });
+  // 콘크리트 기단 + 상단 경고 띠
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.25, len), conc);
+  base.position.set(x, 0.62, midZ); base.castShadow = true; base.receiveShadow = true; g.add(base);
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.16, len), warn);
+  cap.position.set(x, 1.32, midZ); g.add(cap);
+  // 철제 기둥 + 가로대(광고의 컨베이어 난간 느낌)
+  const n = Math.max(2, Math.round(len / 4));
+  const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), iron, n);
+  const m = new THREE.Matrix4();
+  for (let i = 0; i < n; i++) { m.makeTranslation(x, 2.05, z0 + (i + 0.5) * (len / n) * Math.sign(z1 - z0)); posts.setMatrixAt(i, m); }
+  posts.castShadow = true; g.add(posts);
+  for (const y of [1.85, 2.55]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, len), iron);
+    rail.position.set(x, y, midZ); g.add(rail);
+  }
+  return g;
+}

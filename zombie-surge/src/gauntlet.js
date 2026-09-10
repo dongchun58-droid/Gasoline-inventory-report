@@ -8,7 +8,7 @@
 //   오른쪽: +병력 게이트. 값은 현재 배수와 같다(부술수록 커진다).
 // 중간중간 거인이 내려온다 — 체력이 있는 건 거인뿐이고, 나올수록 강해진다.
 import * as THREE from 'three';
-import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp } from './env.js';
+import { ROAD_HALF, buildEnvironment, buildCard, buildNumberBlock, buildNumberGate, buildStatue, setStatueHp, buildLaneBarrier } from './env.js';
 import { Squad, FORMATION_KEYS } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
@@ -17,6 +17,8 @@ const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3
 const SQ_Z = 0, SPAWN_Z = -72, LINE_Z = SQ_Z - 1.0;
 const RANGE = 58, FALL = 26, FAR_MIN = 0.22;
 const LANE = { left: -7.2, mid: 0, right: 7.2 };
+const BARRIER_X = -3.6;                  // 좀비는 이 선을 넘어오지 못한다
+const ZOMBIE_MAX_X = BARRIER_X - 0.75;
 const NUM_Z = -26;                       // 가운데 숫자 관문이 고정된 자리
 // 배수는 끝없이 이어진다: 1 · 2 · 5 · 10 · 20 · 50 · 100 · 200 · 500 …
 function tierValue(i) { const base = [1, 2, 5][i % 3]; return base * Math.pow(10, Math.floor(i / 3)); }
@@ -44,6 +46,7 @@ export class GauntletRun {
     this._statueT = this.G.statueEvery[0]; this._numberT = 2.0; this._plusT = 1.0;
     this._giantT = this.G.giantEvery[0]; this._spawnAcc = 0; this._trAcc = 0; this._killAcc = 0;
     this.gate = buildNumberGate(); this.gate.position.set(LANE.mid, 0, NUM_Z); this.group.add(this.gate);
+    this.group.add(buildLaneBarrier(BARRIER_X, -96, 3));   // 왼쪽 좀비 채널을 막는 방책
     this.best = 0;
     this.squad.pos.set(this.x, 0, SQ_Z); this.squad.setCount(this.troops);
     this.msg = { text: '← 황금 석상 부수기  ·  가운데 숫자 = 보급 강화  ·  +병력 →', color: '#ffd23f', t: 4.5 };
@@ -100,7 +103,7 @@ export class GauntletRun {
     while (this._spawnAcc >= 1) {
       this._spawnAcc -= 1;
       // 왼쪽 레인에만, 레인을 꽉 채우듯 촘촘하게 (광고처럼 붉은 무리가 밀려온다)
-      const x = LANE.left + (this.R() - 0.5) * G.laneWidth;
+      const x = Math.min(ZOMBIE_MAX_X, LANE.left + (this.R() - 0.5) * G.laneWidth);
       const zb = this.zombies.spawn(x, SPAWN_Z - this.R() * 5,
         this.R() < 0.3 ? 'runner' : 'walker', 1, G.enemySpeed);   // 체력 1 — 스치면 쓰러진다
       if (zb) { zb.sway = 0.2 + this.R() * 0.5; zb.swayPh = this.R() * 6.28; zb.swaySp = 0.5 + this.R() * 0.8; }
@@ -109,16 +112,19 @@ export class GauntletRun {
       if (zb.state === 'dying') continue;
       if (zb.z < LINE_Z) {
         zb.state = 'walk'; zb.z += zb.speed * dt;
-        if (zb.z > -18) {                       // 가까워지면 분대 쪽으로 모여든다
-          const dx = this.x - zb.x;
+        if (zb.z > -18) {                       // 가까워지면 몰려든다 — 단, 장벽은 못 넘는다
+          const goal = Math.min(this.x, ZOMBIE_MAX_X);
+          const dx = goal - zb.x;
           zb.x += Math.sign(dx) * Math.min(Math.abs(dx), zb.speed * 0.85 * dt);
         } else zb.x += Math.sin(this.t * zb.swaySp + zb.swayPh) * zb.sway * dt;
-        zb.x = Math.max(-ROAD_HALF + 0.6, Math.min(ROAD_HALF - 0.6, zb.x));
+        zb.x = Math.max(-ROAD_HALF + 0.6, Math.min(ZOMBIE_MAX_X, zb.x));
       } else {
         zb.z = LINE_Z; zb.state = 'attack'; zb.atk -= dt;
         if (zb.atk <= 0) { zb.atk = 0.8;
-          if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - 1); this.shake = Math.max(this.shake, 0.16); this.audio.hit && this.audio.hit(); }
-          this.fx.spark(_a.set(zb.x, 0.7, zb.z), 4, 0xff8a50); }
+          if (Math.abs(zb.x - this.x) < 3.4) {   // 장벽 너머에 있으면 물지 못한다
+            if (this.shieldT <= 0) { this.troops = Math.max(0, this.troops - 1); this.shake = Math.max(this.shake, 0.16); this.audio.hit && this.audio.hit(); }
+            this.fx.spark(_a.set(zb.x, 0.7, zb.z), 4, 0xff8a50);
+          } }
       }
     }
   }
