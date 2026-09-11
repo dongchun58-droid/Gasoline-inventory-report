@@ -25,14 +25,22 @@ export class HUD {
     if (this._wpn !== null && s.weapon !== this._wpn) { this.el.wpnPop.textContent = '▲ ' + s.weapon; this.el.wpnPop.style.opacity = 1; this._wpnT = 1.6; }
     this._wpn = s.weapon;
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
-    if (s.godzMode) { this.el.remain.textContent = `GODZILLA ${s.godz}초`; this.el.form.style.color = '#8affd0'; }
-    else if (s.wipes != null) { this.el.remain.textContent = `전멸 ${s.wipes}회  ·  최고 ×${s.best}`; this.el.form.style.color = ''; }
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
     this.el.wave.textContent = s.quota ? `처치 ${s.kills} / ${s.quota}`
       : `×${s.tier}  ·  ${Math.floor(s.survived / 60)}:${String(Math.floor(s.survived % 60)).padStart(2, '0')} 생존  ·  석상 ${s.smashed}격파/${s.missed}실패`;
-    this.el.remain.textContent = s.statue ? `황금 석상 내구도 ${Math.round(s.statue.frac * 100)}%`
+    // remain 줄은 한 번만 조립한다 — 고질라 표시가 석상 내구도에 덮이지 않도록
+    let remain = s.statue ? `황금 석상 내구도 ${Math.round(s.statue.frac * 100)}%`
       : (s.remain > 0 ? `접근 중 ${s.remain}` : '');
+    if (s.godzMode) {
+      const g = s.godz < 0 ? 'GODZILLA ∞' : `GODZILLA ${s.godz}초`;
+      remain = remain ? `${g}  ·  ${remain}` : g;
+      this.el.form.style.color = '#8affd0';
+    } else {
+      if (!remain && s.wipes != null) remain = `전멸 ${s.wipes}회  ·  최고 ×${s.best}`;
+      this.el.form.style.color = '';
+    }
+    this.el.remain.textContent = remain;
     if (s.boss) { this.el.bossBar.style.display = 'block'; this.el.bossName.textContent = s.boss.name; this.el.bossFill.style.width = (Math.max(0, s.boss.frac) * 100) + '%'; }
     else this.el.bossBar.style.display = 'none';
     if (s.msg && s.msg !== this._last) { this._last = s.msg; this.el.msg.textContent = s.msg.text; this.el.msg.style.color = s.msg.color; this.el.msg.style.opacity = 1; this._msgT = s.msg.t; }

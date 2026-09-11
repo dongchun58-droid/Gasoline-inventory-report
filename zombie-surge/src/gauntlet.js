@@ -97,7 +97,7 @@ export class GauntletRun {
     if (this.troops <= 0 && !this.godz) this._rally();
   }
 
-  // ── 고질라: ×200 이후 표지판이 내려온다. 먹으면 변신하되 병력은 1로 초기화 ──
+  // ── 고질라: ×200 이후 표지판이 내려온다. 먹으면 변신하고 그대로 영원히 고질라 ──
   _godzilla(dt) {
     // 변신 중
     if (this.godz) {
@@ -105,7 +105,7 @@ export class GauntletRun {
       G.mesh.position.set(this.x, 0, SQ_Z - 1.0); G.mesh.rotation.y = Math.PI;
       animateGodzilla(G.mesh, this.t, G.roar > 0);
       G.roar -= dt;
-      if (G.t <= 0) {
+      if (isFinite(G.t) && G.t <= 0) {         // 무한(Infinity)이면 절대 풀리지 않는다
         this.group.remove(G.mesh); this.godz = null;
         this.squad.group.visible = true;
         this.troops = 1;                       // 변신이 끝나면 다시 한 명부터
@@ -134,12 +134,12 @@ export class GauntletRun {
   _transform() {
     this._signDone = true;
     const mesh = buildGodzilla(1.0); mesh.rotation.y = Math.PI; this.group.add(mesh);   // 도로 위쪽(-z)을 본다
-    this.godz = { mesh, t: this.G.godzillaTime, roar: 1.2 };
+    this.godz = { mesh, t: this.G.godzillaTime > 0 ? this.G.godzillaTime : Infinity, roar: 1.2 };
     this.squad.group.visible = false;
     this.troops = 1;                            // 오직 하나 — 고질라
     this.shake = 1.0;
     this.fx.spark(_a.set(this.x, 3.0, SQ_Z), 90, 0x8affd0);
-    this.msg = { text: 'GODZILLA 변신!', color: '#8affd0', t: 2.6 };
+    this.msg = { text: isFinite(this.godz.t) ? 'GODZILLA 변신!' : 'GODZILLA 변신! — 영원히', color: '#8affd0', t: 2.6 };
     this.audio.roar && this.audio.roar();
   }
 
@@ -543,7 +543,7 @@ export class GauntletRun {
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
       statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,
       endless: true, survived: this.time, wipes: this.wipes, best: this.best, godzMode: !!this.godz,
-      escaped: this.escaped, godz: this.godz ? Math.ceil(this.godz.t) : 0 };
+      escaped: this.escaped, godz: this.godz ? (isFinite(this.godz.t) ? Math.ceil(this.godz.t) : -1) : 0 };
   }
   dispose() { this.scene.remove(this.group); this.group.traverse((o) => { if (o.geometry) o.geometry.dispose?.(); }); }
 }
