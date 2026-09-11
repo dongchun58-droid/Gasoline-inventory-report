@@ -34,8 +34,11 @@ export class HUD {
     if (this._wpnT > 0) { this._wpnT -= 1 / 60; if (this._wpnT <= 0) this.el.wpnPop.style.opacity = 0; }
     this.el.prog.style.width = (s.prog * 100).toFixed(1) + '%';
     this.el.coins.textContent = '🪙 ' + s.coins;
+    const mm = Math.floor(s.survived / 60) + ':' + String(Math.floor(s.survived % 60)).padStart(2, '0');
+    const narrow = window.innerWidth < 520;                 // 휴대폰에선 가운데 병력 표시와 부딪히지 않게 줄인다
     this.el.wave.textContent = s.quota ? `처치 ${big(s.kills)} / ${s.quota}`
-      : `×${s.tier}  ·  ${Math.floor(s.survived / 60)}:${String(Math.floor(s.survived % 60)).padStart(2, '0')} 생존  ·  석상 ${s.smashed}격파/${s.missed}실패`;
+      : narrow ? `×${s.tier} · ☠${big(s.kills)} · ${mm} · 🗿${s.smashed}/${s.missed}`
+      : `×${s.tier}  ·  처치 ${big(s.kills)}  ·  ${mm} 생존  ·  석상 ${s.smashed}격파/${s.missed}실패`;
     // remain 줄은 한 번만 조립한다 — 고질라 표시가 석상 내구도에 덮이지 않도록
     let remain = s.statue ? `황금 석상 내구도 ${Math.round(s.statue.frac * 100)}%`
       : (s.remain > 0 ? `접근 중 ${s.remain}` : '');
