@@ -331,8 +331,8 @@ export class WaveDefense {
     if (W.beam) {
       for (let i = 0; i < shots.length; i += 2) {          // 한 칸 걸러 — 빔이 한 덩어리로 뭉치지 않게
         const sh = shots[i];
-        this.fx.tracer(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0], 0.92, sh[1]), W.tracer, W.w);
-        if (Math.random() < 0.35) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0x9ff4ff);
+        this.fx.tracer(_a.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.7), _b.set(sh[0], 0.92, sh[1]), W.tracer, W.w);
+        if (Math.random() < 0.35) this.fx.flash(_c.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.9), W.flash, 0x9ff4ff);
       }
       this._trAcc += W.rate * dt;
       while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot(W.key); }
@@ -344,9 +344,9 @@ export class WaveDefense {
         const c = Math.floor(Math.random() * cols), sh = shots[c];
         for (let p = 0; p < W.pellets; p++) {
           const jx = (Math.random() - 0.5) * catchW * 1.7;
-          this.fx.bullet(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w * 0.68);
+          this.fx.bullet(_a.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w * 0.68);
         }
-        if (fired <= 14) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0xffd070);
+        if (fired <= 14) this.fx.flash(_c.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.9), W.flash, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);
       }
     }
@@ -384,7 +384,7 @@ export class WaveDefense {
   }
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
-    const tx = this.x * 0.62, ty = 8.8 + big * 2.8, tz = SQ_Z + 11.6 + big * 4.0;
+    const tx = this.x * 0.62, ty = 8.8 + big * 2.8 + (this.camY || 0), tz = SQ_Z + 11.6 + big * 4.0;
     c.position.x += (tx - c.position.x) * Math.min(1, dt * 5);
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
@@ -393,7 +393,7 @@ export class WaveDefense {
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;
-    return { troops: this.troops, cap: TROOP_CAP, formation: this.squad.form.name, weapon: this.weapon.name, kills: this.kills, quota: this.F.quota,
+    return { troops: this.troops, cap: TROOP_CAP, formation: this.squad.form.name, weapon: this.weapon.name, kills: this.kills + (this.bonusKills || 0), quota: this.F.quota,
       prog: this.prog, coins: this.coins, boss: B, msg: this.msg, shield: this.shieldT > 0,
       remain: this.zombies.alive, firing: this.firing };
   }

@@ -454,8 +454,8 @@ export class GauntletRun {
     if (W.beam) {
       for (let i = 0; i < shots.length; i += 2) {
         const sh = shots[i];
-        this.fx.tracer(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0], 0.92, sh[1]), W.tracer, W.w * 0.6);
-        if (Math.random() < 0.3) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, W.tracer);
+        this.fx.tracer(_a.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.7), _b.set(sh[0], 0.92, sh[1]), W.tracer, W.w * 0.6);
+        if (Math.random() < 0.3) this.fx.flash(_c.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.9), W.flash, W.tracer);
       }
       this._trAcc += W.rate * dt;
       while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot(W.key); }
@@ -467,9 +467,9 @@ export class GauntletRun {
         const sh = shots[Math.floor(Math.random() * cols)];
         for (let p = 0; p < W.pellets; p++) {
           const jx = (Math.random() - 0.5) * catchW * 1.7;
-          this.fx.bullet(_a.set(sh[0], 0.92, SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w * 0.68);
+          this.fx.bullet(_a.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.7), _b.set(sh[0] + jx, 0.92 + (Math.random() - 0.5) * 0.3, sh[1]), W.tracer, W.w * 0.68);
         }
-        if (fired <= 12) this.fx.flash(_c.set(sh[0], 0.92, SQ_Z - 0.9), W.flash, 0xffd070);
+        if (fired <= 12) this.fx.flash(_c.set(sh[0], 0.92 + (this.flyY || 0), SQ_Z - 0.9), W.flash, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);
       }
     }
@@ -527,7 +527,7 @@ export class GauntletRun {
   }
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
-    const tx = this.x * 0.55, ty = 10.5 + big * 3.0, tz = SQ_Z + 13.5 + big * 4.0;
+    const tx = this.x * 0.55, ty = 10.5 + big * 3.0 + (this.camY || 0), tz = SQ_Z + 13.5 + big * 4.0;
     c.position.x += (tx - c.position.x) * Math.min(1, dt * 5);
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
@@ -539,7 +539,7 @@ export class GauntletRun {
     const s = this.statues[0];
     return { troops: this.godz ? 1 : this.troops, cap: this.godz ? 1 : this.cap,
       formation: this.godz ? 'GODZILLA' : this.squad.form.name, weapon: this.godz ? 'ATOMIC BREATH' : this.weapon.name,
-      kills: this.kills, quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
+      kills: this.kills + (this.bonusKills || 0), quota: 0, tier: this.mult, prog: this.prog, coins: this.coins, boss: B,
       msg: this.msg, shield: this.shieldT > 0, remain: this.zombies.alive, firing: this.firing,
       statue: s ? { hp: Math.ceil(s.hp), frac: s.hp / s.maxHp } : null, smashed: this.smashed, missed: this.missed,
       endless: true, survived: this.time, wipes: this.wipes, best: this.best, godzMode: !!this.godz,

@@ -11,6 +11,7 @@ import { renderPortraits } from './squad.js';
 import { buildBoss } from './zombies.js';
 import { load, save } from './save.js';
 import { GameAudio } from './audio.js';
+import { Admin } from './admin.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -63,6 +64,7 @@ function launch(n, character) {
   hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits); state.badge = character;
   audio.start(); audio.setScene('wave');
   state.mode = 'play';
+  if (admin) { if (admin.godz) admin.godz = null; if (admin.flying) admin.fly(true); if (admin.godMode) admin.god(true); }
 }
 function startStage(n, character) {
   if (!state.data.seenTut) { hud.showTutorial(() => { state.data.seenTut = true; save(state.data); launch(n, character); }); }
@@ -86,7 +88,7 @@ function finish(kind) {
   save(state.data);
   const hasNext = STAGES.some((s) => s.n === st.n + 1 && s.playable);
   audio.setScene('result'); clear ? audio.clear() : audio.fail();
-  hud.showResult({ clear: st.endless ? true : clear, stars, troops: r.troops, peak: r.peak, kills: r.kills,
+  hud.showResult({ clear: st.endless ? true : clear, stars, troops: r.troops, peak: r.peak, kills: r.kills + (r.bonusKills || 0),
       time: r.time, coins: r.coins, hasNext, endless: st.endless, best: r.best, title: st.endless ? `최고 ×${r.best}` : null },
     () => startStage(st.n + 1, state.character), () => startStage(st.n, state.character), showMenu);
   state.mode = 'result';
@@ -94,10 +96,11 @@ function finish(kind) {
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const dt = Math.min(0.05, (now - last) / 1000) * admin.timeScale; last = now;
   const r = state.run;
   if (state.mode === 'play' && r) {
     r.update(dt, input);
+    admin.update(dt);
     hud.update(r.status());
     const rz = r.z || 0;
     sun.target.position.set(r.x, 0, rz - 20); sun.position.set(r.x + (state.stage.theme.time === 'sunset' ? -40 : 30), state.stage.theme.time === 'sunset' ? 24 : 55, rz - 38);
@@ -114,7 +117,9 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+const admin = new Admin({ state, camera, fx, audio, hud, launch });
 applyTheme(STAGES[0].theme);
 showMenu();
 requestAnimationFrame(frame);
-window.__zs = { get run() { return state.run; }, state, startStage: launch, STAGES, scene, camera, renderer, input, audio, fx, hud, portraits, THREE, buildBoss };
+window.admin = admin;
+window.__zs = { get run() { return state.run; }, state, admin, startStage: launch, STAGES, scene, camera, renderer, input, audio, fx, hud, portraits, THREE, buildBoss };

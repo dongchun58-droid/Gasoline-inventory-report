@@ -377,9 +377,9 @@ export class FieldRun {
       const off = Math.floor(Math.random() * step);
       for (let i = off; i < shots.length; i += step) {
         const [ca, sa, d] = shots[i];
-        src.set(this.x + ca * 1.0, 0.95, this.z + sa * 1.0);
+        src.set(this.x + ca * 1.0, 0.95 + (this.flyY || 0), this.z + sa * 1.0);
         this.fx.tracer(src, _b.set(this.x + ca * d, 0.95, this.z + sa * d), W.tracer, W.w * 0.42);
-        if (Math.random() < 0.28) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash * 0.75, W.tracer);
+        if (Math.random() < 0.28) this.fx.flash(_c.set(src.x, src.y, src.z), W.flash * 0.75, W.tracer);
       }
       this._trAcc += W.rate * dt;
       while (this._trAcc >= 1) { this._trAcc -= 1; this.audio.shot && this.audio.shot(W.key); }
@@ -391,10 +391,10 @@ export class FieldRun {
         const [ca, sa, d] = shots[Math.floor(Math.random() * shots.length)];
         const j = (Math.random() - 0.5) * 0.10;
         const c2 = Math.cos(Math.atan2(sa, ca) + j), s2 = Math.sin(Math.atan2(sa, ca) + j);
-        src.set(this.x + ca * 1.0, 0.95, this.z + sa * 1.0);
+        src.set(this.x + ca * 1.0, 0.95 + (this.flyY || 0), this.z + sa * 1.0);
         for (let p = 0; p < W.pellets; p++)
           this.fx.bullet(src, _b.set(this.x + c2 * d, 0.95 + (Math.random() - 0.5) * 0.25, this.z + s2 * d), W.tracer, W.w * 0.62);
-        if (fired <= 8) this.fx.flash(_c.set(src.x, 0.95, src.z), W.flash * 0.8, 0xffd070);
+        if (fired <= 8) this.fx.flash(_c.set(src.x, src.y, src.z), W.flash * 0.8, 0xffd070);
         this.audio.shot && this.audio.shot(W.key);
       }
     }
@@ -448,7 +448,7 @@ export class FieldRun {
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
     // 사방을 보려면 높고 안정적인 시점이 낫다 — 분대를 중심에 두고 위에서 비스듬히
-    const up = 26.0 + big * 6.5, back = 18.5 + big * 4.0;
+    const up = 26.0 + big * 6.5 + (this.camY || 0), back = 18.5 + big * 4.0;
     c.position.x += (this.x - c.position.x) * Math.min(1, dt * 4.0);
     c.position.y += (up - c.position.y) * Math.min(1, dt * 3.0);
     c.position.z += ((this.z + back) - c.position.z) * Math.min(1, dt * 4.0);
@@ -457,7 +457,7 @@ export class FieldRun {
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;
-    return { troops: this.troops, cap: TROOP_CAP, weapon: this.weapon.name, kills: this.kills, quota: this.F.quota,
+    return { troops: this.troops, cap: TROOP_CAP, weapon: this.weapon.name, kills: this.kills + (this.bonusKills || 0), quota: this.F.quota,
       prog: this.prog, coins: this.coins, boss: B, msg: this.msg, shield: this.shieldT > 0,
       remain: this.zombies.alive, firing: this.firing, formation: this.squad.form.name,
       fan: Math.round(this.fan * 180 / Math.PI) };
