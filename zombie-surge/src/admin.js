@@ -1,5 +1,5 @@
 // admin.js — 관리자(치트) 콘솔
-// 열기: F9 또는 ` 키 · 키보드로 "admin" 입력 · 코인 표시를 5번 연속 탭(휴대폰)
+// 열기: 1 키(또는 F9 · ` ) · 키보드로 "admin" 입력 · 코인 표시를 5번 연속 탭(휴대폰)
 // 콘솔에서는 window.admin 으로 전부 호출할 수 있다. admin.help() 로 목록 확인.
 import * as THREE from 'three';
 import { buildGodzilla, animateGodzilla } from './zombies.js';
@@ -479,7 +479,9 @@ export class Admin {
   }
   _hotkeys() {
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'F9' || e.code === 'Backquote') { e.preventDefault(); this.panel(); return; }
+      if (e.code === 'Digit1' || e.code === 'Numpad1' || e.code === 'F9' || e.code === 'Backquote') {
+        e.preventDefault(); this.panel(); return;      // 1 키로 바로 열고 닫는다
+      }
       if (e.key && e.key.length === 1) {                 // "admin" 을 타이핑하면 열린다
         this._seq = (this._seq + e.key.toLowerCase()).slice(-5);
         if (this._seq === 'admin') { this._seq = ''; this.panel(true); }
