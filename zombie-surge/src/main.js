@@ -117,7 +117,7 @@ function frame(now) {
   renderer.render(scene, camera);
 }
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-const admin = new Admin({ state, camera, fx, audio, hud, launch });
+const admin = new Admin({ state, camera, fx, audio, hud, input, launch });
 applyTheme(STAGES[0].theme);
 showMenu();
 requestAnimationFrame(frame);

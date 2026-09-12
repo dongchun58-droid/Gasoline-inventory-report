@@ -3,7 +3,7 @@
 // 콘솔에서는 window.admin 으로 전부 호출할 수 있다. admin.help() 로 목록 확인.
 import * as THREE from 'three';
 import { buildGodzilla, animateGodzilla } from './zombies.js';
-import { WEAPON_ORDER, TROOP_CAP, STAGES, CHARACTERS, CHARACTER_ORDER } from './stages.js';
+import { WEAPONS, WEAPON_ORDER, TROOP_CAP, STAGES, CHARACTERS, CHARACTER_ORDER } from './stages.js';
 import { save } from './save.js';
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3();
@@ -13,12 +13,16 @@ const TRILLION = 1e12;          // 1조
 
 export class Admin {
   constructor(ctx) {
-    this.ctx = ctx;                   // { state, camera, fx, audio, hud, launch }
+    this.ctx = ctx;                   // { state, camera, fx, audio, hud, input, launch }
     this.timeScale = 1;
     this.flying = false; this.godMode = false; this.godTroops = 0;
     this.meteorOn = false; this.lightningOn = false; this.freezeOn = false; this.paperOn = false;
     this.holeOn = false; this.magnetOn = false; this.scale = 1;
     this.meteors = []; this._metAcc = 0; this._ltAcc = 0;
+    this.torOn = false; this.betrayOn = false; this.chainOn = false; this.rainbowOn = false;
+    this.autoOn = false; this.slowOn = false; this.zoomStep = 0;
+    this.nukes = []; this.tor = null; this.pets = [];
+    this._btAcc = 0; this._dying = new WeakSet(); this._hue = 0; this._tracer0 = null;
     this.godz = null;                 // 보너스 스테이지 밖에서 쓰는 관리자 전용 고질라
     this.open = false;
     this._seq = '';
@@ -150,7 +154,12 @@ export class Admin {
     const r = this.run;
     this.timeScale = 1; this.godMode = false;
     this.meteorOn = this.lightningOn = this.paperOn = this.holeOn = this.magnetOn = false;
-    this.meteors.length = 0; this.scale = 1;
+    this.betrayOn = this.chainOn = this.torOn = false;
+    this.meteors.length = 0; this.nukes.length = 0; this.tor = null; this.scale = 1; this.zoomStep = 0;
+    if (this.pets.length) this.godzillaArmy(false);
+    if (this.rainbowOn) this.rainbow(false);
+    if (this.autoOn) this.auto(false);
+    if (this.slowOn) this.slowmo(false);
     if (this.freezeOn) this.freeze(false);
     if (this.flying) this.fly(false);
     if (r && (r.godz || this.godz)) this.human();
@@ -181,6 +190,15 @@ export class Admin {
       ['admin.cards(n)', '카드 n장 즐생성'],
       ['admin.boss()', '보스/거인 소환'],
       ['admin.hero(key)', '대장 교체(부대 전체)'],
+      ['admin.nuke()', '핵폭탄 충격파'],
+      ['admin.tornado()', '도로를 거슬러 올라가는 토네이도'],
+      ['admin.betray()', '좌비끼리 서로 잡아먹기'],
+      ['admin.chain()', '자폭 좌비(연쇄 폭발)'],
+      ['admin.rainbow()', '무지개 총알'],
+      ['admin.godzillaArmy()', '작은 고질라 4마리 소환'],
+      ['admin.auto()', '오토 플레이(알아서 싸운다)'],
+      ['admin.slowmo()', '좌비만 ¼ 속도'],
+      ['admin.zoom(n)', '카메라 줄어보기 3단계'],
       ['admin.chaos()', '전부 켜기'],
       ['admin.speed(x)', '게임 속도 (기본: 2배씩 순환)'],
       ['admin.stage(n)', '잠금 무시하고 n스테이지 시작'],
@@ -261,7 +279,82 @@ export class Admin {
   chaos() {
     this.horde(); this.gun(); this.god(true); this.fly(true);
     this.meteor(true); this.lightning(true); this.paper(true); this.magnet(true); this.giant(3);
+    this.tornado(true); this.chain(true); this.rainbow(true); this.godzillaArmy(true); this.zoom(1);
+    this.nuke();
     this._toast('카오스!!!', '#ff5a9a');
+  }
+
+
+  // ────────────────────────────────── 더 미친 것들
+  /** ☢️ 핵폭탄 — 하얀 섬광과 함께 충격파 고리가 퍼져나간다. */
+  nuke() {
+    const r = this.run; if (!r) return;
+    this.nukes.push({ x: r.x, z: (r.z || 0) - 26, rad: 1 });
+    r.shake = Math.max(r.shake, 1.6);
+    r.fx.flash(_c.set(r.x, 6, (r.z || 0) - 26), 26, 0xffffff);
+    this.ctx.audio.roar && this.ctx.audio.roar();
+    this._toast('핵폭탄!!!', '#ffd23f');
+  }
+  /** 🌪 토네이도 — 회오리가 도로를 거슬러 올라가며 좌비를 젯이둔다. */
+  tornado(on) {
+    this.torOn = on === undefined ? !this.torOn : !!on;
+    const r = this.run;
+    this.tor = this.torOn && r ? { x: r.x, z: (r.z || 0) - 10 } : null;
+    this._toast(this.torOn ? '토네이도 ON' : '토네이도 OFF', '#a8d8ff');
+  }
+  /** 🧟 좌비 배신 — 좌비끼리 서로 잡아먹는다. */
+  betray(on) { this.betrayOn = on === undefined ? !this.betrayOn : !!on;
+    this._toast(this.betrayOn ? '좌비 배신 ON — 서로 싸운다' : '배신 OFF', '#ff7ab0'); }
+  /** 🧨 자폭 좌비 — 죽을 때마다 터져서 옆에 있는 놀이까지 연쇄로 터진다. */
+  chain(on) { this.chainOn = on === undefined ? !this.chainOn : !!on;
+    this._toast(this.chainOn ? '자폭 좌비 ON' : '자폭 OFF', '#ff9a50'); }
+  /** 🌈 무지개 총알 — 총알 색이 계속 변한다. */
+  rainbow(on) {
+    const was = this.rainbowOn;
+    this.rainbowOn = on === undefined ? !this.rainbowOn : !!on;
+    if (this.rainbowOn && !this._tracer0) {
+      this._tracer0 = {}; for (const k of WEAPON_ORDER) this._tracer0[k] = WEAPONS[k].tracer;
+    }
+    if (was && !this.rainbowOn && this._tracer0) {
+      for (const k of WEAPON_ORDER) WEAPONS[k].tracer = this._tracer0[k];
+    }
+    this._toast(this.rainbowOn ? '무지개 ON' : '무지개 OFF', '#ff7ab0');
+  }
+  /** 🐉 고질라 군단 — 작은 고질라 4마리가 양옆에서 같이 태운다. */
+  godzillaArmy(on) {
+    const r = this.run; if (!r) return;
+    const want = on === undefined ? !this.pets.length : !!on;
+    for (const q of this.pets) r.group.remove(q.mesh);
+    this.pets.length = 0;
+    if (want) {
+      for (const off of [-13, -6.5, 6.5, 13]) {
+        const mesh = buildGodzilla(0.62); mesh.rotation.y = Math.PI; r.group.add(mesh);
+        this.pets.push({ mesh, off, run: r });
+      }
+      this.ctx.audio.roar && this.ctx.audio.roar();
+    }
+    this._toast(want ? '고질라 군단 소집!' : '고질라 군단 해산', '#8affd0');
+  }
+  /** 🤖 오토 플레이 — 좌비가 제일 많은 곳으로 알아서 움직이며 쓴다. */
+  auto(on) {
+    if (!this.ctx.input) return this._toast('오토 플레이를 쓸 수 없다', '#ff8a70');
+    this.autoOn = on === undefined ? !this.autoOn : !!on;
+    if (!this.autoOn) { const I = this.ctx.input; I.steer = null; I.fire = false; }
+    this._toast(this.autoOn ? '오토 플레이 ON' : '오토 플레이 OFF', '#9fffd0');
+  }
+  /** 🐢 슈퍼 슬로우 — 좌비만 ¼ 속도로 기어간다. */
+  slowmo(on) {
+    const was = this.slowOn;
+    this.slowOn = on === undefined ? !this.slowOn : !!on;
+    if (this.slowOn && this.freezeOn) this.freeze(false);
+    const r = this.run;
+    if (was && !this.slowOn && r) for (const z of r.zombies.list) if (z._spd !== undefined) { z.speed = z._spd; delete z._spd; }
+    this._toast(this.slowOn ? '슈퍼 슬로우 ON' : '슬로우 OFF', '#a8e6ff');
+  }
+  /** 🔭 줄어보기 — 카메라가 훌씩 물러난다(누를 때마다 단계). */
+  zoom(step) {
+    this.zoomStep = step == null ? (this.zoomStep + 1) % 3 : Math.max(0, Math.min(2, step));
+    this._toast(['카메라 기본', '카메라 멀리', '카메라 아주 멀리'][this.zoomStep], '#9fd0ff');
   }
 
   // ────────────────────────────────── 매 프레임 유지
@@ -280,6 +373,14 @@ export class Admin {
     if (this.paperOn) for (const z of r.zombies.list) { if (z.hp > 1) z.hp = 1; }
     if (this.holeOn) this._blackhole(dt, r);
     if (this.magnetOn) this._magnet(dt, r);
+    if (this.slowOn) this._slow(r);
+    if (this.betrayOn) this._betray(dt, r);
+    if (this.chainOn) this._chain(r);
+    if (this.rainbowOn) this._rainbow(dt);
+    if (this.autoOn) this._auto(r);
+    if (this.nukes.length) this._nukes(dt, r);
+    if (this.torOn) this._tornado(dt, r);
+    if (this.pets.length) this._pets(dt, r);
     if (this.godz) this._burn(dt);
     this._syncPanel();
   }
@@ -290,7 +391,7 @@ export class Admin {
     const s = this.scale, g = r.squad.group, y = this.flying ? FLY_H : 0;
     r.flyY = y;
     // 내가 커지면 카메라도 같이 물러난다 — 안 그러면 병사가 화면을 다 가린다
-    r.camY = (this.flying ? FLY_H * 0.75 : 0) + (s - 1) * 7.5;
+    r.camY = (this.flying ? FLY_H * 0.75 : 0) + (s - 1) * 7.5 + this.zoomStep * 17;
     if (s === 1) { g.scale.setScalar(1); g.position.set(0, y, 0); return; }
     g.scale.setScalar(s);
     g.position.set(r.x * (1 - s), y, (r.z || 0) * (1 - s));
@@ -401,6 +502,133 @@ export class Admin {
     r.fx.flash(src, 3.0, 0x9fffd8);
   }
 
+
+  // ☢️ 핵폭탄: 충격파 고리가 지나가면서 쓸어버린다
+  _nukes(dt, r) {
+    for (let i = this.nukes.length - 1; i >= 0; i--) {
+      const n = this.nukes[i], prev = n.rad;
+      n.rad += 62 * dt;
+      for (const zb of r.zombies.list) {
+        if (zb.state === 'dying') continue;
+        const d = Math.hypot(zb.x - n.x, zb.z - n.z);
+        if (d >= prev && d < n.rad) r._kill(zb);
+      }
+      if (r.boss && !r.boss.dead) {
+        const d = Math.hypot(r.boss.x - n.x, r.boss.z - n.z);
+        if (d >= prev && d < n.rad) { r.boss.hp -= 6000; if (r.boss.hp <= 0 && r._bossDie) r._bossDie(); }
+      }
+      for (let k = 0; k < 18; k++) {                       // 퍼지는 고리
+        const a1 = (k / 18) * Math.PI * 2, a2 = ((k + 1) / 18) * Math.PI * 2;
+        r.fx.tracer(_a.set(n.x + Math.cos(a1) * n.rad, 0.7, n.z + Math.sin(a1) * n.rad),
+          _b.set(n.x + Math.cos(a2) * n.rad, 0.7, n.z + Math.sin(a2) * n.rad), 0xffd23f, 0.7);
+      }
+      if (n.rad > 95) this.nukes.splice(i, 1);
+    }
+  }
+  // 🌪 토네이도: 도로를 거슬러 올라가며 빨아들인다
+  _tornado(dt, r) {
+    const z0 = r.z || 0, T = this.tor; if (!T) return;
+    T.z -= 13 * dt; T.x += Math.sin(performance.now() * 0.001) * 9 * dt;
+    if (T.z < z0 - 70) { T.z = z0 - 6; T.x = r.x; }
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      const dx = T.x - zb.x, dz = T.z - zb.z, d = Math.hypot(dx, dz) || 1;
+      if (d > 16) continue;
+      if (d < 4) { r._kill(zb); continue; }
+      const k = Math.min(d, 26 * dt) / d;
+      zb.x += dx * k; zb.z += dz * k;
+    }
+    const t = performance.now() * 0.004;
+    for (let k = 0; k < 9; k++) {                          // 소용돌이 기둥
+      const a = t + k * 0.7, y0 = k * 1.5, rad = 1.6 + k * 0.7;
+      r.fx.tracer(_a.set(T.x + Math.cos(a) * rad, y0, T.z + Math.sin(a) * rad),
+        _b.set(T.x + Math.cos(a + 0.9) * (rad + 0.7), y0 + 1.5, T.z + Math.sin(a + 0.9) * (rad + 0.7)), 0xbfe0ff, 0.34);
+    }
+  }
+  // 🧟 배신: 가까운 둘이 서로 잡아먹는다
+  _betray(dt, r) {
+    this._btAcc += dt;
+    while (this._btAcc >= 0.08) {
+      this._btAcc -= 0.08;
+      const live = r.zombies.list.filter((z) => z.state !== 'dying');
+      if (live.length < 2) break;
+      const a = live[Math.floor(Math.random() * live.length)];
+      let victim = null, bd = 6;
+      for (const z of live) { if (z === a) continue;
+        const d = Math.hypot(z.x - a.x, z.z - a.z); if (d < bd) { bd = d; victim = z; } }
+      if (!victim) continue;
+      r._kill(victim);
+      r.fx.ichor(_a.set(victim.x, 0.9, victim.z), 8);
+      r.fx.tracer(_a.set(a.x, 0.9, a.z), _b.set(victim.x, 0.9, victim.z), 0xff5a7a, 0.24);
+    }
+  }
+  // 🧨 자폭: 이번 프레임에 새로 죽은 놀이 주변을 날린다(연쇄)
+  _chain(r) {
+    const fresh = [];
+    for (const z of r.zombies.list) {
+      if (z.state !== 'dying') { if (this._dying.has(z)) this._dying.delete(z); continue; }
+      if (this._dying.has(z)) continue;
+      this._dying.add(z); fresh.push(z);
+    }
+    for (const z of fresh) {
+      r.fx.spark(_a.set(z.x, 0.9, z.z), 18, 0xff9a50);
+      r.fx.flash(_c.set(z.x, 1.0, z.z), 1.8, 0xffc070);
+      for (const o of r.zombies.list) {
+        if (o.state === 'dying') continue;
+        if (Math.hypot(o.x - z.x, o.z - z.z) < 5.5) r._kill(o);
+      }
+    }
+  }
+  // 🌈 무지개: 모든 무기의 예광탄 색을 계속 돌린다
+  _rainbow(dt) {
+    this._hue = (this._hue + dt * 0.55) % 1;
+    for (let i = 0; i < WEAPON_ORDER.length; i++) {
+      const c = new THREE.Color().setHSL((this._hue + i * 0.08) % 1, 1, 0.6);
+      WEAPONS[WEAPON_ORDER[i]].tracer = c.getHex();
+    }
+  }
+  // 🤖 오토 플레이: 좌비가 가장 진한 가로 위치로 붙고 계속 쓴다
+  _auto(r) {
+    const I = this.ctx.input; if (!I) return;
+    const z0 = r.z || 0;
+    let sum = 0, w = 0, near = 1e9, nx = r.x;
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      const dz = z0 - zb.z; if (dz < -6 || dz > 60) continue;
+      const k = 1 / (1 + dz * 0.12);                        // 가까운 줄이 더 급하다
+      sum += zb.x * k; w += k;
+      if (dz < near) { near = dz; nx = zb.x; }
+    }
+    const tx = w > 0 ? (sum / w) * 0.45 + nx * 0.55 : r.x;
+    I.steer = Math.max(-1, Math.min(1, (tx - r.x) * 0.55));
+    I.fire = true;
+  }
+  // 🐢 슈퍼 슬로우
+  _slow(r) {
+    for (const z of r.zombies.list) {
+      if (z._spd === undefined) z._spd = z.speed;
+      z.speed = z._spd * 0.25;
+    }
+  }
+  // 🐉 고질라 군단: 각자 자기 옆을 태운다
+  _pets(dt, r) {
+    const z0 = r.z || 0;
+    for (const q of this.pets) {
+      if (q.run !== r) { this.pets.length = 0; return; }
+      const px = Math.max(-r.limit - 6, Math.min(r.limit + 6, r.x + q.off));
+      q.mesh.position.set(px, r.flyY || 0, z0 - 1.0);
+      animateGodzilla(q.mesh, r.t + q.off, false);
+      if (!r.firing) continue;
+      for (const zb of r.zombies.list) {
+        if (zb.state === 'dying') continue;
+        if (Math.abs(zb.x - px) > 7 || zb.z < z0 - 46 || zb.z > z0 + 2) continue;
+        r._kill(zb);
+      }
+      if (Math.random() < 0.55)
+        r.fx.tracer(_a.set(px, 3.0 + (r.flyY || 0), z0 - 1.4), _b.set(px, 1.0, z0 - 44), 0x6affc0, 0.2);
+    }
+  }
+
   // ────────────────────────────────── 패널 UI
   panel(on) { this.open = on === undefined ? !this.open : !!on; this.el.style.display = this.open ? 'grid' : 'none';
     if (this.open) this._syncPanel(); }
@@ -412,6 +640,7 @@ export class Admin {
         background:#080d13ee;border:1px solid #ffd23f66;border-radius:14px;box-shadow:0 14px 40px #000b;pointer-events:auto;
         -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
       #adminPanel h4{grid-column:1/-1;margin:0 0 2px;font:800 13px "Barlow Condensed",sans-serif;letter-spacing:.14em;color:#ffd23f;text-transform:uppercase}
+      #adminPanel h4.sub{margin:8px 0 0;color:#7f9bb5;font-size:11.5px;border-top:1px solid #24303e;padding-top:7px}
       #adminPanel button{appearance:none;border:1px solid #2f4256;background:#16202c;color:#dbe9f5;border-radius:9px;padding:9px 6px;
         font:700 12.5px system-ui,sans-serif;cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1.25}
       #adminPanel button:active{filter:brightness(1.35)}
@@ -426,6 +655,7 @@ export class Admin {
     this.toastEl = document.createElement('div'); this.toastEl.id = 'adminToast';
     document.body.appendChild(this.el); document.body.appendChild(this.toastEl);
     this.btns = [
+      { sep: '기본' },
       { label: '💀 몰살', fn: () => this.killAll() },
       { label: '🦖 고질라', fn: () => this.godzilla(), on: () => !!(this.run && this.run.godz) || !!this.godz },
       { label: '🕊 비행', fn: () => this.fly(), on: () => this.flying },
@@ -436,6 +666,7 @@ export class Admin {
       { label: '🪙 코인 +9999', fn: () => this.coins() },
       { label: '🔢 배수 +3', fn: () => this.tier(3) },
       { label: '🗿 석상 격파', fn: () => this.smashStatues() },
+      { sep: '미친 기술' },
       { label: '☄️ 메테오', fn: () => this.meteor(), on: () => this.meteorOn },
       { label: '⚡ 연쇄 번개', fn: () => this.lightning(), on: () => this.lightningOn },
       { label: '🧊 시간 정지', fn: () => this.freeze(), on: () => this.freezeOn },
@@ -448,6 +679,17 @@ export class Admin {
       { label: '👹 보스 소환', fn: () => this.boss() },
       { label: '🥷 대장 교체', fn: () => this.hero() },
       { label: '⏩ 속도', fn: () => this.speed(), tag: () => '×' + this.timeScale },
+      { sep: '더 미친 것들' },
+      { label: '☢️ 핵폭탄', fn: () => this.nuke() },
+      { label: '🌪 토네이도', fn: () => this.tornado(), on: () => this.torOn },
+      { label: '🧟 좌비 배신', fn: () => this.betray(), on: () => this.betrayOn },
+      { label: '🧨 자폭 좌비', fn: () => this.chain(), on: () => this.chainOn },
+      { label: '🌈 무지개', fn: () => this.rainbow(), on: () => this.rainbowOn },
+      { label: '🐉 고질라 군단', fn: () => this.godzillaArmy(), on: () => !!this.pets.length },
+      { label: '🤖 오토 플레이', fn: () => this.auto(), on: () => this.autoOn },
+      { label: '🐢 슈퍼 슬로우', fn: () => this.slowmo(), on: () => this.slowOn },
+      { label: '🔭 줄어보기', fn: () => this.zoom(), tag: () => ['', '·멀리', '·아주 멀리'][this.zoomStep] },
+      { sep: '마무리' },
       { label: '🎪 카오스 — 전부 켜기', fn: () => this.chaos(), wide: true },
       { label: '🔓 전스테이지 해금', fn: () => this.unlockAll(), wide: true },
       { label: '🏁 즉시 클리어', fn: () => this.win() },
@@ -456,6 +698,10 @@ export class Admin {
     ];
     const h = document.createElement('h4'); h.textContent = 'Admin · 치트'; this.el.appendChild(h);
     for (const b of this.btns) {
+      if (b.sep) {                                   // 구역 머리말
+        const h2 = document.createElement('h4'); h2.className = 'sub'; h2.textContent = b.sep;
+        this.el.appendChild(h2); continue;
+      }
       const el = document.createElement('button');
       el.className = (b.wide ? 'wide ' : '') + (b.cls || '');
       el.onclick = (e) => { e.stopPropagation(); b.fn(); this._syncPanel(); };
@@ -467,6 +713,7 @@ export class Admin {
   _syncPanel() {
     if (!this.el) return;
     for (const b of this.btns) {
+      if (b.sep) continue;
       const txt = b.label + (b.tag ? '  ' + b.tag() : '');
       if (b.el.textContent !== txt) b.el.textContent = txt;
       if (b.on) b.el.classList.toggle('on', !!b.on());
