@@ -13,7 +13,7 @@ const TRILLION = 1e12;          // 1조
 
 export class Admin {
   constructor(ctx) {
-    this.ctx = ctx;                   // { state, camera, fx, audio, hud, input, launch }
+    this.ctx = ctx;                   // { state, scene, camera, fx, audio, hud, input, launch }
     this.timeScale = 1;
     this.flying = false; this.godMode = false; this.godTroops = 0;
     this.meteorOn = false; this.lightningOn = false; this.freezeOn = false; this.paperOn = false;
@@ -23,6 +23,10 @@ export class Admin {
     this.autoOn = false; this.slowOn = false; this.zoomStep = 0;
     this.nukes = []; this.tor = null; this.pets = [];
     this._btAcc = 0; this._dying = new WeakSet(); this._hue = 0; this._tracer0 = null;
+    this.lavaOn = false; this.eyesOn = false; this.discoOn = false; this.fearOn = false;
+    this.goldOn = false; this.reaperOn = false; this.flameOn = false; this.cloneOn = false;
+    this.antiOn = false; this.zSize = 1;
+    this.ufo = null; this.train = null; this._sky0 = null; this._lastKills = 0; this._cloneAcc = 0;
     this.godz = null;                 // 보너스 스테이지 밖에서 쓰는 관리자 전용 고질라
     this.open = false;
     this._seq = '';
@@ -155,6 +159,13 @@ export class Admin {
     this.timeScale = 1; this.godMode = false;
     this.meteorOn = this.lightningOn = this.paperOn = this.holeOn = this.magnetOn = false;
     this.betrayOn = this.chainOn = this.torOn = false;
+    this.eyesOn = this.goldOn = this.reaperOn = this.flameOn = this.cloneOn = false;
+    if (this.lavaOn || this.discoOn) { this.lavaOn = this.discoOn = false; this._sky(null); }
+    if (this.antiOn) this.antigravity(false);
+    if (this.fearOn) this.fear(false);
+    if (this.zSize !== 1) this.zombieSize(1);
+    if (this.ufo) this.ufoBeam(false);
+    if (this.train) this.trainRun(false);
     this.meteors.length = 0; this.nukes.length = 0; this.tor = null; this.scale = 1; this.zoomStep = 0;
     if (this.pets.length) this.godzillaArmy(false);
     if (this.rainbowOn) this.rainbow(false);
@@ -199,6 +210,20 @@ export class Admin {
       ['admin.auto()', '오토 플레이(알아서 싸운다)'],
       ['admin.slowmo()', '좌비만 ¼ 속도'],
       ['admin.zoom(n)', '카메라 줄어보기 3단계'],
+      ['admin.lava()', '바닥이 용암가 된다'],
+      ['admin.push()', '좌비를 저미리로 날려버리기'],
+      ['admin.laserEyes()', '레이저 눈으로 즐살'],
+      ['admin.disco()', '디스코 — 하늘이 번쩌이고 좌비가 돌아간다'],
+      ['admin.ufoBeam()', 'UFO 소환'],
+      ['admin.trainRun()', '폭주 기차'],
+      ['admin.antigravity()', '좌비가 떠올라 터진다'],
+      ['admin.zombieSize()', '좌비 크기 — 개미/거대'],
+      ['admin.fear()', '좌비가 도망간다'],
+      ['admin.gold()', '처치당 코인 100'],
+      ['admin.reaper()', '나타나면 족족 사망'],
+      ['admin.flame()', '화염방사기'],
+      ['admin.clone()', '1초마다 병력 2배'],
+      ['admin.roulette()', '무작위 치트 하나'],
       ['admin.chaos()', '전부 켜기'],
       ['admin.speed(x)', '게임 속도 (기본: 2배씩 순환)'],
       ['admin.stage(n)', '잠금 무시하고 n스테이지 시작'],
@@ -280,7 +305,8 @@ export class Admin {
     this.horde(); this.gun(); this.god(true); this.fly(true);
     this.meteor(true); this.lightning(true); this.paper(true); this.magnet(true); this.giant(3);
     this.tornado(true); this.chain(true); this.rainbow(true); this.godzillaArmy(true); this.zoom(1);
-    this.nuke();
+    this.lava(true); this.laserEyes(true); this.flame(true); this.gold(true);
+    this.ufoBeam(true); this.trainRun(true); this.nuke();
     this._toast('카오스!!!', '#ff5a9a');
   }
 
@@ -357,6 +383,107 @@ export class Admin {
     this._toast(['카메라 기본', '카메라 멀리', '카메라 아주 멀리'][this.zoomStep], '#9fd0ff');
   }
 
+
+  // ────────────────────────────────── 진짜 미친 것들
+  /** 🌋 용암 바닥 — 바닥이 끈어오르고 서 있는 것은 다 타 죽는다. */
+  lava(on) {
+    this.lavaOn = on === undefined ? !this.lavaOn : !!on;
+    this._sky(this.lavaOn ? 0x481008 : null);
+    this._toast(this.lavaOn ? '용암 바닥 ON' : '용암 OFF', '#ff6a2a');
+  }
+  /** 💨 충격파 — 모든 좌비를 한꺼번에 저미리로 날려버린다. */
+  push() {
+    const r = this.run; if (!r) return;
+    const z0 = r.z || 0;
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      const dx = zb.x - r.x, dz = zb.z - z0, d = Math.hypot(dx, dz) || 1;
+      zb.x += (dx / d) * 30; zb.z += (dz / d) * 45;
+      zb.state = 'walk';
+    }
+    r.shake = Math.max(r.shake, 1.1);
+    for (let k = 0; k < 24; k++) {
+      const a1 = (k / 24) * Math.PI * 2, a2 = ((k + 1) / 24) * Math.PI * 2;
+      r.fx.tracer(_a.set(r.x + Math.cos(a1) * 12, 0.7, z0 + Math.sin(a1) * 12),
+        _b.set(r.x + Math.cos(a2) * 12, 0.7, z0 + Math.sin(a2) * 12), 0x9fe8ff, 0.8);
+    }
+    this._toast('충격파!', '#9fe8ff');
+  }
+  /** 🔴 레이저 눈 — 가까운 놀이를 차례로 녹여버린다. */
+  laserEyes(on) { this.eyesOn = on === undefined ? !this.eyesOn : !!on;
+    this._toast(this.eyesOn ? '레이저 눈 ON' : '레이저 눈 OFF', '#ff4a4a'); }
+  /** 🕺 디스코 — 하늘이 번쩌이고 좌비가 빙빙 돌며 춤춘다. */
+  disco(on) {
+    this.discoOn = on === undefined ? !this.discoOn : !!on;
+    if (this.discoOn) this._skyCapture();            // 직접 색을 돌리기 전에 원래 하늘을 보관
+    else this._sky(this.lavaOn ? 0x481008 : null);
+    this._toast(this.discoOn ? '디스코 타임!' : '디스코 OFF', '#ff7ab0');
+  }
+  /** 🛸 UFO — 접시 드롬이 따라다니며 광선을 쪽 쓴다. */
+  ufoBeam(on) {
+    const r = this.run; if (!r) return;
+    const want = on === undefined ? !this.ufo : !!on;
+    if (this.ufo) { r.group.remove(this.ufo.mesh); this.ufo = null; }
+    if (want) { const mesh = buildSaucer(); r.group.add(mesh); this.ufo = { mesh, run: r, a: 0 }; }
+    this._toast(want ? 'UFO 등장' : 'UFO 아녕', '#a8ffe0');
+  }
+  /** 🚂 폭주 기차 — 도로를 쉬지 않고 내달리며 깔아버린다. */
+  trainRun(on) {
+    const r = this.run; if (!r) return;
+    const want = on === undefined ? !this.train : !!on;
+    if (this.train) { r.group.remove(this.train.mesh); this.train = null; }
+    if (want) { const mesh = buildTrain(); r.group.add(mesh); this.train = { mesh, run: r, x: r.x, z: (r.z || 0) - 90 }; }
+    this._toast(want ? '기차 출발!' : '기차 정차', '#ffd23f');
+  }
+  /** 🎈 반중력 — 좌비가 둥둥 떠올라 터진다. */
+  antigravity(on) {
+    const was = this.antiOn;
+    this.antiOn = on === undefined ? !this.antiOn : !!on;
+    const r = this.run;
+    if (was && !this.antiOn && r) for (const z of r.zombies.list) z.yOff = 0;
+    this._toast(this.antiOn ? '반중력 ON' : '반중력 OFF', '#c9a8ff');
+  }
+  /** 🐜 좌비 크기 — 보통 → 개미 → 거대 순서로 바뀜다. */
+  zombieSize(x) {
+    this.zSize = x == null ? (this.zSize === 1 ? 0.3 : this.zSize === 0.3 ? 3 : 1) : Math.max(0.15, Math.min(6, x));
+    const r = this.run;
+    if (r && this.zSize === 1) for (const z of r.zombies.list) if (z._sc0 !== undefined) { z.scale = z._sc0; delete z._sc0; }
+    this._toast(this.zSize === 1 ? '좌비 크기 원래대로' : this.zSize < 1 ? '개미 좌비' : '거대 좌비', '#ffe9a0');
+  }
+  /** 😱 공포 — 좌비가 뒤돌아 도망간다. */
+  fear(on) {
+    const was = this.fearOn;
+    this.fearOn = on === undefined ? !this.fearOn : !!on;
+    if (this.fearOn) { if (this.freezeOn) this.freeze(false); if (this.slowOn) this.slowmo(false); }
+    const r = this.run;
+    if (was && !this.fearOn && r) for (const z of r.zombies.list) {
+      if (z._spd !== undefined) { z.speed = z._spd; delete z._spd; } z.ang = 0;
+    }
+    this._toast(this.fearOn ? '공포 ON — 좌비가 도망간다' : '공포 OFF', '#a8ffb0');
+  }
+  /** 💰 골드 러시 — 한 마리 잡을 때마다 코인 100개. */
+  gold(on) { this.goldOn = on === undefined ? !this.goldOn : !!on;
+    if (this.run) this._lastKills = this.run.kills;
+    this._toast(this.goldOn ? '골드 러시 ON' : '골드 러시 OFF', '#ffd23f'); }
+  /** ☠️ 사신 — 화면에 나타나는 족족 죽는다. */
+  reaper(on) { this.reaperOn = on === undefined ? !this.reaperOn : !!on;
+    this._toast(this.reaperOn ? '사신 ON — 나오면 죽는다' : '사신 OFF', '#ff5a7a'); }
+  /** 🔥 화염방사기 — 앞으로 부채꼴 불길을 내뿜둔다. */
+  flame(on) { this.flameOn = on === undefined ? !this.flameOn : !!on;
+    this._toast(this.flameOn ? '화염방사기 ON' : '화염방사기 OFF', '#ff8a3c'); }
+  /** 🧬 복제 — 1초마다 병력이 두 배가 된다. */
+  clone(on) { this.cloneOn = on === undefined ? !this.cloneOn : !!on; this._cloneAcc = 0;
+    this._toast(this.cloneOn ? '복제 ON — 1초마다 2배' : '복제 OFF', '#8fd6ff'); }
+  /** 🎰 룰렛 — 무작위 치트 하나를 마음대로 켜버린다. */
+  roulette() {
+    const pool = ['meteor', 'lightning', 'blackhole', 'tornado', 'betray', 'chain', 'lava', 'disco',
+      'laserEyes', 'antigravity', 'fear', 'flame', 'ufoBeam', 'trainRun', 'godzillaArmy', 'rainbow'];
+    const k = pool[Math.floor(Math.random() * pool.length)];
+    this[k](true);
+    this._toast('룰렛 → ' + k, '#ff7ab0');
+    return k;
+  }
+
   // ────────────────────────────────── 매 프레임 유지
   update(dt) {
     const r = this.run; if (!r) return;
@@ -381,6 +508,18 @@ export class Admin {
     if (this.nukes.length) this._nukes(dt, r);
     if (this.torOn) this._tornado(dt, r);
     if (this.pets.length) this._pets(dt, r);
+    if (this.lavaOn) this._lava(dt, r);
+    if (this.eyesOn) this._eyes(dt, r);
+    if (this.discoOn) this._disco(dt, r);
+    if (this.fearOn) this._fear(r);
+    if (this.antiOn) this._anti(dt, r);
+    if (this.zSize !== 1) this._zsize(r);
+    if (this.flameOn) this._flame(dt, r);
+    if (this.reaperOn) this._reaper(r);
+    if (this.goldOn) this._gold(r);
+    if (this.cloneOn) this._clone(dt, r);
+    if (this.ufo) this._ufo(dt, r);
+    if (this.train) this._train(dt, r);
     if (this.godz) this._burn(dt);
     this._syncPanel();
   }
@@ -629,6 +768,161 @@ export class Admin {
     }
   }
 
+
+  // 🌋 용암 바닥
+  _lava(dt, r) {
+    const dmg = 120 * dt;
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      zb.hp -= dmg; if (zb.hp <= 0) r._kill(zb);
+    }
+    if (Math.random() < 0.5) {
+      const z0 = r.z || 0;
+      r.fx.spark(_a.set(r.x + (Math.random() - 0.5) * 60, 0.3, z0 - Math.random() * 60), 3, 0xff6a2a);
+    }
+  }
+  // 🔴 레이저 눈: 가까운 순서로 한 프레임에 몇 마리씩
+  _eyes(dt, r) {
+    const z0 = r.z || 0, src = _a.set(r.x, 1.6 + (r.flyY || 0), z0 - 0.8);
+    const live = r.zombies.list.filter((z) => z.state !== 'dying');
+    live.sort((p, q) => Math.hypot(p.x - r.x, p.z - z0) - Math.hypot(q.x - r.x, q.z - z0));
+    for (let i = 0; i < Math.min(3, live.length); i++) {
+      const t = live[i];
+      r.fx.tracer(src, _b.set(t.x, 1.0, t.z), 0xff3a3a, 0.5);
+      r.fx.flash(_c.set(t.x, 1.0, t.z), 1.6, 0xff8a70);
+      r._kill(t);
+    }
+  }
+  // 🕺 디스코: 하늘이 바뀌고 좌비가 돌아간다
+  _disco(dt, r) {
+    this._hue = (this._hue + dt * 1.6) % 1;
+    const sc = this.ctx.scene;
+    if (sc && sc.background) sc.background.setHSL(this._hue, 0.85, 0.45);
+    for (const z of r.zombies.list) z.ang = (z.ang || 0) + dt * 7;
+    if (Math.random() < 0.7 && r.zombies.list.length) {
+      const z = r.zombies.list[Math.floor(Math.random() * r.zombies.list.length)];
+      r.fx.spark(_a.set(z.x, 1.4, z.z), 2, new THREE.Color().setHSL(Math.random(), 1, 0.6).getHex());
+    }
+  }
+  // 😱 공포: 뒤돌아서 도망간다
+  _fear(r) {
+    for (const z of r.zombies.list) {
+      if (z._spd === undefined) z._spd = z.speed;
+      z.speed = -Math.abs(z._spd) * 1.4;
+      z.ang = Math.PI;
+    }
+  }
+  // 🎈 반중력: 떠오르다가 터진다
+  _anti(dt, r) {
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      zb.yOff = (zb.yOff || 0) + 9 * dt;
+      if (zb.yOff > 13) { r.fx.spark(_a.set(zb.x, zb.yOff, zb.z), 14, 0xc9a8ff); r._kill(zb); }
+    }
+  }
+  // 🐜 좌비 크기
+  _zsize(r) {
+    for (const z of r.zombies.list) {
+      if (z._sc0 === undefined) z._sc0 = z.scale;
+      z.scale = z._sc0 * this.zSize;
+    }
+  }
+  // 🔥 화염방사기: 앞쪽 부채꼴
+  _flame(dt, r) {
+    const z0 = r.z || 0, REACH = 44, HALF = 0.85;
+    const src = _a.set(r.x, 1.2 + (r.flyY || 0), z0 - 1.0);
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      const dz = z0 - zb.z, dx = zb.x - r.x;
+      if (dz < 0 || dz > REACH) continue;
+      if (Math.abs(Math.atan2(dx, dz)) > HALF) continue;
+      zb.hp -= 900 * dt; if (zb.hp <= 0) r._kill(zb);
+    }
+    for (let k = 0; k < 5; k++) {
+      const a = (Math.random() - 0.5) * HALF * 2, d = 6 + Math.random() * (REACH - 6);
+      r.fx.tracer(src, _b.set(r.x + Math.sin(a) * d, 0.7 + Math.random() * 1.6, z0 - Math.cos(a) * d),
+        Math.random() < 0.5 ? 0xff7a2a : 0xffd23f, 0.5);
+    }
+    if (Math.random() < 0.6) r.fx.flash(_c.set(r.x, 1.3 + (r.flyY || 0), z0 - 1.6), 3.0, 0xff9a40);
+  }
+  // ☠️ 사신: 나오는 족족
+  _reaper(r) {
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      r.fx.ash(_a.set(zb.x, 0.8, zb.z), 4); r._kill(zb);
+    }
+    if (r.boss && !r.boss.dead && r._bossDie) { r.boss.hp -= 4000; if (r.boss.hp <= 0) r._bossDie(); }
+  }
+  // 💰 골드 러시
+  _gold(r) {
+    const d = r.kills - this._lastKills;
+    this._lastKills = r.kills;
+    if (d > 0) {
+      r.coins += d * 100;
+      const z0 = r.z || 0;
+      for (let i = 0; i < Math.min(d, 6); i++)
+        r.fx.spark(_a.set(r.x + (Math.random() - 0.5) * 6, 1.6, z0 - 2 - Math.random() * 4), 4, 0xffd23f);
+    }
+  }
+  // 🧬 복제
+  _clone(dt, r) {
+    this._cloneAcc += dt;
+    while (this._cloneAcc >= 1) {
+      this._cloneAcc -= 1;
+      r.troops = Math.min(9999, Math.max(2, r.troops * 2));
+      r.peak = Math.max(r.peak || 0, r.troops); this.godTroops = r.troops;
+    }
+  }
+  // 🛸 UFO: 맴도는 광선으로 쓸어낸다
+  _ufo(dt, r) {
+    const U = this.ufo; if (U.run !== r) { this.ufo = null; return; }
+    U.a += dt * 1.1;
+    const z0 = r.z || 0, ux = r.x + Math.sin(U.a) * 8, uz = z0 - 15 + Math.cos(U.a * 0.7) * 6;
+    U.mesh.position.set(ux, 15, uz); U.mesh.rotation.y += dt * 2.2;
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      if (Math.hypot(zb.x - ux, zb.z - uz) > 9.5) continue;
+      r._kill(zb);
+    }
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2;
+      r.fx.tracer(_a.set(ux, 13.6, uz), _b.set(ux + Math.cos(a) * 9.5, 0.4, uz + Math.sin(a) * 9.5), 0x7affe0, 0.5);
+    }
+  }
+  // 🚂 폭주 기차: 지나간 자리가 평평해진다
+  _train(dt, r) {
+    const T = this.train; if (T.run !== r) { this.train = null; return; }
+    T.z += 58 * dt;
+    const z0 = r.z || 0;
+    if (T.z > z0 + 26) { T.z = z0 - 96; T.x = r.x + (Math.random() - 0.5) * 10; }
+    T.mesh.position.set(T.x, 0, T.z);
+    for (const zb of r.zombies.list) {
+      if (zb.state === 'dying') continue;
+      if (Math.abs(zb.x - T.x) < 4.2 && Math.abs(zb.z - T.z) < 9) {
+        r.fx.ichor(_a.set(zb.x, 1.0, zb.z), 8); r._kill(zb);
+      }
+    }
+    if (Math.random() < 0.4) r.fx.spark(_a.set(T.x, 4.6, T.z - 6), 4, 0xdddddd);
+  }
+  // 하늘색 바꾸기(용암·디스코) — null 이면 원래대로
+  _skyCapture() {
+    const sc = this.ctx.scene;
+    if (sc && sc.background && !this._sky0)
+      this._sky0 = { bg: sc.background.getHex(), fog: sc.fog ? sc.fog.color.getHex() : null };
+  }
+  _sky(hex) {
+    const sc = this.ctx.scene; if (!sc || !sc.background) return;
+    this._skyCapture();
+    if (hex == null) {
+      sc.background.setHex(this._sky0.bg);
+      if (sc.fog && this._sky0.fog != null) sc.fog.color.setHex(this._sky0.fog);
+      this._sky0 = null;
+    } else {
+      sc.background.setHex(hex);
+      if (sc.fog) sc.fog.color.setHex(hex);
+    }
+  }
+
   // ────────────────────────────────── 패널 UI
   panel(on) { this.open = on === undefined ? !this.open : !!on; this.el.style.display = this.open ? 'grid' : 'none';
     if (this.open) this._syncPanel(); }
@@ -689,6 +983,21 @@ export class Admin {
       { label: '🤖 오토 플레이', fn: () => this.auto(), on: () => this.autoOn },
       { label: '🐢 슈퍼 슬로우', fn: () => this.slowmo(), on: () => this.slowOn },
       { label: '🔭 줄어보기', fn: () => this.zoom(), tag: () => ['', '·멀리', '·아주 멀리'][this.zoomStep] },
+      { sep: '진짜 미친 것들' },
+      { label: '🌋 용암 바닥', fn: () => this.lava(), on: () => this.lavaOn },
+      { label: '💨 충격파', fn: () => this.push() },
+      { label: '🔴 레이저 눈', fn: () => this.laserEyes(), on: () => this.eyesOn },
+      { label: '🕺 디스코', fn: () => this.disco(), on: () => this.discoOn },
+      { label: '🛸 UFO', fn: () => this.ufoBeam(), on: () => !!this.ufo },
+      { label: '🚂 폭주 기차', fn: () => this.trainRun(), on: () => !!this.train },
+      { label: '🎈 반중력', fn: () => this.antigravity(), on: () => this.antiOn },
+      { label: '🐜 좌비 크기', fn: () => this.zombieSize(), on: () => this.zSize !== 1 },
+      { label: '😱 공포', fn: () => this.fear(), on: () => this.fearOn },
+      { label: '💰 골드 러시', fn: () => this.gold(), on: () => this.goldOn },
+      { label: '☠️ 사신', fn: () => this.reaper(), on: () => this.reaperOn },
+      { label: '🔥 화염방사기', fn: () => this.flame(), on: () => this.flameOn },
+      { label: '🧬 복제', fn: () => this.clone(), on: () => this.cloneOn },
+      { label: '🎰 룰렛', fn: () => this.roulette() },
       { sep: '마무리' },
       { label: '🎪 카오스 — 전부 켜기', fn: () => this.chaos(), wide: true },
       { label: '🔓 전스테이지 해금', fn: () => this.unlockAll(), wide: true },
@@ -757,3 +1066,33 @@ function fmt(n) {
   if (n >= 1e4) return (n / 1e4).toFixed(1) + '만';
   return String(Math.round(n));
 }
+
+// 관리자 전용 소품 — UFO 접시와 폭주 기차
+function buildSaucer() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 1.6, 1.1, 18),
+    new THREE.MeshStandardMaterial({ color: 0xb8c6d2, roughness: 0.3, metalness: 0.85 }));
+  g.add(body);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x7affe0, emissive: 0x2a9a7a, roughness: 0.15, transparent: true, opacity: 0.8 }));
+  dome.position.y = 0.5; g.add(dome);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.22, 8, 24),
+    new THREE.MeshStandardMaterial({ color: 0x7affe0, emissive: 0x38ffc0, roughness: 0.2 }));
+  ring.rotation.x = Math.PI / 2; ring.position.y = -0.2; g.add(ring);
+  return g;
+}
+function buildTrain() {
+  const g = new THREE.Group();
+  const hull = M2(0x8a2a2a), steel = M2(0x9aa4ae, 0.75), glass = M2(0x2a3a4a);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(4.0, 3.2, 12), hull); body.position.y = 2.0; g.add(body);
+  const nose = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 3.4, 12), hull);
+  nose.rotation.x = Math.PI / 2; nose.position.set(0, 2.0, -7.0); g.add(nose);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.6, 3.0), glass); cab.position.set(0, 4.2, 2.4); g.add(cab);
+  const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.8, 1.6, 10), steel); stack.position.set(0, 4.6, -4.2); g.add(stack);
+  for (const sx of [-1, 1]) for (const dz of [-4, -1, 2, 5]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.4, 12), steel);
+    w.rotation.z = Math.PI / 2; w.position.set(sx * 2.0, 1.0, dz); g.add(w);
+  }
+  return g;
+}
+function M2(color, metal = 0.35) { return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: metal }); }
