@@ -30,6 +30,7 @@ export class Admin {
     this.godz = null;                 // 보너스 스테이지 밖에서 쓰는 관리자 전용 고질라
     this.open = false;
     this._seq = '';
+    for (const k of Object.keys(CHAOS)) this[k] = () => this._preset(k);   // admin.hell() 처럼 이름으로 부른다
     this._build(); this._hotkeys();
   }
   get run() { return this.ctx.state.run; }
@@ -166,6 +167,7 @@ export class Admin {
     if (this.zSize !== 1) this.zombieSize(1);
     if (this.ufo) this.ufoBeam(false);
     if (this.train) this.trainRun(false);
+    this._wantUfo = this._wantTrain = this._wantPets = false;
     this.meteors.length = 0; this.nukes.length = 0; this.tor = null; this.scale = 1; this.zoomStep = 0;
     if (this.pets.length) this.godzillaArmy(false);
     if (this.rainbowOn) this.rainbow(false);
@@ -224,7 +226,17 @@ export class Admin {
       ['admin.flame()', '화염방사기'],
       ['admin.clone()', '1초마다 병력 2배'],
       ['admin.roulette()', '무작위 치트 하나'],
+      ['admin.flood(n)', '좀비 n마리 즉시 투입'],
       ['admin.chaos()', '전부 켜기'],
+      ['admin.hell()', '카오스 · 지옥(용암/화염/메테오)'],
+      ['admin.space()', '카오스 · 우주(UFO/반중력/비행)'],
+      ['admin.kaiju()', '카오스 · 괴수 대전(고질라 군단/기차)'],
+      ['admin.party()', '카오스 · 파티(디스코/무지개/골드)'],
+      ['admin.doom()', '카오스 · 종말(메테오/번개/토네이도/핵)'],
+      ['admin.afk()', '카오스 · 놀면서 이기기(오토+사신)'],
+      ['admin.swarm()', '카오스 · 좀비 600마리'],
+      ['admin.mayhem()', '카오스 · 무작위 6개'],
+      ['admin.ultra()', '카오스 · 전부 + 대홍수'],
       ['admin.speed(x)', '게임 속도 (기본: 2배씩 순환)'],
       ['admin.stage(n)', '잠금 무시하고 n스테이지 시작'],
       ['admin.unlockAll()', '전 스테이지 해금(저장)'],
@@ -359,6 +371,7 @@ export class Admin {
       }
       this.ctx.audio.roar && this.ctx.audio.roar();
     }
+    this._wantPets = want;
     this._toast(want ? '고질라 군단 소집!' : '고질라 군단 해산', '#8affd0');
   }
   /** 🤖 오토 플레이 — 좌비가 제일 많은 곳으로 알아서 움직이며 쓴다. */
@@ -425,6 +438,7 @@ export class Admin {
     const want = on === undefined ? !this.ufo : !!on;
     if (this.ufo) { r.group.remove(this.ufo.mesh); this.ufo = null; }
     if (want) { const mesh = buildSaucer(); r.group.add(mesh); this.ufo = { mesh, run: r, a: 0 }; }
+    this._wantUfo = want;
     this._toast(want ? 'UFO 등장' : 'UFO 아녕', '#a8ffe0');
   }
   /** 🚂 폭주 기차 — 도로를 쉬지 않고 내달리며 깔아버린다. */
@@ -433,6 +447,7 @@ export class Admin {
     const want = on === undefined ? !this.train : !!on;
     if (this.train) { r.group.remove(this.train.mesh); this.train = null; }
     if (want) { const mesh = buildTrain(); r.group.add(mesh); this.train = { mesh, run: r, x: r.x, z: (r.z || 0) - 90 }; }
+    this._wantTrain = want;
     this._toast(want ? '기차 출발!' : '기차 정차', '#ffd23f');
   }
   /** 🎈 반중력 — 좌비가 둥둥 떠올라 터진다. */
@@ -482,6 +497,73 @@ export class Admin {
     this[k](true);
     this._toast('룰렛 → ' + k, '#ff7ab0');
     return k;
+  }
+
+
+  /** 🌊 좀비 대홍수 — n마리를 단번에 쏟아부어 화면을 꽉 채운다. */
+  flood(n = 400) {
+    const r = this.run; if (!r) return 0;
+    const z0 = r.z || 0, field = !!r.stage.field;
+    const hp = r.stage.bonus ? 1 : r.stage.zombie.hp * (1 + r.troops / 90);
+    let made = 0;
+    for (let i = 0; i < n; i++) {
+      let x, z;
+      if (field) { const a = Math.random() * Math.PI * 2, rr = 26 + Math.random() * 20;
+        x = r.x + Math.cos(a) * rr; z = z0 + Math.sin(a) * rr; }
+      else if (r.stage.bonus) { x = -7.2 + (Math.random() - 0.5) * 6.9; z = z0 - 8 - Math.random() * 64; }
+      else { x = (Math.random() * 2 - 1) * 5.0; z = z0 - 8 - Math.random() * 64; }
+      const type = Math.random() < 0.25 ? 'runner' : 'walker';
+      if (this._spawnOne(r, x, z, type, hp)) made++;
+    }
+    this._toast(`좀비 ${made}마리 투입!`, '#ff8a70');
+    return made;
+  }
+  _spawnOne(r, x, z, type, hp) {
+    const zb = r._newZombie ? r._newZombie(x, z, type, hp)
+      : r.zombies.spawn(x, z, type, hp, (r.stage.zombie && r.stage.zombie.speed) || 4);
+    if (zb && zb.sway === undefined) {
+      zb.sway = 0.3 + Math.random() * 1.2; zb.swayPh = Math.random() * 6.28; zb.swaySp = 0.5 + Math.random() * 0.8;
+    }
+    return zb;
+  }
+  // 카오스 모음: 각각 성격이 다른 한 판. 설정이 섞이지 않게 먼저 전부 끄고 시작한다.
+  _preset(key) {
+    const P = CHAOS[key]; if (!P) return;
+    this.reset();
+    P.run(this);
+    this._toast(P.name, P.color || '#ff5a9a');
+    return key;
+  }
+  /** 🎲 난장판 — 치트 6개를 무작위로 골라 한꺼번에 켠다. */
+  mayhem() {
+    this.reset();
+    const pool = ['meteor', 'lightning', 'blackhole', 'tornado', 'betray', 'chain', 'lava', 'disco', 'laserEyes',
+      'antigravity', 'fear', 'flame', 'ufoBeam', 'trainRun', 'godzillaArmy', 'rainbow', 'reaper', 'gold', 'magnet', 'clone'];
+    const picked = [];
+    while (picked.length < 6) {
+      const k = pool[Math.floor(Math.random() * pool.length)];
+      if (!picked.includes(k)) { picked.push(k); this[k](true); }
+    }
+    this.god(true); this.army(); this.gun();
+    this._toast('난장판! ' + picked.length + '개 동시', '#ff7ab0');
+    return picked;
+  }
+
+  // 스테이지가 바뀌면 이전 판에 붙어 있던 것들을 정리하고, 켜둔 치트를 새 판에 다시 건다.
+  // (특히 하늘색은 새 스테이지 테마를 기준으로 다시 저장해야 원래대로 되돌릴 수 있다)
+  onStage() {
+    this._sky0 = null;
+    this.ufo = null; this.train = null; this.pets.length = 0; this.godz = null;
+    this.meteors.length = 0; this.nukes.length = 0; this.tor = null;
+    this._lastKills = 0; this._dying = new WeakSet();
+    if (this.lavaOn) { this.lavaOn = false; this.lava(true); }
+    if (this.discoOn) this._skyCapture();
+    if (this.flying) this.fly(true);
+    if (this.godMode) this.god(true);
+    if (this.torOn) { this.torOn = false; this.tornado(true); }
+    if (this._wantPets) this.godzillaArmy(true);
+    if (this._wantUfo) this.ufoBeam(true);
+    if (this._wantTrain) this.trainRun(true);
   }
 
   // ────────────────────────────────── 매 프레임 유지
@@ -998,8 +1080,19 @@ export class Admin {
       { label: '🔥 화염방사기', fn: () => this.flame(), on: () => this.flameOn },
       { label: '🧬 복제', fn: () => this.clone(), on: () => this.cloneOn },
       { label: '🎰 룰렛', fn: () => this.roulette() },
+      { label: '🌊 좀비 대홍수', fn: () => this.flood(400) },
+      { sep: '카오스 모음' },
+      { label: '🎪 카오스', fn: () => this.chaos(), wide: true },
+      { label: '🌋 지옥', fn: () => this.hell() },
+      { label: '🌌 우주', fn: () => this.space() },
+      { label: '🦖 괴수 대전', fn: () => this.kaiju() },
+      { label: '🎉 파티', fn: () => this.party() },
+      { label: '☄️ 종말', fn: () => this.doom() },
+      { label: '😴 놀면서 이기기', fn: () => this.afk() },
+      { label: '🌊 대홍수 한 판', fn: () => this.swarm() },
+      { label: '🎲 난장판', fn: () => this.mayhem() },
+      { label: '💥 울트라 카오스', fn: () => this.ultra(), wide: true },
       { sep: '마무리' },
-      { label: '🎪 카오스 — 전부 켜기', fn: () => this.chaos(), wide: true },
       { label: '🔓 전스테이지 해금', fn: () => this.unlockAll(), wide: true },
       { label: '🏁 즉시 클리어', fn: () => this.win() },
       { label: '♻️ 치트 해제', fn: () => this.reset() },
@@ -1066,6 +1159,27 @@ function fmt(n) {
   if (n >= 1e4) return (n / 1e4).toFixed(1) + '만';
   return String(Math.round(n));
 }
+
+// ── 카오스 모음 ────────────────────────────────────────────────────────
+// 하나하나가 성격이 다른 한 판. admin.hell() 처럼 이름으로도 부를 수 있다.
+const CHAOS = {
+  hell: { name: '🌋 지옥', color: '#ff6a2a', run: (a) => {
+    a.god(true); a.army(); a.gun(); a.lava(true); a.flame(true); a.meteor(true); a.chain(true); a.zombieSize(3); a.flood(250); } },
+  space: { name: '🌌 우주', color: '#a8ffe0', run: (a) => {
+    a.god(true); a.army(); a.gun(); a.fly(true); a.zoom(2); a.ufoBeam(true); a.antigravity(true); a.laserEyes(true); a.disco(true); } },
+  kaiju: { name: '🦖 괴수 대전', color: '#8affd0', run: (a) => {
+    a.god(true); a.godzilla(); a.godzillaArmy(true); a.zombieSize(3); a.trainRun(true); a.zoom(1); a.flood(250); } },
+  party: { name: '🎉 파티', color: '#ff7ab0', run: (a) => {
+    a.god(true); a.horde(); a.gun(); a.disco(true); a.rainbow(true); a.gold(true); a.magnet(true); a.zombieSize(0.3); a.fear(true); } },
+  doom: { name: '☄️ 종말', color: '#ffd23f', run: (a) => {
+    a.god(true); a.army(); a.gun(); a.meteor(true); a.lightning(true); a.tornado(true); a.blackhole(true); a.flood(350); a.nuke(); } },
+  afk: { name: '😴 놀면서 이기기', color: '#9fffd0', run: (a) => {
+    a.god(true); a.auto(true); a.reaper(true); a.gold(true); a.magnet(true); a.clone(true); } },
+  swarm: { name: '🌊 좀비 대홍수', color: '#ff8a70', run: (a) => {
+    a.god(true); a.army(); a.gun(); a.zoom(1); a.flood(600); } },
+  ultra: { name: '💥 울트라 카오스', color: '#ff5a9a', run: (a) => {
+    a.chaos(); a.reaper(true); a.clone(true); a.auto(true); a.zombieSize(3); a.flood(400); } },
+};
 
 // 관리자 전용 소품 — UFO 접시와 폭주 기차
 function buildSaucer() {

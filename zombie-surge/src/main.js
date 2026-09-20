@@ -64,7 +64,7 @@ function launch(n, character) {
   hud.hideMenu(); hud.hideResult(); hud.setStage(st); hud.setHero(character, portraits); state.badge = character;
   audio.start(); audio.setScene('wave');
   state.mode = 'play';
-  if (admin) { if (admin.godz) admin.godz = null; if (admin.flying) admin.fly(true); if (admin.godMode) admin.god(true); }
+  if (admin) admin.onStage();          // 치트를 켠 채 스테이지를 옮겨도 깨지지 않게
 }
 function startStage(n, character) {
   if (!state.data.seenTut) { hud.showTutorial(() => { state.data.seenTut = true; save(state.data); launch(n, character); }); }
