@@ -169,6 +169,83 @@ export function buildAPC() {
 
 // ---- 평야 필드(Phase B/C): 사방이 트인 개활지 ----
 export const FIELD_R = 46;          // 전장 반경
+// ── 우주 정거장 전장 ───────────────────────────────────────────────────
+// 평야 대신 금속 발판 하나가 우주에 떠 있다. 둘레는 별, 주위엔 떠다니는
+// 운석과 행성. 지면 밖은 그대로 허공이라 아래가 뻥 뚫려 보인다.
+export function buildSpaceField(theme, R = FIELD_R) {
+  const g = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.CylinderGeometry(R + 18, R + 14, 2.2, 72),
+    new THREE.MeshStandardMaterial({ color: theme.deck, roughness: 0.5, metalness: 0.75 }));
+  deck.position.y = -1.1; deck.receiveShadow = true; g.add(deck);
+  // 발판 위 빛나는 격자
+  const glow = (r0, r1, op) => {
+    const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 96),
+      new THREE.MeshBasicMaterial({ color: theme.parapet, transparent: true, opacity: op, side: THREE.DoubleSide, toneMapped: false, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.02; g.add(m);
+  };
+  for (let i = 1; i <= 5; i++) glow(i * (R / 5) - 0.18, i * (R / 5) + 0.18, i === 5 ? 0.38 : 0.16);
+  const barMat = new THREE.MeshBasicMaterial({ color: theme.parapet, transparent: true, opacity: 0.18, toneMapped: false, depthWrite: false });
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const bar = new THREE.Mesh(new THREE.PlaneGeometry(R * 2, 0.22), barMat);
+    bar.rotation.x = -Math.PI / 2; bar.rotation.z = a; bar.position.y = 0.02; g.add(bar);
+  }
+  // 둘레 기둥(착륙등)
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, roughness: 0.35, metalness: 0.9 });
+  const lampMat = new THREE.MeshBasicMaterial({ color: theme.sun, toneMapped: false });
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2, px = Math.cos(a) * (R + 6), pz = Math.sin(a) * (R + 6);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 3.0, 8), postMat);
+    post.position.set(px, 1.5, pz); g.add(post);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), lampMat);
+    lamp.position.set(px, 3.2, pz); g.add(lamp);
+  }
+  // 별
+  const N = 1400, pos = new Float32Array(N * 3);
+  let seed = 90210; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < N; i++) {
+    const a = rnd() * Math.PI * 2, b = Math.acos(rnd() * 2 - 1), d = 320 + rnd() * 180;
+    pos[i * 3] = Math.sin(b) * Math.cos(a) * d;
+    pos[i * 3 + 1] = Math.abs(Math.cos(b)) * d * 0.55 + 6;      // 지평선 위쪽으로 고르게
+    pos[i * 3 + 2] = Math.sin(b) * Math.sin(a) * d;
+  }
+  const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: true, toneMapped: false }));
+  g.add(stars);
+  // 행성 두 개 + 고리
+  const planet = (x, y, z, r, col, ring) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 20),
+      new THREE.MeshStandardMaterial({ color: col, roughness: 0.85, emissive: new THREE.Color(col).multiplyScalar(0.18) }));
+    m.position.set(x, y, z); g.add(m);
+    if (ring) {
+      const rg = new THREE.Mesh(new THREE.RingGeometry(r * 1.4, r * 2.1, 64),
+        new THREE.MeshBasicMaterial({ color: 0xd8c8a0, transparent: true, opacity: 0.45, side: THREE.DoubleSide, toneMapped: false }));
+      rg.rotation.set(-Math.PI / 2.4, 0, 0.3); rg.position.set(x, y, z); g.add(rg);
+    }
+    return m;
+  };
+  planet(-190, 46, -250, 52, 0x5a6cff, true);
+  planet(230, 70, -300, 34, 0xff8a5a, false);
+  planet(-40, 34, 300, 26, 0x9a6aff, false);
+  // 떠다니는 운석
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x6a6f7a, roughness: 1, metalness: 0.1 });
+  const rocks = [];
+  for (let i = 0; i < 40; i++) {
+    const a = rnd() * Math.PI * 2, d = R + 14 + rnd() * 70;
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + rnd() * 3.4, 0), rockMat);
+    m.position.set(Math.cos(a) * d, -6 + rnd() * 34, Math.sin(a) * d);
+    m.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+    g.add(m); rocks.push({ m, sx: (rnd() - 0.5) * 0.5, sy: (rnd() - 0.5) * 0.5, bob: rnd() * 6.28 });
+  }
+  let t = 0;
+  return { group: g, update(dt) {
+    t += dt;
+    for (const r of rocks) { r.m.rotation.x += r.sx * dt; r.m.rotation.y += r.sy * dt;
+      r.m.position.y += Math.sin(t * 0.6 + r.bob) * 0.012; }
+    stars.rotation.y += dt * 0.006;
+  } };
+}
+
 export function buildField(theme, R = FIELD_R) {
   const g = new THREE.Group();
   // 지면

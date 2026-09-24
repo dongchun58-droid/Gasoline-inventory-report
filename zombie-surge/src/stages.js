@@ -184,4 +184,19 @@ export const STAGES = [
     cards: { plus: 1, mul: 0, minus: 0, weapon: 0, shield: 0 },
     zombie: { hp: 1, speed: 5.2 },
     par: 240 },
+  // ── 12: 방귀로 날아오르면 도착하는 우주 정거장 ──────────────────────
+  { n: 12, name: '우주 정거장', phase: 'SPACE', playable: true, field: true, space: true, flank: 0.35,
+    cam: { up: 15, back: 31, ly: 8, lz: -16 },          // 시점을 낮춰 별과 행성이 보이게
+    theme: { sky: 0x05060f, fog: 0x0a0c1e, sun: 0xbfd8ff, deck: 0x2a3140, parapet: 0x6affe0, water: 0x05060f, hemi: 0x4a6aa0, ground: 0x10131f, time: 'night', fogNear: 220, fogFar: 1600 },
+    startTroops: 60, cardSpeed: 26, plusRange: [5, 13], wpnStart: 8, wpnMax: 11,
+    cards: { plus: 0.46, mul: 0.08, minus: 0.18, weapon: 0.17, shield: 0.11 },
+    zombie: { hp: 11, speed: 6.2 },
+    flow: { quota: 3600, gateHp: 200, rate: [9.0, 54], runnerFrom: 0.05, tankFrom: 0.14, tankRate: 0.22, tankHp: 6.0, cardEvery: [1.75, 1.12],
+            bosses: [ B(0.14, 'screamer', 'none', '무중력 비명', 2500, 1.40, { speed: 5.6, slam: 10, aoe: 0.24, aoeEvery: 5.0, summon: { n: 14, every: 5.5 } }),
+                      B(0.30, 'butcher', 'twin', '위성 도살자', 3100, 1.50, { speed: 5.8, slam: 12, aoe: 0.26, aoeEvery: 4.6, shotEvery: 1.7 }),
+                      B(0.48, 'reaper', 'cleaver', '운석 사신', 3600, 1.55, { speed: 6.2, slam: 12, aoe: 0.28, aoeEvery: 4.5 }),
+                      B(0.68, 'brute', 'maul', '달 파괴자', 4400, 1.85, { speed: 5.6, slam: 15, aoe: 0.32, aoeEvery: 4.3 }),
+                      B(0.86, 'warlord', 'minigun', '궤도 포격수', 5200, 1.95, { speed: 5.4, slam: 14, aoe: 0.32, aoeEvery: 4.2, shotEvery: 1.4 }),
+                      B(1.00, 'warlord', 'cleaver', '우주 좀비 왕', 7200, 2.50, { speed: 5.2, slam: 16, aoe: 0.34, aoeEvery: 4.4, summon: { n: 18, every: 5.0 } }) ] },
+    par: 620 },
 ];

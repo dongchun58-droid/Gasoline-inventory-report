@@ -27,6 +27,7 @@ export class Admin {
     this.goldOn = false; this.reaperOn = false; this.flameOn = false; this.cloneOn = false;
     this.antiOn = false; this.zSize = 1;
     this.ufo = null; this.train = null; this._sky0 = null; this._lastKills = 0; this._cloneAcc = 0;
+    this.blast = null;                // 💨 방귀 발사 연출
     this.godz = null;                 // 보너스 스테이지 밖에서 쓰는 관리자 전용 고질라
     this.open = false;
     this._seq = '';
@@ -176,11 +177,13 @@ export class Admin {
     if (this.freezeOn) this.freeze(false);
     if (this.flying) this.fly(false);
     if (r && (r.godz || this.godz)) this.human();
+    if (this.blast) { this.blast = null; if (r) { r.squad.group.scale.setScalar(1); r.squad.group.position.set(0, 0, 0); r.camLookY = 0; } }
     if (r) { r.bonusKills = 0; r.shieldT = 0; this._body(r); }
     this._toast('치트 해제', '#9fb8cf');
   }
   help() {
     const rows = [
+      ['admin.fart()', '방귀로 날아올라 우주 정거장으로'],
       ['admin.killAll()', '화면의 좀비·보스·거인 몰살'],
       ['admin.godzilla()', '영구 고질라 변신 / 해제'],
       ['admin.fly()', '공중 부양 + 무적 토글'],
@@ -566,9 +569,75 @@ export class Admin {
     if (this._wantTrain) this.trainRun(true);
   }
 
+
+  /** 💨 초강력 방귀 — 방귀를 뀌고 그 힘으로 우주까지 날아가 우주 정거장에 내린다. */
+  fart() {
+    const r = this.run;
+    if (!r) return this._toast('전투 중에만 뀔 수 있다', '#ff8a70');
+    if (this.blast) return;
+    this.blast = { t: 0, phase: 'charge', y: 0, v: 0 };
+    r.msg = { text: '뿌우우웅—!!!', color: '#c8e06a', t: 2.0 };
+    r.shake = Math.max(r.shake, 0.8);
+    this.ctx.audio.fart && this.ctx.audio.fart(1);
+    this._toast('뿌우우웅—!!!', '#c8e06a');
+  }
+  // 방귀 → 도약 → 우주. 1단계 부풀기(0.9초) · 2단계 발사(2.2초) · 도착
+  _blast(dt, r) {
+    const B = this.blast; B.t += dt;
+    const g = r.squad.group, z0 = r.z || 0;
+    const gas = (n, y, spread, up) => {
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, d = Math.random() * spread;
+        this.ctx.fx.spark(_a.set(r.x + Math.cos(a) * d, y + Math.random() * up, z0 + Math.sin(a) * d),
+          2, Math.random() < 0.5 ? 0xb6d84a : 0x7a8f3a);
+      }
+    };
+    if (B.phase === 'charge') {                       // 부풀어 오른다
+      const u = Math.min(1, B.t / 0.9);
+      g.scale.set(1 + u * 0.5, 1 - u * 0.25, 1 + u * 0.5);
+      g.position.set(r.x * (1 - (1 + u * 0.5)) * 0, 0, 0);
+      gas(3, 0.3, 2.2 + u * 3, 1.2);
+      r.shake = Math.max(r.shake, 0.2 + u * 0.5);
+      const cam0 = this.ctx.camera;                     // 부풀 때는 가까이 당겨 본다
+      cam0.position.set(r.x - 5 - u * 2, 4.5, z0 + 12);
+      cam0.lookAt(r.x, 1.2, z0);
+      if (B.t >= 0.9) {
+        B.phase = 'up'; B.t = 0; B.v = 9;
+        r.msg = { text: '🚀 우주로 발사!', color: '#8fd6ff', t: 2.2 };
+        this.ctx.audio.blastoff && this.ctx.audio.blastoff();
+        this.ctx.audio.fart && this.ctx.audio.fart(0.7);
+      }
+      return;
+    }
+    B.v += 34 * dt; B.y += B.v * dt;                  // 점점 빨리 솟아오른다
+    g.scale.set(1, 1.25, 1);
+    g.position.set(0, B.y, 0);
+    r.flyY = B.y;
+    // 발사 중엔 카메라를 직접 잡는다 — 분대를 화면 가운데 두고 땅이 멀어지게
+    const cam = this.ctx.camera;
+    cam.position.set(r.x - 7, 5 + B.y * 0.78, z0 + 15 + B.y * 0.10);
+    cam.lookAt(r.x, B.y + 1.6, z0);
+    gas(7, Math.max(0, B.y - 3), 2.6, 2.4);
+    this.ctx.fx.flash(_c.set(r.x, Math.max(0.6, B.y - 1.6), z0), 5.5, 0xc8e06a);
+    r.shake = Math.max(r.shake, 0.5);
+    if (B.t >= 2.2) this._toSpace();
+  }
+  _toSpace() {
+    const r = this.run;
+    if (r) { r.squad.group.scale.setScalar(1); r.squad.group.position.set(0, 0, 0); r.flyY = 0; r.camY = 0; r.camLookY = 0; }
+    this.blast = null;
+    const d = this.ctx.state.data;                    // 우주 정거장을 영구 해금
+    d.unlocked = Math.max(d.unlocked, 12); save(d);
+    this.ctx.launch(12, this.ctx.state.character);
+    const nr = this.run;
+    if (nr) nr.msg = { text: '🌌 우주 정거장 도착! 무중력 좀비를 막아라', color: '#6affe0', t: 4.0 };
+    this._toast('🌌 우주 도착!', '#6affe0');
+  }
+
   // ────────────────────────────────── 매 프레임 유지
   update(dt) {
     const r = this.run; if (!r) return;
+    if (this.blast) { this._blast(dt, r); this._syncPanel(); return; }   // 발사 중엔 이것만
     if (this.godMode) { r.shieldT = Infinity; r.troops = Math.max(r.troops, this.godTroops || 1); }
     if (this.flying) {
       r.shieldT = Infinity;
@@ -1042,6 +1111,7 @@ export class Admin {
       { label: '🪙 코인 +9999', fn: () => this.coins() },
       { label: '🔢 배수 +3', fn: () => this.tier(3) },
       { label: '🗿 석상 격파', fn: () => this.smashStatues() },
+      { label: '💨 초강력 방귀 → 우주로', fn: () => this.fart(), wide: true },
       { sep: '미친 기술' },
       { label: '☄️ 메테오', fn: () => this.meteor(), on: () => this.meteorOn },
       { label: '⚡ 연쇄 번개', fn: () => this.lightning(), on: () => this.lightningOn },

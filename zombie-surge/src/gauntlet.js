@@ -532,7 +532,7 @@ export class GauntletRun {
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
     if (this.shake > 0) { this.shake -= dt; c.position.x += (Math.random() - 0.5) * this.shake * 0.7; c.position.y += (Math.random() - 0.5) * this.shake * 0.5; }
-    c.lookAt(this.x * 0.34, 0.8, SQ_Z - 20);
+    c.lookAt(this.x * 0.34, 0.8 + (this.camLookY || 0), SQ_Z - 20);
   }
   status() {
     const B = this.giant && !this.giant.dead ? { name: this.giant.def.name, frac: this.giant.hp / this.giant.hpMax } : null;

@@ -5,7 +5,7 @@
 //   상위 무기는 사실상 방사형(전방위)으로 쏜다. 대형에 따라서도 달라진다.
 // · 보급 관문은 전장 외곽 세 지점에 서 있고, 부수면 그 지점에서 카드가 굴러온다.
 import * as THREE from 'three';
-import { FIELD_R, buildField, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
+import { FIELD_R, buildField, buildSpaceField, buildCard, buildSupplyGate, setGateHp, openGate, buildAPC } from './env.js';
 import { Squad } from './squad.js';
 import { ZombiePool, buildBoss, animateBoss, buildProjectile } from './zombies.js';
 import { WEAPONS, WEAPON_ORDER, CHARACTERS, TROOP_CAP } from './stages.js';
@@ -28,7 +28,7 @@ export class FieldRun {
     this.F = stage.flow;
     this.R = rng(stage.n * 7919 + 13);
     this.group = new THREE.Group(); scene.add(this.group);
-    this.env = buildField(stage.theme); this.group.add(this.env.group);
+    this.env = (stage.space ? buildSpaceField : buildField)(stage.theme); this.group.add(this.env.group);
     this.squad = new Squad(character); this.group.add(this.squad.group);
     this.zombies = new ZombiePool(); this.group.add(this.zombies.group);
     this.limit = FIELD_R - 4;
@@ -448,12 +448,14 @@ export class FieldRun {
   _camera(dt) {
     const c = this.camera, big = Math.min(1, this.squad.shown / 80);
     // 사방을 보려면 높고 안정적인 시점이 낫다 — 분대를 중심에 두고 위에서 비스듬히
-    const up = 26.0 + big * 6.5 + (this.camY || 0), back = 18.5 + big * 4.0;
+    const C = this.stage.cam || {};                      // 스테이지마다 시점을 조금 달리 준다
+    const up = (C.up != null ? C.up : 26.0) + big * 6.5 + (this.camY || 0);
+    const back = (C.back != null ? C.back : 18.5) + big * 4.0;
     c.position.x += (this.x - c.position.x) * Math.min(1, dt * 4.0);
     c.position.y += (up - c.position.y) * Math.min(1, dt * 3.0);
     c.position.z += ((this.z + back) - c.position.z) * Math.min(1, dt * 4.0);
     if (this.shake > 0) { this.shake -= dt; c.position.x += (Math.random() - 0.5) * this.shake * 0.7; c.position.y += (Math.random() - 0.5) * this.shake * 0.5; }
-    c.lookAt(this.x, 0.6, this.z - 1.5);
+    c.lookAt(this.x, (C.ly != null ? C.ly : 0.6) + (this.camLookY || 0), this.z + (C.lz != null ? C.lz : -1.5));
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;

@@ -389,7 +389,7 @@ export class WaveDefense {
     c.position.y += (ty - c.position.y) * Math.min(1, dt * 4);
     c.position.z += (tz - c.position.z) * Math.min(1, dt * 4);
     if (this.shake > 0) { this.shake -= dt; c.position.x += (Math.random() - 0.5) * this.shake * 0.6; c.position.y += (Math.random() - 0.5) * this.shake * 0.45; }
-    c.lookAt(this.x * 0.40, 0.6, SQ_Z - 17);
+    c.lookAt(this.x * 0.40, 0.6 + (this.camLookY || 0), SQ_Z - 17);
   }
   status() {
     const B = this.boss && !this.boss.dead ? { name: this.boss.def.name, frac: this.boss.hp / this.boss.hpMax } : null;

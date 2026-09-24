@@ -132,6 +132,23 @@ export class GameAudio {
 
   // ── 음악: 룩어헤드 스케줄러(16분음표) ────────────────────────────────────
   _startClock() { if (this._timer) clearInterval(this._timer); this._timer = setInterval(() => this._sched(), 40); }
+  // 💨 초강력 방귀 — 낮게 떨리는 톱니 + 바람 소리
+  fart(power = 1) {
+    if (!this.ctx || this.muted) return; const t = this.ctx.currentTime;
+    for (let i = 0; i < 5; i++) {
+      const tt = t + i * 0.085;
+      this._osc(tt, { type: 'sawtooth', f: 95 - i * 9 + Math.random() * 26, f2: 44 + Math.random() * 20,
+        dur: 0.22, gain: 0.34 * power, rev: 0.25 });
+      this._noiseHit(tt, { type: 'bandpass', f: 220 + Math.random() * 260, q: 2.2, dur: 0.18, gain: 0.30 * power, rev: 0.3 });
+    }
+    this._osc(t + 0.42, { type: 'square', f: 70, f2: 30, dur: 0.5, gain: 0.26 * power, rev: 0.4 });
+  }
+  // 🚀 발사 — 점점 커지는 바람
+  blastoff() {
+    if (!this.ctx || this.muted) return; const t = this.ctx.currentTime;
+    this._noiseHit(t, { type: 'lowpass', f: 300, f2: 5200, q: 0.8, dur: 1.9, gain: 0.5, rev: 0.6 });
+    this._osc(t, { type: 'sawtooth', f: 60, f2: 420, dur: 1.9, gain: 0.22, rev: 0.5 });
+  }
   stop() { if (this._timer) { clearInterval(this._timer); this._timer = null; } }
   _sched() {
     const ctx = this.ctx; if (!ctx) return; const spb = 60 / 96 / 4;   // 96BPM 16분음표

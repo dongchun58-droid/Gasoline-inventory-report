@@ -73,14 +73,17 @@ export class HUD {
     }
     const grid = $('stages'); grid.innerHTML = ''; this.selStage = Math.min(save.unlocked, 2);
     // 보너스는 언제나 열려 있으니 눈에 먼저 띄게 앞에 놓는다
-    const order = [...STAGES].sort((a, b) => (b.bonus ? 1 : 0) - (a.bonus ? 1 : 0));
+    // 보너스와 우주는 특별 스테이지라 앞쪽에 눈에 띄게 놓는다
+    const rank = (x) => (x.bonus ? 2 : x.space ? 1 : 0);
+    const order = [...STAGES].sort((a, b) => rank(b) - rank(a));
     for (const st of order) {
       const d = document.createElement('div');
       const locked = st.bonus ? false : (st.n > save.unlocked || !st.playable);   // 보너스는 언제나 열려 있다
-      d.className = 'st' + (locked ? ' lock' : '') + (st.bonus ? ' bonus' : '') + (st.n === this.selStage ? ' sel' : ''); d.dataset.n = st.n;
+      d.className = 'st' + (locked ? ' lock' : '') + (st.bonus ? ' bonus' : '') + (st.space ? ' space' : '') + (st.n === this.selStage ? ' sel' : ''); d.dataset.n = st.n;
       const stars = save.stars[st.n] ? '★'.repeat(save.stars[st.n]) : (st.playable ? '' : '준비중');
       d.innerHTML = st.bonus ? `<span class="disp" style="font-size:19px">보너스</span><span class="stars">황금 관문</span>`
-                             : `<span class="disp">${st.n}</span><span class="stars">${stars}</span>`;
+        : st.space ? `<span class="disp" style="font-size:19px">🌌 우주</span><span class="stars">우주 정거장</span>`
+        : `<span class="disp">${st.n}</span><span class="stars">${stars}</span>`;
       if (!locked) d.onclick = () => { this.selStage = st.n; grid.querySelectorAll('.st').forEach((x) => x.classList.toggle('sel', +x.dataset.n === st.n)); };
       grid.appendChild(d);
     }
